@@ -1,0 +1,202 @@
+version: "3.1"
+
+nlu:
+
+  # ENTITY DEFINITIONS
+
+  - lookup: litterstatus
+    examples: |
+      - clean
+      - dirty
+
+  - lookup: cat
+    examples: |
+      - Peanut
+      - Butter
+
+  - lookup: urine
+    examples: |
+      - one
+      - two
+      - three
+
+  - lookup: litterbox
+    examples: |
+      - front
+      - back
+      - both
+      - litterrobot
+
+  # INTENTS
+
+  - intent: observed_litter_being_used
+    examples: |
+      - I saw [Peanut](cat:Peanut) use [the front litter box](litterbox:front)
+      - I heard [Butter](cat:Butter) use [the back litter box](litterbox:back)
+      - I think [Butter](cat:Butter) used [the back letter box](litterbox:back)
+      - I heard [Peanut](cat:Peanut) pee in [the front layer](litterbox:front)
+      - I think I heard [Peanut](cat:Peanut) use [the back layer](litterbox:back)
+      - I think I saw [Butter](cat:Butter) use [the front theater](litterbox:front)
+      - [Peanut](cat:Peanut) just used [the back mirror](litterbox:back)
+      - I can hear [Peanut](cat:Peanut) peeing in [the back glitter](litterbox:back).
+      - I heard [Peanut](cat:Peanut) use [the back letter](litterbox:back) a little bit ago.
+      - I believe [Peanut](cat:Peanut) used [the back litter](litterbox:back).
+      - [Peanut](cat:Peanut) used [the front layer](litterbox:front).
+      - [Butter](cat:Butter) is using [the front litter](litterbox:front).
+      - [PNET](cat:Peanut) is currently using [the front letter](litterbox:front).
+      - I think [Butter](cat:Butter) used [the front litter](litterbox:front).
+      - I saw [Butter](cat:Butter) use [the back litter](litterbox:back).
+      - I heard [Butter](cat:Butter) use [the back letter](litterbox:back).
+      - [Butter](cat:Butter) used [the back litterbox](litterbox:back).
+      - I believe [Butter](cat:Butter) used [the back litter](litterbox:back).
+      - I believe [Butter](cat:Butter) used [the front litter](litterbox:front).
+      - I can hear [Butter](cat:Butter) using [the front litter](litterbox:front).
+      - I saw [Butter](cat:Butter) using [the back litter](litterbox:back).
+      - [Butter](cat:Butter) is using [the back litter](litterbox:back).
+# need to add capturing senses!
+
+  - intent: posthoc_litter_observation
+    examples: |
+      - [the back litter](litterbox:back) is [clean](litterstatus:clean).
+      - [the front mirror](litterbox:front) is [clean](litterstatus:clean).
+      - [the front letter](litterbox:front) has been [used](litterstatus:dirty).
+      - [both](litterbox:both) litter boxes have been [used](litterstatus:dirty).
+      - [both](litterbox:both) litter boxes are [clean](litterstatus:clean).
+      - [the back litter](litterbox:back) has been [used](litterstatus:dirty).
+      - [The front litter](litterbox:front) box is [clean](litterstatus:clean).
+      - [The back litter box](litterbox:back) is currently [cleaned](litterstatus:clean).
+      - [The back glitter](litterbox:back) is also [dirty](litterstatus:dirty).
+      - When I got home, [the front letter](litterbox:front) was [used](litterstatus:dirty).
+      - It looks like [the front letter](litterbox:front) was [used](litterstatus:dirty) while I was on a walk.
+      - [Both letterboxes](litterbox:both) are currently [clean](litterstatus:clean).
+      - [The back litter](litterbox:back) is [soiled](litterstatus:dirty).
+      - [The back litter](litterbox:back) is [soil](litterstatus:dirty).
+      - [The back letterbox](litterbox:back) is [soiled](litterstatus:dirty).
+      - It looks like [the back letter](litterbox:back) was [used](litterstatus:dirty) while I was in the shower.
+
+  - intent: observe_sifted_contents
+    examples: |
+      - I sifted [two poops](poop:two) and [one pee clump](urine:one) from [the back litter box](litterbox:back)
+      - I sifted [one pee clump](urine:one) from [the front litter box](litterbox:front)
+      - There were [two poops](poop:two) in [the back litter box](litterbox:back)
+      - I found [one pee clump](urine:one) and [one poop](poop:one) in [the front litter](litterbox:front)
+      - I sifted [a pea clump](urine:one) from [the front litter](litterbox:front).
+      - I sifted [one big pea clump](urine:one) from [the back litter](litterbox:back).
+      - [The back litter](litterbox:back) had [two pea clumps](urine:two).
+      - I sifted [one pea clump](urine:one) from [the front litter](litterbox:front).
+      - [The back litter](litterbox:back) had [a big pea clump](urine:one).
+      - I sifted [a peak lump](urine:one) from [the back litter](litterbox:back).
+      - [The front litter](litterbox:front) had [poop](poop:one) in it.
+      - [The back litter](litterbox:back) had both [pee](urine:one) and [poop](poop:one) when I sifted it.
+      - I sifted [pee](urine:one) from [the front litter](litterbox:front).
+      - I sifted [pea](urine:one) from [the back litter](litterbox:back).
+      - I sifted [PE](urine:one) from [the front letterbox](litterbox:front) a little bit earlier.
+      - [The back letter](litterbox:back) had [a P clump](urine:one).
+      - I sifted [the front letter](litterbox:front) and found [a P-clump](urine:one).
+      - [The front letter](litterbox:front) had both [P](urine:one) and [poop](poop:one) in it.
+      - [The front litter](litterbox:front) had [a little peak lump](urine:one).
+      - I sifted [two poops](poop:two) and [one pee clump](urine:one) from [the back litter box](litterbox:back)
+      - I sifted [pee](urine:one) from [the front litter box](litterbox:front)
+      - I sifted [two pea clubs](urine:two) from [the front litter](litterbox:front).
+      - I sifted [two pea clumps](urine:two) from [the front litter](litterbox:front).
+      - [The front letter](litterbox:front) had [two P clumps](urine:two).
+      - [The front litter](litterbox:front) had [poop](poop:one) and [two peas](urine:two).
+      - [The front litter](litterbox:front) had [a pee clump](urine:two).
+      - [The front letter](litterbox:front) had [two B clumps](urine:two).
+      - [The front litter](litterbox:front) had [one poop](poop:one) and [two pee clumps](urine:two).
+      - I sifted [one poop](poop:one) and [two pee clumps](urine:two) from [the front litter box](litterbox:front).
+      - I sifted [two poops](poop:two) and [two pee clumps](urine:two) from [the back litter box](litterbox:back).
+      - [The back litter](litterbox:back) had [two poops](poop:two) and [two pee clumps](urine:two).
+      - I sifted both [poop](poop:one) and [pee](urine:one) from [the back litter](litterbox:back)
+      - I sifted [a small pea clump](urine:one) from [the back letter](litterbox:back).
+      - I sifted [two poops](poop:two) from [the front litter box](litterbox:front).
+      - [The back litter](litterbox:back) had [one poop](poop:one).
+      - I sifted [the pea clump](urine:one) from [the front litter box](litterbox:front).
+      - I sifted [the pee](urine:one) from [the back litter box](litterbox:back).
+      - [The back letterbox](litterbox:back) had [the poop](poop:one) in it.
+      - I found [the pee clump](urine:one) in [the back letter box](litterbox:back).
+      - I sifted [the poop](poop:one) from [the back litter box](litterbox:back).
+      - I sifted [the pee](urine:one) from [the front litter box](litterbox:front).
+      - [The front letterbox](litterbox:front) had [the poop](poop:one) in it.
+      - I sifted [the poop](poop:one) from [the front litter box](litterbox:front).
+      - I sifted [the pee](urine:one) and [two poops](poop:two) from [the front litter box](litterbox:front).
+      - I sifted [a litter clump](urine:one) from [the front litter box](litterbox:front).
+      - I sifted [two poops](poop:two) from [the front litter box](litterbox:front).
+      - I sifted [a pee](urine:one) and [two poops](poop:two) from [the back litter box](litterbox:back).
+      - I sifted [a pee](urine:one) and [a poop](poop:one) from [the back litter box](litterbox:back).
+      - I sifted [a pee](urine:one) and [a poops](poop:two) from [the front litter box](litterbox:front).
+      - [The front litter](litterbox:front) had both [pee](urine:one) and [poop](poop:one).
+      - I sift both [pee](urine:one) and [poop](poop:one) from [the front litter](litterbox:front).
+      - [The front litter](litterbox:front) had [three pea clumps](urine:three).
+      - I sifted [three pea clumps](urine:three) from [the front litter](litterbox:front).
+      - There were [three pee clumps](urine:three) in [the back litter](litterbox:back).
+      - [The back litter](litterbox:back) had [both pee](urine:one) and [poop](poop:one) when I sifted it.
+      - I sifted [the pea](urine:one) from [the back litter box](litterbox:back).
+
+  - lookup: color
+    examples: |
+      - red
+      - orange
+      - yellow
+      - green
+      - cyan
+      - blue
+      - purple
+      - white
+      - relaxed
+
+  - regex: brightness
+    examples: |
+      - \b([0-9]{1,2}|100)\b
+
+  - lookup: light_state
+    examples: |
+      - on
+      - off
+
+  - intent: set_the_lights
+    examples: |
+      - Set the lights to [red](color:red).
+      - Set the lights to [orange](color:orange).
+      - Set the lights to [yellow](color:yellow).
+      - Set the lights to [green](color:green).
+      - Set the lights to [cyan](color:cyan).
+      - Set the lights to [blue](color:blue).
+      - Turn the lights to [purple](color:purple).
+      - Turn the lights to [white](color:white).
+      - Turn [off](light_state:off) the lights.
+      - Set the lights to [off](light_state:off).
+      - Set the lights to [on](light_state:on).
+      - Turn [on](light_state:on) the lights.
+      - Set the lights to [40](brightness:40).
+      - Set the lights to [50](brightness:50).
+      - Set the lights to [100](brightness:100).
+      - Set the lights to [0](brightness:0).
+      - Set brightness to [100](brightness:100).
+      - Set all the lights to [white](color:white).
+      - Set all lights to [on](light_state:on).
+
+# ask when Peanut last peed / how long since he last peed
+
+  - intent: no_intent
+    examples: |
+      - Peanut is sleeping near me on the heating pad, although it is not currently heated.
+      - Butter was sleeping on my bed
+      - Peanut currently has zoomies
+      - Butter was being chirpy and cuddly and cute just now
+      - This is a quick test beginning at about 9.17pm and ending at about 9.17pm.
+      - Peanut is chilling in my lap and Butter is in the front cat tree cubby and I think the recycling is being picked up right now.
+      - Guessing by smell, the front litter use was a poop.
+      - I just ate.
+      - I thought Butter was going to be sleeping in the front cat tree cubby, but she was actually fine next to Peanut.
+      - Peanut woke me up because he was up at my gesture. He stood there weird.
+      - I think the recycling truck just went by.
+      - The dump truck just did their pickup.
+      - Butter is sleeping in the cubby.
+      - Peanut is sleeping in the scoop thing.
+      - Butter is sleeping on my bed.
+      - Peanut is sleeping on the heating pad.
+      - Peanut and Butter are sleeping on my bed with me.
+      - Both the cats are on my bed.
+      - Peanut is on the heating pad which is currently heated.
+      - Peanut is sleeping near me on the heating pad, although it is not currently turned on.

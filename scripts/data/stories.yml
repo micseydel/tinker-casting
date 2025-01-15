@@ -1,0 +1,11 @@
+version: "3.1"
+
+stories:
+
+  - story: unused but making rasa quiet
+    steps:
+      - intent: observed_litter_being_used
+      - intent: posthoc_litter_observation
+      - intent: observe_sifted_contents
+      - intent: set_the_lights
+      - intent: no_intent

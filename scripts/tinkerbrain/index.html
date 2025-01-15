@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tinkerbrain</title>
+  <style>
+    #transcription {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      background: white;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="graph"></div>
+  <div class="frame-control">
+    <label for="frame-slider">Frame:</label>
+    <input type="range" id="frame-slider" min="1" max="20" value="1" step="1">
+    <span id="current-frame">1</span>
+  </div>
+</div>
+<div id="tooltip" style="position: absolute; text-align: center; width: auto; height: auto; padding: 8px; font: 12px sans-serif; background: lightsteelblue; border: 0px; border-radius: 8px; pointer-events: none; opacity: 0;"></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

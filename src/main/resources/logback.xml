@@ -1,0 +1,134 @@
+<configuration>
+    <!-- This is a development logging configuration that logs to a file, for an example of a production
+        logging config, see the Akka docs: https://doc.akka.io/docs/akka/2.6/typed/logging.html#logback -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/application.log</file>
+        <encoder>
+<!--            <pattern>[%date{ISO8601}] [%level] [%logger] [%thread] [%X{akkaSource}] - %msg%n</pattern>-->
+            <pattern>[%date{ISO8601}] [%level] [%X{akkaSource}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Appender for ERROR and WARN only -->
+    <appender name="ERROR-WARN-FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/error-warn.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%X{akkaSource}] - %msg%n</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+    </appender>
+
+    <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE" />
+    </appender>
+
+
+    <appender name="NOTIFS_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/notifications.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%logger] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+
+    <appender name="CATS_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/cats.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%logger] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="me.micseydel.actor.kitties.CatNotificationsManager$" level="INFO" additivity="true">
+        <appender-ref ref="CATS_FILE" />
+        <appender-ref ref="NOTIFS_FILE" />
+    </logger>
+
+    <logger name="me.micseydel.actor.kitties.CatsHelper$" level="INFO" additivity="true">
+        <appender-ref ref="CATS_FILE" />
+    </logger>
+
+    <logger name="me.micseydel.actor.kitties.LitterBoxesHelper$" level="INFO" additivity="true">
+        <appender-ref ref="CATS_FILE" />
+    </logger>
+
+    <logger name="me.micseydel.actor.kitties.CatTranscriptionListener$" level="INFO" additivity="true">
+        <appender-ref ref="CATS_FILE" />
+    </logger>
+
+
+    <appender name="HALTO_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/halto.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%logger] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="me.micseydel.actor.Halto$" level="INFO" additivity="true">
+        <appender-ref ref="HALTO_FILE" />
+    </logger>
+
+
+    <appender name="FOODREMINDER_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/foodreminder.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%logger] [%thread] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="me.micseydel.actor.FoodReminderActor$" level="INFO" additivity="true">
+        <appender-ref ref="FOODREMINDER_FILE" />
+        <appender-ref ref="HALTO_FILE" />
+    </logger>
+    <logger name="me.micseydel.actor.HungerTracker$" level="INFO" additivity="true">
+        <appender-ref ref="FOODREMINDER_FILE" />
+        <appender-ref ref="HALTO_FILE" />
+    </logger>
+
+    <logger name="me.micseydel.actor.SleepReportActor$" level="INFO" additivity="true">
+        <appender-ref ref="HALTO_FILE" />
+    </logger>
+
+
+    <logger name="me.micseydel.actor.notifications.NotificationCenterManager$" level="INFO" additivity="true">
+        <appender-ref ref="NOTIFS_FILE" />
+    </logger>
+
+    <logger name="me.micseydel.actor.notifications.UpcomingNotificationsManager$" level="INFO" additivity="true">
+        <appender-ref ref="NOTIFS_FILE" />
+    </logger>
+
+
+    <appender name="REMEMBERINGTIMEKEEPER_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/rememberingtimekeeper.log</file>
+        <encoder>
+<!--            <pattern>[%date{ISO8601}] [%level] [%logger] [%thread] - %msg%n</pattern>-->
+            <pattern>[%date{ISO8601}] [%level] [%X{akkaSource}] [%thread] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="me.micseydel.actor.RememberingTimeKeeper$" level="INFO" additivity="true">
+        <appender-ref ref="REMEMBERINGTIMEKEEPER_FILE" />
+    </logger>
+
+
+    <appender name="REMINDME_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/remindme.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%X{akkaSource}] [%thread] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="me.micseydel.actor.RemindMeListenerActor$" level="INFO" additivity="true">
+        <appender-ref ref="REMINDME_FILE" />
+    </logger>
+
+
+    <root level="INFO">
+        <appender-ref ref="ASYNC"/>
+        <appender-ref ref="ERROR-WARN-FILE"/>
+    </root>
+</configuration>

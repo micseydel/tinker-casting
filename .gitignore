@@ -1,0 +1,17 @@
+*.class
+tinkerenv.bash
+tinkerenv.bash.back
+.idea
+.bsp/
+logs/
+target/
+project/target/
+sbt-dist/bin/sbt-launch.jar
+.DS_Store
+queued_temp_files
+py3.10_venv/
+scripts/.rasa/
+scripts/models/
+**.pyc
+sbt-dist/
+scripts/wakewordtesting.bash
