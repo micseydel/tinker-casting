@@ -5,6 +5,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.NoOp
 import me.micseydel.actor.FolderWatcherActor.{PathModifiedEvent, PathUpdatedEvent}
 import me.micseydel.actor._
+import me.micseydel.actor.notifications.ChimeActor.Message
+import me.micseydel.actor.notifications.ChimeJsonFormat.ChimeMessageJsonFormat
 import me.micseydel.actor.notifications.NotificationCenterManager._
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.dsl.Tinker.Ability
@@ -54,6 +56,8 @@ object NotificationCenterManager {
 
   case class HueCommand(command: HueControl.Command) extends SideEffect
 
+  case class Chime(message: ChimeActor.Message) extends SideEffect
+
   //
 
   case class Notification(
@@ -81,7 +85,8 @@ object NotificationCenterManager {
   }
 
   def apply(vaultRoot: VaultPath,
-            ntfyAbility: Tinker => Ability[NtfyerActor.Message]): Behavior[Message] = Behaviors.setup { context =>
+            ntfyAbility: Tinker => Ability[NtfyerActor.Message],
+            chimeHost: Option[String]): Behavior[Message] = Behaviors.setup { context =>
     val subdirectory = s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/notification_center"
 
     @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
@@ -93,30 +98,39 @@ object NotificationCenterManager {
       "NotificationCenterFolderWatcherActor"
     )
 
-    initializing(ntfyAbility)
+    initializing(ntfyAbility, chimeHost)
   }
 
-  private def initializing(ntfyAbility: Tinker => Ability[NtfyerActor.Message]): Behavior[Message] = Behaviors.withStash(10) { stash =>
+  private def initializing(ntfyAbility: Tinker => Ability[NtfyerActor.Message], chimeHost: Option[String]): Behavior[Message] = Behaviors.withStash(10) { stash =>
     Behaviors.receiveMessage {
       case message@(PathUpdated(_) | _: NotificationMessage) =>
         stash.stash(message)
         Behaviors.same
 
       case StartTinkering(tinker) =>
-        stash.unstashAll(finishInitializing(ntfyAbility(tinker))(tinker))
+        stash.unstashAll(finishInitializing(ntfyAbility(tinker), chimeHost)(tinker))
     }
   }
 
-  private def finishInitializing(ntfyAbility: Ability[NtfyerActor.Message])(implicit Tinker: Tinker): Ability[Message] =
+  private def finishInitializing(ntfyAbility: Ability[NtfyerActor.Message], maybeChimeHost: Option[String])(implicit Tinker: Tinker): Ability[Message] =
     Tinker.initializedWithNote(NoteName, "_actor_notes/notification_center") { case (_, noteRef) =>
       Tinker.initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) { case (context, jsonRef) =>
         val upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message] = context.cast(UpcomingNotificationsManager(context.self), "UpcomingNotificationsManager")
         val ntfyer = context.cast(ntfyAbility, "Ntfyer")
-        ability(Map.empty)(Tinker, upcomingNotificationsManager, noteRef, jsonRef, ntfyer)
+
+        val chime: SpiritRef[ChimeActor.Message] = maybeChimeHost match {
+          case Some(chimeHost) =>
+            context.cast(ChimeActor(chimeHost), "Chime")
+
+          case None =>
+            context.cast(Tinker.ignore, "InertChime")
+        }
+
+        ability(Map.empty)(Tinker, upcomingNotificationsManager, noteRef, jsonRef, ntfyer, chime)
       }
     }
 
-  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], noteRef: NoteRef, jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message]): Ability[Message] =
+  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], noteRef: NoteRef, jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Message]): Ability[Message] =
     Tinkerer(rgb(205, 205, 0), "❗️").receive { (context, message) =>
       implicit val c: TinkerContext[_] = context
       message match {
@@ -131,6 +145,8 @@ object NotificationCenterManager {
               ntfyer !! NtfyerActor.DoNotify(key, message)
             case HueCommand(command) =>
               context.system.hueControl !! command
+            case Chime(message) =>
+              chime !! message
           }
           Behaviors.same
 
@@ -153,6 +169,8 @@ object NotificationCenterManager {
               ntfyer !! NtfyerActor.DoNotify(key, message)
             case HueCommand(command) =>
               context.system.hueControl !! command
+            case Chime(message) =>
+              chime !! message
           }
 
           Behaviors.same
@@ -254,7 +272,7 @@ case class NotificationCenterState(map: Map[String, Notification]) {
   def removed(k: String): NotificationCenterState = NotificationCenterState(map.removed(k))
 }
 
-private object NotificationCenterManagerJsonFormat extends DefaultJsonProtocol {
+object NotificationCenterManagerJsonFormat extends DefaultJsonProtocol {
 
   import me.micseydel.actor.perimeter.HueControlJsonFormat.HueControlCommandJsonFormat
   import me.micseydel.Common.{OptionalJsonFormat, ZonedDateTimeJsonFormat}
@@ -264,12 +282,15 @@ private object NotificationCenterManagerJsonFormat extends DefaultJsonProtocol {
   implicit val hueCommandJsonFormat: RootJsonFormat[HueCommand] = jsonFormat1(HueCommand)
   implicit val maybeNoteIdFormat: JsonFormat[Option[NoteId]] = OptionalJsonFormat(noteIdFormat)
   implicit val notificationIdJsonFormat: JsonFormat[NotificationId] = jsonFormat1(NotificationId)
+  import ChimeJsonFormat.ChimeMessageJsonFormat
+  implicit val chimeJsonFormat: JsonFormat[Chime] = jsonFormat1(Chime)
 
   implicit object SideEffectJsonFormat extends RootJsonFormat[SideEffect] {
     def write(m: SideEffect): JsValue = {
       val (jsObj, typ) = m match {
         case l: PushNotification => (l.toJson.asJsObject, "PushNotification")
         case l: HueCommand => (l.toJson.asJsObject, "HueCommand")
+        case l: Chime => (l.toJson.asJsObject, "Chime")
       }
       JsObject(jsObj.fields + ("type" -> JsString(typ)))
     }
@@ -278,6 +299,7 @@ private object NotificationCenterManagerJsonFormat extends DefaultJsonProtocol {
       value.asJsObject.getFields("type") match {
         case Seq(JsString("PushNotification")) => value.convertTo[PushNotification]
         case Seq(JsString("HueCommand")) => value.convertTo[HueCommand]
+        case Seq(JsString("Chime")) => value.convertTo[Chime]
         case other => throw DeserializationException(s"Unknown type, expected Seq(JsString(_)) for one of {PushNotification, HueCommand} but got $other")
       }
     }

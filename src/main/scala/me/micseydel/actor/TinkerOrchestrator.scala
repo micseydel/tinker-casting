@@ -19,7 +19,8 @@ object TinkerOrchestrator {
                     eventReceiverHost: String,
                     eventReceiverPort: Int,
                     ntfyKeys: NtfyKeys,
-                    fitbitAuthorizationBasic: Option[String]
+                    fitbitAuthorizationBasic: Option[String],
+                    chimeHost: Option[String]
                    )
 
   // actor mailbox

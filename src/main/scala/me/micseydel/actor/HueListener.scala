@@ -2,6 +2,9 @@ package me.micseydel.actor
 
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
+import me.micseydel.actor.notifications.ChimeActor.{Chime, Material}
+import me.micseydel.actor.notifications.{ChimeActor, NotificationCenterManager}
+import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffect, Notification}
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
@@ -71,6 +74,7 @@ object HueListener {
                 for (light <- AllList) {
                   hueControl !! HueControl.SetLight(light, colorWithBrightness)
                 }
+                context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
             }
 
             val ackMessage: Chronicler.ListenerAcknowledgement = Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), model match {

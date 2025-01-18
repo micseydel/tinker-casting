@@ -10,7 +10,6 @@ import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor, HueControl, 
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, PahoWrapperClassicActor, TinkerOrchestrator}
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
-import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.{Gossiper, NetworkPerimeterActor, TinkerBrain}
@@ -35,7 +34,8 @@ object TinkerContainer {
         config.eventReceiverHost,
         config.eventReceiverPort,
         config.ntfyKeys,
-        config.fitbitAuthorizationBasic
+        config.fitbitAuthorizationBasic,
+        config.chimeHost
       ))(tinker), NtfyerActor()(_)
     )
 
@@ -84,7 +84,7 @@ object RootTinkerBehavior {
     val hueControl: typed.ActorRef[HueControl.Message] = context.spawn(HueControl(config.hueConfig.getOrElse(HueConfig("", ""))), "HueControl")
 
     val notificationCenterManager: typed.ActorRef[NotificationCenterManager.Message] =
-      context.spawn(NotificationCenterManager(config.vaultRoot, ntfyAbility), "NotificationCenterManager")
+      context.spawn(NotificationCenterManager(config.vaultRoot, ntfyAbility, config.chimeHost), "NotificationCenterManager")
 
     val actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message] = context.spawn(
       ActorNotesFolderWatcherActor(config.vaultRoot),

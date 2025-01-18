@@ -21,7 +21,8 @@ object AppConfiguration {
     ntfyKeys: NtfyKeys,
     hueConfig: Option[HueConfig],
     mqttConfig: Option[MqttConfig],
-    fitbitAuthorizationBasic: Option[String]
+    fitbitAuthorizationBasic: Option[String],
+    chimeHost: Option[String]
   )
 
   /**
@@ -80,7 +81,8 @@ object AppConfiguration {
               ),
               hueConfig,
               maybeMqttConfig,
-              getOptionalString(config, "fitbit.authorizationBasic")
+              getOptionalString(config, "fitbit.authorizationBasic"),
+              getOptionalString(config, "chime.host")
             ))
           case Validated.Invalid(errors) =>
             // note: this line may be erroneously marked as incorrect by an IDE
