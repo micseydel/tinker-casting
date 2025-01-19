@@ -7,6 +7,8 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.prototyping.ObsidianCharts
+import me.micseydel.prototyping.ObsidianCharts.Series
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
 import spray.json.DefaultJsonProtocol._
@@ -46,7 +48,7 @@ object SleepReportActor {
         context.actorContext.log.debug(s"Uncomment RequestSleep(context.messageAdapter(ReceiveSleepReport) line to fetch sleep data at startup")
 
         // uncomment this to fetch today's Fitbit sleep report on startup (instead of just at scheduled times)
-//                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
+                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
 
         // uncomment to refresh Markdown on startup (e.g. if you're tinkering)
         //        jsonRef.read() match {
@@ -172,44 +174,42 @@ object SleepReportMarkdown {
         }
       }.toList.reverse
 
+      val last7DaysChart = ObsidianCharts.chart(
+        List("6 days ago", "-5", "-4", "-3", "-2", "-1", "Today"),
+        List(
+          Series("Suggested minimum", List.fill(7)(360)),
+          Series("Total minutes of sleep", last7Days.reverse)
+        )
+      )
+
+      val last14DaysChart = ObsidianCharts.chart(
+        List("A couple weeks ago", "-12", "-11", "-10", "-9", "-8", "A week ago", "-6", "-5", "-4", "-3", "-2", "-1", "Today"),
+        List(
+          Series("Suggested minimum", List.fill(14)(360)),
+          Series("Total minutes of sleep", last14Days.reverse)
+        )
+      )
+
+      val last30DaysChart = ObsidianCharts.chart(
+        last30daysLabels,
+        List(
+          Series("Suggested minimum", List.fill(30)(360)),
+          Series("Total minutes of sleep", last30Days.reverse),
+          Series("Average sleep last 7 days", runningAverage(last37Days, 7).reverse)
+        )
+      )
+
       s"""## Last 7 days
           |
-          |```chart
-          |  type: "line"
-          |  labels: ["6 days ago", -5, -4, -3, -2, -1, "Today"]
-          |  series:
-          |    - title: "Suggested minimum"
-          |      data: [360, 360, 360, 360, 360, 360, 360]
-          |    - title: "Total minutes of sleep"
-          |      data: $formatted7daysData
-          |
-          |```
+          |$last7DaysChart
           |
           |## Last 14 days
           |
-          |```chart
-          |  type: "line"
-          |  labels: ["A couple weeks ago", -12, -11, -10, -9, -8, "A week ago", -6, -5, -4, -3, -2, -1, "Today"]
-          |  series:
-          |    - title: "Suggested minimum"
-          |      data: [360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360]
-          |    - title: "Total minutes of sleep"
-          |      data: $formatted14daysData
-          |```
+          |$last14DaysChart
           |
           |## Last 30 days
           |
-          |```chart
-          |  type: "line"
-          |  labels: ${last30daysLabels.toJson.compactPrint}
-          |  series:
-          |    - title: "Suggested minimum"
-          |      data: [360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360, 360]
-          |    - title: "Total minutes of sleep"
-          |      data: $formatted30daysData
-          |    - title: "Average sleep last 7 days"
-          |      data: $formatted30daysRunningAverageData
-          |```
+          |$last30DaysChart
           |""".stripMargin
     } else {
       ""
@@ -222,8 +222,8 @@ object SleepReportMarkdown {
         val totalSleptMinutesLast3Days = recentDays.sum
         val averageSleptMinutesLast3Days = totalSleptMinutesLast3Days / 3
 
-        s"""- Last night's total: **${nicelyFormatMinutes(todaysReport.summary.totalMinutesAsleep)}**
-           |- Average last 3 days: **${nicelyFormatMinutes(averageSleptMinutesLast3Days)}**
+        s"""- Last night's total: **${TimeUtil.minuteToHoursAndMinutes(todaysReport.summary.totalMinutesAsleep)}**
+           |- Average last 3 days: **${TimeUtil.minuteToHoursAndMinutes(averageSleptMinutesLast3Days)}**
            |- Total days captured: ***${reports.rawByDay.size}*
            |- This report was generated ${ZonedDateTime.now()}
            |
@@ -235,11 +235,5 @@ object SleepReportMarkdown {
       case other =>
         s"Unexpected: $other"
     }
-  }
-
-  private def nicelyFormatMinutes(mins: Long): String = {
-    val hours = mins / 60
-    val minutes = mins % 60
-    s"$hours hours and $minutes minutes"
   }
 }

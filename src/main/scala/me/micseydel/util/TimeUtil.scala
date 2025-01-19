@@ -85,4 +85,10 @@ object TimeUtil {
     val subSeconds = duration - duration.toInt
     f"$minutes%02d:$seconds%02d.$subSeconds%01.0f"
   }
+
+  def minuteToHoursAndMinutes(mins: Long): String = {
+    val hours = mins / 60
+    val minutes = mins % 60
+    s"$hours hours and $minutes minutes"
+  }
 }
