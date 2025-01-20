@@ -5,13 +5,10 @@ import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.concat
 import akka.http.scaladsl.server.Route
-import me.micseydel.actor.AudioNoteCapturer.AcceptableFileExts
 import me.micseydel.dsl.cast.TinkerBrain
-import me.micseydel.model.WhisperResult
 import me.micseydel.prototyping.{EventRouting, WebSocketRouting}
 import spray.json._
 
-import java.nio.file.Paths
 import scala.util.{Failure, Success}
 
 object EventReceiver {
@@ -71,7 +68,7 @@ object EventReceiver {
 
   sealed trait EventType
   object TranscriptionCompleted extends EventType
-  object HeartRate extends EventType // FIXME: placeholder
+  object HeartRate extends EventType
 
   // util
 
@@ -99,6 +96,7 @@ object EventReceiver {
       def read(value: JsValue): EventType = value match {
         case JsString(s) => s match {
           case "TranscriptionCompleted" | "transcription_completed" => TranscriptionCompleted
+          case "HeartRate" | "heart_rate" => HeartRate
           case _ => throw DeserializationException(s"Expected transcription_completed")
         }
         case _ => throw DeserializationException(s"Expected transcription_completed")
