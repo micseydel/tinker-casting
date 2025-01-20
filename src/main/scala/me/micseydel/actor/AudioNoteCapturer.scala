@@ -1,18 +1,20 @@
 package me.micseydel.actor
 
-import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import com.softwaremill.quicklens._
-import me.micseydel.Common
+import me.micseydel.{Common, NoOp}
+import me.micseydel.actor.EventReceiver.TranscriptionCompleted
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
-import me.micseydel.dsl.{Tinker, TinkerClock}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.{TinkerBrain, UntrackedTimeKeeper}
+import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext}
 import me.micseydel.model.WhisperResult
+import me.micseydel.model.WhisperResultJsonProtocol._
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
+import spray.json._
 
 import java.io.File
 import java.nio.file.Path
@@ -43,7 +45,7 @@ object AudioNoteCapturer {
 
   sealed trait Message
 
-  case class TranscriptionEvent(event: WhisperResult) extends Message
+  case class TranscriptionEvent(payload: String) extends Message
 
   private case class PathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
 
@@ -52,7 +54,8 @@ object AudioNoteCapturer {
   private val NoteName = "audio_note_capture (tinkering)"
   private val NoteFolder = "_actor_notes/audio_note_capture"
 
-  def apply(config: Config, chronicler: ActorRef[Chronicler.Message], tinkerbrain: ActorRef[TinkerBrain.Message])(
+  // FIXME: Chronicler shouldn't need to be passed here, should it?
+  def apply(config: Config, chronicler: ActorRef[Chronicler.Message])(
     implicit Tinker: Tinker, httpExecutionContext: ExecutionContext
   ): Ability[Message] = Tinker.initializedWithNote(NoteName, NoteFolder) { case (context, noteRef) =>
     val newFileCreationEventAdapter = context.messageAdapter(PathUpdatedEvent).underlying
@@ -64,15 +67,9 @@ object AudioNoteCapturer {
       "MobileAudioFolderWatcherActor"
     )
 
-    @unused // driven internally by an HTTP server (which takes in response to the async WhisperFlask uses
-    val eventReceiver: ActorRef[EventReceiver.Message] = context.spawn(
-      EventReceiver(
-        EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),
-        context.messageAdapter(TranscriptionEvent).underlying,
-        tinkerbrain
-      ),
-      "EventReceiver"
-    )
+    context.actorContext.log.info(s"Claiming EventReceiver key $TranscriptionCompleted")
+    val transcriptionAdapter = context.messageAdapter(TranscriptionEvent).underlying
+    context.system.eventReceiver ! EventReceiver.ClaimEventType(TranscriptionCompleted, transcriptionAdapter)
 
     // FIXME: bad names, secondary means transfer the file over the network
     // maybe on_host, on_local_network?
@@ -133,6 +130,7 @@ object AudioNoteCapturer {
   }
 
   private def idle(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], timerKey: Option[UUID], timeKeeper: ActorRef[UntrackedTimeKeeper.Message], triggerTranscriptionForWavPath: Path => Unit)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val c: TinkerContext[_] = context
     message match {
       case PathUpdatedEvent(PathCreatedEvent(audioPath)) if audioPath.toString.split("\\.").lastOption.exists(AcceptableFileExts.contains) =>
         context.actorContext.log.info(s"New audio ${audioPath.getFileName} (size=${new File(audioPath.toString).length()})")
@@ -164,20 +162,23 @@ object AudioNoteCapturer {
         context.actorContext.log.debug(s"Ignoring event $other")
         Tinker.steadily
 
-      case TranscriptionEvent(whisperResultEvent) =>
-        context.actorContext.log.info(s"[idle] Transcription completed for ${whisperResultEvent.whisperResultMetadata.vaultPath}")
-        chronicler ! Chronicler.TranscriptionCompletedEvent(fixWhisper(whisperResultEvent))
-        noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] last received $whisperResultEvent\n")
+      case TranscriptionEvent(payload) =>
+        onTranscriptionEvent("idle", payload, chronicler, noteRef) match {
+          case Failure(exception) => throw exception
+          case Success(NoOp) =>
+        }
         Tinker.steadily
     }
   }
 
   private def preventingRedundancy(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], timerKey: Option[UUID], timeKeeper: ActorRef[UntrackedTimeKeeper.Message], triggerTranscriptionForWavPath: Path => Unit)(implicit Tinker: Tinker, noteRef: NoteRef): Behavior[Message] = Tinker.receive { (context, message) =>
+    implicit val c: TinkerContext[_] = context
     message match {
-      case TranscriptionEvent(whisperResultEvent) =>
-        context.actorContext.log.info(s"[preventingRedundancy] Transcription completed for ${whisperResultEvent.whisperResultMetadata.vaultPath}")
-        chronicler ! Chronicler.TranscriptionCompletedEvent(fixWhisper(whisperResultEvent))
-        noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] [preventingRedundancy] $whisperResultEvent]")
+      case TranscriptionEvent(payload) =>
+        onTranscriptionEvent("preventingRedundancy", payload, chronicler, noteRef) match {
+          case Failure(exception) => throw exception
+          case Success(NoOp) =>
+        }
         Tinker.steadily
 
       case PathUpdatedEvent(PathCreatedEvent(path)) =>
@@ -225,6 +226,25 @@ object AudioNoteCapturer {
   }
 
   //
+
+  def onTranscriptionEvent(state: String, payload: String, chronicler: ActorRef[Chronicler.Message], noteRef: NoteRef)(implicit context: TinkerContext[_]): Try[NoOp.type] = {
+    val whisperResultEvent = try {
+      payload.parseJson.convertTo[WhisperResult]
+
+    } catch {
+      case e: DeserializationException =>
+        context.actorContext.log.error(s"Deserialization failed for payload $payload", e)
+        throw e
+    }
+
+    if (!whisperResultEvent.whisperResultMetadata.vaultPath.toLowerCase.split("\\.").exists(AcceptableFileExts.contains)) {
+      context.actorContext.log.warn(s"Whisper result filename ${whisperResultEvent.whisperResultMetadata.vaultPath} expected to end with $AcceptableFileExts!")
+    }
+
+    context.actorContext.log.info(s"[$state] Transcription completed for ${whisperResultEvent.whisperResultMetadata.vaultPath}")
+    chronicler ! Chronicler.TranscriptionCompletedEvent(fixWhisper(whisperResultEvent))
+    noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] last received $whisperResultEvent\n")
+  }
 
   case class NoticedAudioNote(wavPath: Path, captureTime: ZonedDateTime, lengthSeconds: Double, transcriptionStartedTime: ZonedDateTime) {
     def transcriptionNoteName: String = s"Transcription for ${wavPath.getFileName.toString}"

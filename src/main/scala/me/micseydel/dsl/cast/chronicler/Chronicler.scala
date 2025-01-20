@@ -70,7 +70,7 @@ object Chronicler {
               config.whisperLargeHost,
               config.eventReceiverHost,
               config.eventReceiverPort
-            ), context.self, tinkerBrain
+            ), context.self
           ), "AudioNoteCapturer")
 
           val moc = context.spawn(ChroniclerMOC(), "ChroniclerMOC")

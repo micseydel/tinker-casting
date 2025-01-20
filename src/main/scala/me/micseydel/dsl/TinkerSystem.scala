@@ -4,7 +4,7 @@ import akka.actor.typed
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, ActorSystem}
 import cats.data.NonEmptyList
-import me.micseydel.actor.ActorNotesFolderWatcherActor
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver}
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.cast.chronicler.Chronicler
@@ -36,6 +36,8 @@ abstract class TinkerSystem {
   def networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost]
 
   def hueControl: SpiritRef[HueControl.Command]
+
+  def eventReceiver: ActorRef[EventReceiver.ClaimEventType]
 
   //  def homeMonitor: SpiritRef[HomeMonitorActor.Monitoring]
   def operator: SpiritRef[Operator.Message]
@@ -91,8 +93,8 @@ object TinkerSystem {
   def apply(actorSystem: ActorSystem[_], tinkerBrain: ActorRef[TinkerBrain.Message], vaultKeeper: ActorRef[VaultKeeper.Message], chronicler: ActorRef[Chronicler.Message], gossiper: ActorRef[Gossiper.Message], hueControlActor: ActorRef[HueControl.Message], notifier: ActorRef[NotificationCenterManager.NotificationMessage],
             networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
-            actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message]): TinkerSystem = {
-    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, chronicler, gossiper, hueControlActor, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor)
+            actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message], eventReceiver: ActorRef[EventReceiver.ClaimEventType]): TinkerSystem = {
+    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, chronicler, gossiper, hueControlActor, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
   }
 }
 
@@ -106,7 +108,8 @@ class TinkerSystemImplementation(
                                   notifierActor: ActorRef[NotificationCenterManager.NotificationMessage],
                                   val networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
                                   operatorActor: ActorRef[Operator.Message],
-                                  actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message]
+                                  actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message],
+                                  val eventReceiver: ActorRef[EventReceiver.ClaimEventType]
                                 ) extends TinkerSystem {
   override def newContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
     new TinkerContextImpl[T](actorContext, this)

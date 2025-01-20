@@ -6,7 +6,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Scheduler}
 import akka.util.Timeout
-import me.micseydel.actor.ActorNotesFolderWatcherActor
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver}
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.SideEffect
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
@@ -125,6 +125,8 @@ class TinkerSystemForTesting(
   override def operator: SpiritRef[Operator.Message] = wrap(operatorActor)
 
   override def clock: TinkerClock = tinkerClock
+
+  override def eventReceiver: ActorRef[EventReceiver.ClaimEventType] = ???
 }
 
 abstract class TinkerTest(val noteRefs: Map[String, NoteRef],

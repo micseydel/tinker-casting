@@ -6,8 +6,8 @@ import akka.actor.{ActorRef, ActorSystem, Props, typed}
 import me.micseydel.actor.inactive.owntracks
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.perimeter.HueControl.HueConfig
-import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor, HueControl, NtfyerActor}
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, PahoWrapperClassicActor, TinkerOrchestrator}
+import me.micseydel.actor.perimeter.{HomeMonitorActor, HueControl, NtfyerActor}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, TinkerOrchestrator}
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.Tinker.Ability
@@ -93,6 +93,14 @@ object RootTinkerBehavior {
     
     val operator: typed.ActorRef[Operator.Message] = context.spawn(Operator(), "Operator")
 
+    val eventReceiver: typed.ActorRef[EventReceiver.Message] = context.spawn(
+      EventReceiver(
+        EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),
+        tinkerBrain
+      ),
+      "EventReceiver"
+    )
+
     // magic
     val tinkerSystem = TinkerSystem(
       context.system,
@@ -105,7 +113,8 @@ object RootTinkerBehavior {
       notificationCenterManager,
       networkPerimeter,
       operator,
-      actorNotesFolderWatcherActor
+      actorNotesFolderWatcherActor,
+      eventReceiver
     )
 
     implicit val tinker: Tinker = new Tinker(tinkerSystem)
