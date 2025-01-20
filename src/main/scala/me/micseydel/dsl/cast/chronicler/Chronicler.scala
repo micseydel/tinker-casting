@@ -61,7 +61,6 @@ object Chronicler {
         case StartTinkering(tinker) =>
           implicit val Tinker: Tinker = tinker
 
-          // FIXME: move this after StartTinkering
           @unused
           val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
             AudioNoteCapturer.Config(
@@ -74,9 +73,8 @@ object Chronicler {
             ), context.self, tinkerBrain
           ), "AudioNoteCapturer")
 
-          val jsonPath = config.vaultRoot.resolve("json")
-          val moc = context.spawn(ChroniclerMOC(jsonPath, vaultKeeper), "ChroniclerMOC")
-          stash.unstashAll(behavior(jsonPath, vaultKeeper, moc, rasaActor, tinker.tinkerSystem.wrap(gossiper), tinkerBrain, Map.empty))
+          val moc = context.spawn(ChroniclerMOC(), "ChroniclerMOC")
+          stash.unstashAll(behavior(vaultKeeper, moc, rasaActor, tinker.tinkerSystem.wrap(gossiper), tinkerBrain, Map.empty))
 
         case message: PostInitMessage =>
           stash.stash(message)
@@ -86,7 +84,6 @@ object Chronicler {
   }
 
   def behavior(
-                jsonPath: Path,
                 vaultKeeper: ActorRef[VaultKeeper.Message],
                 moc: ActorRef[ChroniclerMOC.Message],
                 rasaActor: ActorRef[RasaActor.Message],
@@ -117,7 +114,7 @@ object Chronicler {
                 wavNameToTranscriptionNoteOwner.updated(wavName, wrapper)
             }
 
-            behavior(jsonPath, vaultKeeper, moc, rasaActor, gossiper, tinkerBrain, updatedNoteNameToTranscriptionNoteOwner)
+            behavior(vaultKeeper, moc, rasaActor, gossiper, tinkerBrain, updatedNoteNameToTranscriptionNoteOwner)
 
           case TranscriptionCompletedEvent(result) =>
             val wavName = Path.of(result.whisperResultMetadata.vaultPath).getFileName.toString

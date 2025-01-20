@@ -51,6 +51,7 @@ object AudioNoteCapturer {
 
   private val NoteName = "audio_note_capture (tinkering)"
   private val NoteFolder = "_actor_notes/audio_note_capture"
+
   def apply(config: Config, chronicler: ActorRef[Chronicler.Message], tinkerbrain: ActorRef[TinkerBrain.Message])(
     implicit Tinker: Tinker, httpExecutionContext: ExecutionContext
   ): Ability[Message] = Tinker.initializedWithNote(NoteName, NoteFolder) { case (context, noteRef) =>
@@ -63,13 +64,10 @@ object AudioNoteCapturer {
       "MobileAudioFolderWatcherActor"
     )
 
-    val jsonPath: Path = config.vaultRoot.resolve("json")
-    context.actorContext.log.debug(s"jsonPath=$jsonPath (from vaultRoot=${config.vaultRoot})")
-
     @unused // driven internally by an HTTP server (which takes in response to the async WhisperFlask uses
     val eventReceiver: ActorRef[EventReceiver.Message] = context.spawn(
       EventReceiver(
-        EventReceiver.Config(jsonPath, config.eventReceiverHost, config.eventReceiverPort),
+        EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),
         context.messageAdapter(TranscriptionEvent).underlying,
         tinkerbrain
       ),

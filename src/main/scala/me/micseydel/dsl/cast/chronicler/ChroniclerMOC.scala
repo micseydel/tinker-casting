@@ -1,13 +1,10 @@
 package me.micseydel.dsl.cast.chronicler
 
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.{NoteId, VaultKeeper}
+import me.micseydel.vault.NoteId
 
-import java.nio.file.Path
 import java.time.{LocalDate, ZonedDateTime}
 
 object ChroniclerMOC {
@@ -43,13 +40,12 @@ object ChroniclerMOC {
 
   // behavior
 
-  def apply(jsonPath: Path, vaultKeeper: ActorRef[VaultKeeper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    context.actorContext.log.info(s"Starting ChroniclerMOC with jsonPath $jsonPath")
-    // FIXME: replace this map with DailyRouter or whatever?
-    behavior(jsonPath, vaultKeeper, Map.empty)
+  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    context.actorContext.log.info(s"Starting ChroniclerMOC")
+    behavior(Map.empty)
   }
 
-  private def behavior(jsonPath: Path, vaultKeeper: ActorRef[VaultKeeper.Message], noteKeepers: Map[LocalDate, SpiritRef[ChroniclerMOCDailyNote.PostInitMessage]])(implicit Tinker: Tinker): Ability[Message] =
+  private def behavior(noteKeepers: Map[LocalDate, SpiritRef[ChroniclerMOCDailyNote.PostInitMessage]])(implicit Tinker: Tinker): Ability[Message] =
     Tinker.receive { (context, incomingMessage) =>
       val day = incomingMessage.time.toLocalDate
 
@@ -67,12 +63,12 @@ object ChroniclerMOC {
       noteKeepers.get(day) match {
         case Some(chroniclerDailyMOC) =>
           chroniclerDailyMOC !! outgoingMessage
-          Behaviors.same
+          Tinker.steadily
 
         case None =>
           val freshChroniclerDailyMOC = context.cast(ChroniclerMOCDailyNote(day), TimeUtil.localDateToISO8601Date(day))
           freshChroniclerDailyMOC !! outgoingMessage
-          behavior(jsonPath, vaultKeeper, noteKeepers.updated(day, freshChroniclerDailyMOC))
+          behavior(noteKeepers.updated(day, freshChroniclerDailyMOC))
       }
     }
 

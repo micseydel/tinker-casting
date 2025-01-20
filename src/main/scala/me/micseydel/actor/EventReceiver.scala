@@ -26,7 +26,7 @@ object EventReceiver {
 
   // config
 
-  case class Config(jsonPath: Path, httpHost: String, httpPort: Int)
+  case class Config(httpHost: String, httpPort: Int)
 
   // behavior
 
@@ -34,11 +34,6 @@ object EventReceiver {
     val route = concat(EventRouting.route(context.self), WebSocketRouting.websocketRoute(tinkerbrain))
     context.log.info(f"Starting event receiver HTTP server on port ${config.httpPort}")
     startHttpServer(route, config.httpPort)(context.system)
-
-    val jsonKeeper: ActorRef[JsonKeeper.Message[WhisperResult]] = context.spawn(
-      JsonKeeper(config.jsonPath, me.micseydel.model.WhisperResultJsonProtocol.whisperResultFormat),
-      "JsonKeeper"
-    )
 
     Behaviors.receiveMessage {
       case IncomingEvent(TranscriptionCompleted, payload) =>
@@ -54,7 +49,6 @@ object EventReceiver {
           val rawFilename = Paths.get(result.whisperResultMetadata.vaultPath).getFileName.toString
           val filename = s"${rawFilename}_${result.whisperResultMetadata.model}"
           context.log.debug(s"Storing JSON in $filename")
-          jsonKeeper ! JsonKeeper.Write(filename, result)
 
           replyTo ! result
         } catch {
@@ -66,26 +60,6 @@ object EventReceiver {
       case IncomingEvent(Tinkering, payload) =>
         context.log.info(s"Received Tinkering payload: $payload")
         Behaviors.same
-
-//      case IncomingEvent(RasaResultCompleted, payload) =>
-//        import me.micseydel.model.RasaResultProtocol._
-//        try {
-//          val result: RasaResultWrapper = payload.parseJson.convertTo[RasaResultWrapper]
-//
-//          println(result.rasa_result)
-//
-//          // should be a .wav file
-//          val rawFilename = Paths.get(result.whisperResultMetadata.vaultPath).getFileName.toString
-//          val filename = s"${rawFilename}_${result.whisperResultMetadata.model}"
-//          context.log.info(s"Storing JSON in $filename")
-//          jsonKeeper ! JsonKeeper.Write(filename, result)
-//
-//          replyTo ! result
-//        } catch {
-//          case e: DeserializationException =>
-//            context.log.error(s"Deserialization failed for payload $payload", e)
-//        }
-//        Behaviors.same
     }
   }
 
@@ -120,17 +94,10 @@ object EventReceiver {
     }
 
     implicit val eventFormat: RootJsonFormat[IncomingEvent] = jsonFormat2(IncomingEvent)
-
-//    def extractEvent(jsonString: String): Option[IncomingEvent] = {
-//      val parsed = Try(jsonString.parseJson.convertTo[IncomingEvent])
-//      parsed match {
-//        case Success(event) => Some(event)
-//        case Failure(ex) => None
-//      }
-//    }
   }
 }
 
+@deprecated
 private object JsonKeeper {
   // mailbox
 
