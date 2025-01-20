@@ -137,8 +137,6 @@ object FitbitActor {
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
     // https://dev.fitbit.com/build/reference/web-api/sleep/get-sleep-log-by-date/
     val url = s"https://api.fitbit.com/1.2/user/-/sleep/date/$day.json"
-    // FIXME: bad practice to log this
-    log.info(s"About to make a GET call out to $url with headers $headers")
 
     Http().singleRequest(HttpRequest(
       method = HttpMethods.GET,

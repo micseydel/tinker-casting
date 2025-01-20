@@ -1,11 +1,7 @@
 package me.micseydel.prototyping
 
-import me.micseydel.util.TimeUtil
-import spray.json.enrichAny
 import spray.json.DefaultJsonProtocol._
-
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
+import spray.json.enrichAny
 
 object ObsidianCharts {
   def chart(labels: List[String], series: List[Series]): String = {

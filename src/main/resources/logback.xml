@@ -127,6 +127,21 @@
     </logger>
 
 
+    <appender name="PURPLEAIR_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/purpleair.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}] [%level] [%X{akkaSource}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="me.micseydel.actor.PurpleAirActor$" level="INFO" additivity="true">
+        <appender-ref ref="PURPLEAIR_FILE" />
+    </logger>
+    <logger name="me.micseydel.actor.ReadingPollingActor$" level="INFO" additivity="true">
+        <appender-ref ref="PURPLEAIR_FILE" />
+    </logger>
+
+
     <root level="INFO">
         <appender-ref ref="ASYNC"/>
         <appender-ref ref="ERROR-WARN-FILE"/>

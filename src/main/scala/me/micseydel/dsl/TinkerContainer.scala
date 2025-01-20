@@ -117,16 +117,8 @@ object RootTinkerBehavior {
     gossiper ! Gossiper.StartTinkering(tinker)
     actorNotesFolderWatcherActor ! ActorNotesFolderWatcherActor.StartTinkering(tinker)
 
-    // FIXME: this looks like could be simplified, but I'm leaving it for now until I can dig in more
-    config.aranetConfig match {
-      case Some(aranetConfig) =>
-        val homeMonitor = context.spawn(HomeMonitorActor(tinker => AranetActor(AranetActor.Config(aranetConfig.host, aranetConfig.port, config.ntfyKeys.highCO2))(tinker)), "HomeMonitor")
-        homeMonitor ! HomeMonitorActor.StartTinkering(tinker)
-
-      case None =>
-        context.log.warn(s"No valid Aranet config found, not starting home monitor")
-    }
-
+    @unused // driven internally
+    val homeMonitor = context.spawn(HomeMonitorActor(config.aranetConfig, config.ntfyKeys.highCO2, config.purpleAirUri), "HomeMonitor")
 
 //    tinkerBrain ! TinkerBrain.SystemStarted()
     context.log.info("Waiting 3 seconds before announcing system started")

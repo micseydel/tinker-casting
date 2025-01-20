@@ -22,7 +22,8 @@ object AppConfiguration {
     hueConfig: Option[HueConfig],
     mqttConfig: Option[MqttConfig],
     fitbitAuthorizationBasic: Option[String],
-    chimeHost: Option[String]
+    chimeHost: Option[String],
+    purpleAirUri: Option[String]
   )
 
   /**
@@ -82,7 +83,8 @@ object AppConfiguration {
               hueConfig,
               maybeMqttConfig,
               getOptionalString(config, "fitbit.authorizationBasic"),
-              getOptionalString(config, "chime.host")
+              getOptionalString(config, "chime.host"),
+              getOptionalString(config, "purpleair.uri")
             ))
           case Validated.Invalid(errors) =>
             // note: this line may be erroneously marked as incorrect by an IDE
