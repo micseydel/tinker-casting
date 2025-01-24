@@ -18,7 +18,7 @@ object NotificationCenterManagerMarkdown {
       val (done, notDone) = lines.toList.partition(_.startsWith("- [x]"))
 
       val toWrite: Option[String] = if (done.nonEmpty) {
-        Some(notDone.mkString("", "\n", "\n"))
+        Some(notDone.mkString("\n") + "\n")
       } else {
         None
       }
