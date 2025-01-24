@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+export WYZE_EMAIL=""
+export WYZE_PASSWORD=""
+export WYZE_KEY_ID=""
+export WYZE_API_KEY=""
+
+python wyze_server.py $1 # port from WYZE_URI of tinkerenv.bash

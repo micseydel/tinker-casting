@@ -35,7 +35,8 @@ object TinkerContainer {
         config.eventReceiverPort,
         config.ntfyKeys,
         config.fitbitAuthorizationBasic,
-        config.chimeHost
+        config.chimeHost,
+        config.wyzeUri
       ))(tinker), NtfyerActor()(_)
     )
 

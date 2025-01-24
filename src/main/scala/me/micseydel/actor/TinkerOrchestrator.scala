@@ -1,6 +1,5 @@
 package me.micseydel.actor
 
-import me.micseydel.actor.inactive.{LocationTracker, owntracks}
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.app.AppConfiguration.{AranetConfig, NtfyKeys}
@@ -20,17 +19,23 @@ object TinkerOrchestrator {
                     eventReceiverPort: Int,
                     ntfyKeys: NtfyKeys,
                     fitbitAuthorizationBasic: Option[String],
-                    chimeHost: Option[String]
+                    chimeHost: Option[String],
+                    wyzeUri: Option[String]
                    )
-
-  // actor mailbox
-
-//  sealed trait TinkerMessage
 
   // behavior
 
   def apply(config: Config)(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
 //    val locationTracker: SpiritRef[LocationTracker.Message] = context.cast(LocationTracker(), "LocationTracker")
+
+    config.wyzeUri match {
+      case Some(wyzeUri) =>
+        val wyzeActor = context.cast(WyzeActor(wyzeUri), "WyzeActor")
+        context.actorContext.log.info(s"Started WyzeActor for URI $wyzeUri")
+      case None =>
+        context.actorContext.log.warn("No Wyze URI")
+    }
+
 
     // !! specializations
 
@@ -59,9 +64,9 @@ object TinkerOrchestrator {
 
     implicit val tc: TinkerContext[_] = context
     Tinker.withMessages {
-      case event@ReceiveMqttEvent(owntracks.Topic, _) =>
-//        locationTracker !! LocationTracker.ReceiveMqtt(event)
-        Tinker.steadily
+//      case event@ReceiveMqttEvent(owntracks.Topic, _) =>
+////        locationTracker !! LocationTracker.ReceiveMqtt(event)
+//        Tinker.steadily
 
       case ReceiveMqttEvent(topic, payload) =>
         context.actorContext.log.warn(s"Unexpected topic $topic message, payload ${payload.length} bytes")

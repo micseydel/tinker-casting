@@ -28,10 +28,11 @@ soundfile
 #SpeechRecognition
 #pvporcupine
 
-#claranet4
-
 chime
 
-requests
-bitstruct
-bleak
+# compatibility issues?
+#requests
+#bitstruct
+#bleak
+
+wyze_sdk
