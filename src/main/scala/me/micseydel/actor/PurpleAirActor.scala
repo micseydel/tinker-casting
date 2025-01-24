@@ -79,7 +79,7 @@ private object ReadingPollingActor {
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
     val timeKeeper = context.castTimeKeeper()
-    timeKeeper !! TimeKeeper.RemindMeEvery(1.minutes, context.self, ReadingPollingActor.HeartBeat, None)
+    timeKeeper !! TimeKeeper.RemindMeEvery(10.minutes, context.self, ReadingPollingActor.HeartBeat, None)
 
     Tinker.withMessages {
       case HeartBeat =>
