@@ -35,6 +35,28 @@ def get_wyze_plug_list():
     return jsonify(result), 200
 
 
+@app.route('/wyze/plug', methods=['POST'])
+def set_plug_state():
+    input_json = request.get_json()
+
+    device_mac = input_json.get("device_mac")
+    if device_mac is None:
+        return jsonify({"err": f"JSON did not have key device_mac {input_json}"}), 400
+    else:
+        is_on = input_json.get("is_on")
+        if is_on is None:
+            return jsonify({"err": f"JSON did not have key is_on {input_json}"}), 400
+        else:
+            plug = client.plugs.info(device_mac=device_mac)
+            print(f"Setting state {is_on} for plug {plug}")
+            if is_on:
+                client.plugs.turn_on(device_mac=plug.mac, device_model=plug.product.model)
+            else:
+                client.plugs.turn_off(device_mac=plug.mac, device_model=plug.product.model)
+
+    return jsonify({}), 204
+
+
 ###
 
 
@@ -63,11 +85,6 @@ if __name__ == "__main__":
 
     # FIXME global, lazy
     client = Client(email=email, password=password, key_id=key_id, api_key=api_key)
-
-    plugs: PlugsClient = client.plugs
-    t: Sequence[Plug] = plugs.list()
-    plug: Plug = t[0]
-    plug.to_dict()
 
     app.run(
             # host='0.0.0.0',  # listen on the network, not just localhost

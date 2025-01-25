@@ -2,6 +2,7 @@ package me.micseydel.actor
 
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.ollama.OllamaActor
+import me.micseydel.actor.wyze.WyzeActor
 import me.micseydel.app.AppConfiguration.{AranetConfig, NtfyKeys}
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
