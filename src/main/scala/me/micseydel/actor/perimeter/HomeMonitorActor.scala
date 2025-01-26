@@ -1,7 +1,9 @@
 package me.micseydel.actor.perimeter
 
-import me.micseydel.actor.PurpleAirActor
+import akka.actor.typed.scaladsl.Behaviors
+import me.micseydel.actor.{AirQualityManagerActor, PurpleAirActor}
 import me.micseydel.actor.perimeter.AranetActor.AranetResults
+import me.micseydel.actor.wyze.WyzeActor
 import me.micseydel.app.AppConfiguration.AranetConfig
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
@@ -22,7 +24,7 @@ object HomeMonitorActor {
 
   //
 
-  def apply(maybeAranetConfig: Option[AranetConfig], ntfyCO2Key: Option[String], maybePurpleAirURI: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
+  def apply(maybeAranetConfig: Option[AranetConfig], ntfyCO2Key: Option[String], maybePurpleAirURI: Option[String], wyzeUri: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
     implicit val t: TinkerContext[_] = context
 
     val maybeAranetActor = maybeAranetConfig match {
@@ -35,15 +37,37 @@ object HomeMonitorActor {
         None
     }
 
-    maybePurpleAirURI match {
+    val maybePurpleAirActor = maybePurpleAirURI match {
       case Some(purpleAirURI) =>
         context.actorContext.log.info("Starting PurpleAir actor")
-        @unused // driven by an internal timer
-        val purpleAir = context.cast(PurpleAirActor(purpleAirURI), "PurpleAirActor")
+        Some(context.cast(PurpleAirActor(purpleAirURI), "PurpleAirActor"))
       case None =>
         context.actorContext.log.warn("No PurpleAir URI in config, will not measure AQI")
+        None
     }
 
+    val maybeWyzeActor: Option[SpiritRef[WyzeActor.Message]] = wyzeUri match {
+      case Some(wyzeUri) =>
+        context.actorContext.log.info(s"Starting WyzeActor for URI $wyzeUri")
+        Some(context.cast(WyzeActor(wyzeUri), "WyzeActor"))
+      case None =>
+        context.actorContext.log.warn("No Wyze URI, creating an inert actor")
+        None
+    }
+
+    @unused // driven internally
+    val airQualityManagerActor = for {
+      purpleAirActor <- maybePurpleAirActor
+      wyzeActor <- maybeWyzeActor
+      aranetActor <- maybeAranetActor
+    } yield {
+      context.actorContext.log.info("Starting AirQualityManagerActor")
+      context.cast(AirQualityManagerActor(purpleAirActor, wyzeActor, aranetActor), "AirQualityManagerActor")
+    }
+
+    if (airQualityManagerActor.isEmpty) {
+      context.actorContext.log.warn(s"Failed to start AirQualityManagerActor: maybePurpleAirActor=$maybePurpleAirActor, maybeWyzeActor=$maybeWyzeActor, maybeAranetActor=$maybeAranetActor")
+    }
 
     context.actorContext.log.info("Started CO_Monitor; RemindMeEvery(10.minutes) Heartbeat")
     val timeKeeper = context.castTimeKeeper()

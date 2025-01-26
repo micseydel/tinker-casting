@@ -3,7 +3,7 @@ package me.micseydel.util
 import cats.data.Validated
 import me.micseydel.NoOp
 
-import java.io.{File, FileNotFoundException, FileWriter, PrintWriter}
+import java.io.{File, FileNotFoundException, FileWriter, IOException, PrintWriter}
 import java.nio.file.{Files, Path, Paths}
 import scala.io.{BufferedSource, Source}
 import scala.util.{Failure, Success, Try, Using}
@@ -41,6 +41,9 @@ object FileSystemUtil {
   }
 
   def writeToPath(path: Path, string: String): NoOp.type = {
+    val dir = path.toFile.getParentFile()
+    if (!dir.exists && !dir.mkdirs()) throw new IOException(s"Path $path does not exist and creation failed")
+
     Using.resource(new PrintWriter(path.toString)) { writer =>
       writer.write(string)
     }

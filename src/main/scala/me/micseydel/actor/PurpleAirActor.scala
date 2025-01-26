@@ -21,12 +21,10 @@ import scala.util.{Failure, Success}
 
 object PurpleAirActor {
   sealed trait Message
-//  case class Subscribe(data: RawSensorData) extends Message
+  case class Subscribe(subscriber: SpiritRef[RawSensorData]) extends Message
   private case class ReceiveRawSensorData(data: RawSensorData) extends Message
 
   def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    implicit val c: TinkerContext[_] = context
-
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]] = context.cast(DailyNotesRouter(
       "PurpleAir AQI measurements",
       "purpleair",
@@ -37,12 +35,24 @@ object PurpleAirActor {
     @unused // internally driven
     val readingActor = context.cast(ReadingPollingActor(uri, context.messageAdapter(ReceiveRawSensorData)), "ReadingPollingActor")
 
-    Tinker.withMessages {
+    behavior(Nil, dailyNotesAssistant)
+  }
+
+  private def behavior(subscribers: List[SpiritRef[RawSensorData]], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val c: TinkerContext[_] = context
+    message match {
+      case Subscribe(subscriber) =>
+        behavior(subscriber :: subscribers, dailyNotesAssistant)
       case ReceiveRawSensorData(data) =>
         dailyNotesAssistant !! DailyNotesRouter.Envelope(
           DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(data),
           data.zonedDatetime
         )
+
+        for (subscriber <- subscribers) {
+          subscriber !! data
+        }
+
         Tinker.steadily
     }
   }

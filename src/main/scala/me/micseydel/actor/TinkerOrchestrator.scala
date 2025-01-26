@@ -29,17 +29,9 @@ object TinkerOrchestrator {
   def apply(config: Config)(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
 //    val locationTracker: SpiritRef[LocationTracker.Message] = context.cast(LocationTracker(), "LocationTracker")
 
-    config.wyzeUri match {
-      case Some(wyzeUri) =>
-        val wyzeActor = context.cast(WyzeActor(wyzeUri), "WyzeActor")
-        context.actorContext.log.info(s"Started WyzeActor for URI $wyzeUri")
-      case None =>
-        context.actorContext.log.warn("No Wyze URI")
-    }
-
-
     // !! specializations
 
+    @unused // driven internally
     val llmTinkeringActor = context.cast(LLMTinkeringActor(), "LLMTinkeringActor")
 
     @unused // uses an internal folder watcher
