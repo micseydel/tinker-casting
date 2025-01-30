@@ -16,7 +16,7 @@ object WyzeActor {
 
   private final case class ReceiveVaultPathUpdatedEvent(vaultPathUpdatedEvent: VaultPathUpdatedEvent) extends Message
 
-  private val NoteName = "Wyze tinkering"
+  private val NoteName = "Wyze Plugs"
 
   def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.rgb(0, 255, 255), "🔌").setup { _ =>
     Tinker.initializedWithNote(NoteName, "_actor_notes/wyze") { (context, noteRef) =>
@@ -97,14 +97,15 @@ object WyzeActor {
                     val maybeOnOff: Option[Boolean] = line(3) match {
                       case Off => Some(false)
                       case On => Some(true)
+                      case '[' => None
                       case _ =>
-                        context.actorContext.log.warn(s"Wierd line: $line")
+                        context.actorContext.log.warn(s"Weird line: $line")
                         None
                     }
 
                     maybeOnOff.flatMap { onOff =>
-                      line.split(": ").toList match {
-                        case List(_, mac) =>
+                      line.drop(18).split("\\|").toList match {
+                        case List(mac, _) =>
                           Some(mac -> onOff)
                         case _ =>
                           context.actorContext.log.warn(s"Expected nickname:mac but got `$line``")
