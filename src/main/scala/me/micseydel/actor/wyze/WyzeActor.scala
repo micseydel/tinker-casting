@@ -44,17 +44,27 @@ object WyzeActor {
 
           case WyzePlugAPIResult(wyze_plug_list) =>
             noteRef.setMarkdown {
-              s"- Markdown generated ${context.system.clock.now()}\n" +
-                wyze_plug_list.map {
-                  case WyzePlug(_, mac, nickname, maybe_is_on) =>
-                    maybe_is_on match {
-                      case Some(true) =>
-                        s"- [ ] $nickname: $mac"
-                      case Some(false) =>
-                        s"- [x] $nickname: $mac"
-                      case None =>
-                        s"- $nickname: $mac"
+              val now = context.system.clock.now()
+              s"- From ${now.toString.slice(0, 16)}\n" +
+                wyze_plug_list.sortBy {
+                  case WyzePlug(_, _, nickname, is_on) =>
+                    is_on match {
+                      case _ if nickname.contains("air purifier") => -3
+                      case Some(true) => -2
+                      case Some(false) => -1
+                      case None => 0
                     }
+                }.map {
+                  case WyzePlug(_, mac, nickname, maybe_is_on) =>
+                    val prefix = maybe_is_on match {
+                      case Some(true) =>
+                        s"[ ] "
+                      case Some(false) =>
+                        s"[x] "
+                      case None =>
+                        ""
+                    }
+                    s"- $prefix[[Wyze plug $mac|$nickname]]"
                 }.mkString("\n") + "\n"
             }
 

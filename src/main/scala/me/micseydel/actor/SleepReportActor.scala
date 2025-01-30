@@ -48,7 +48,7 @@ object SleepReportActor {
         context.actorContext.log.debug(s"Uncomment RequestSleep(context.messageAdapter(ReceiveSleepReport) line to fetch sleep data at startup")
 
         // uncomment this to fetch today's Fitbit sleep report on startup (instead of just at scheduled times)
-                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
+//                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
 
         // uncomment to refresh Markdown on startup (e.g. if you're tinkering)
         //        jsonRef.read() match {
