@@ -1,6 +1,8 @@
 package me.micseydel.vault.persistence
 
 import me.micseydel.NoOp
+import me.micseydel.actor.ActorNotesFolderWatcherActor
+import me.micseydel.dsl.TinkerContext
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.{Note, NoteId, VaultPath}
 import spray.json._
@@ -12,7 +14,7 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait VaultRef
 
-abstract class NoteRef(val noteId: NoteId) extends VaultRef {
+abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) extends VaultRef {
   def readRaw(): Try[String]
 
   def readRawAsync()(implicit executionContext: ExecutionContext): Future[String]
@@ -62,6 +64,9 @@ abstract class NoteRef(val noteId: NoteId) extends VaultRef {
   def readNoteAsync()(implicit executionContext: ExecutionContext): Future[Note] =
     readRawAsync().map(rawToNote)
 
+  def readNote(): Try[Note] =
+    readRaw().map(rawToNote)
+
   def upsert(f: Note => Note): Try[Note] = {
     read()
       .recoverWith {
@@ -86,7 +91,7 @@ abstract class NoteRef(val noteId: NoteId) extends VaultRef {
 }
 
 
-class BasicNoteRef(override val noteId: NoteId, vaultRoot: VaultPath, subdirectory: Option[String]) extends NoteRef(noteId) {
+class BasicNoteRef(override val noteId: NoteId, vaultRoot: VaultPath, subdirectory: Option[String]) extends NoteRef(noteId, subdirectory) {
   private[this] val NoteFileName = s"${noteId.id}.md"
 
   private[persistence] def notePath: Path = subdirectory match {

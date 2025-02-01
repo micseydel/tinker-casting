@@ -25,7 +25,7 @@ object WyzeActor {
       val api = context.cast(WyzeAPIActor(wyzeUri), "WyzeAPIActor")
       api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
 
-      context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.Subscribe("wyze", context.messageAdapter(ReceiveVaultPathUpdatedEvent))
+      context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory("wyze", context.messageAdapter(ReceiveVaultPathUpdatedEvent))
 
       initializing(noteRef, api)
     }

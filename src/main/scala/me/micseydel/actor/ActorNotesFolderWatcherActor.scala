@@ -4,13 +4,16 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import cats.data.Validated
 import cats.data.Validated.{Invalid, Valid}
+import me.micseydel.NoOp
 import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.FolderWatcherActor.PathUpdatedEvent
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.vault.VaultPath
+import me.micseydel.vault.persistence.NoteRef
 
 import java.nio.file.Path
+import scala.annotation.unused
 
 /**
  * Provides an easy way to subscribe to watch for updates to \$VAULT_ROOT/_actor_notes/SUBSCRIBED
@@ -19,12 +22,16 @@ object ActorNotesFolderWatcherActor {
 
   val ActorNotesSubdirectory: String = "_actor_notes"
 
+  type Ping = NoOp.type
+
   // mailbox
 
   sealed trait Message
 
   final case class StartTinkering(tinker: Tinker) extends Message
-  final case class Subscribe(subdirectory: String, replyTo: SpiritRef[VaultPathUpdatedEvent]) extends Message
+  final case class SubscribeSubdirectory(subdirectory: String, replyTo: SpiritRef[VaultPathUpdatedEvent]) extends Message
+  final case class SubscribeNoteRef(noteRef: NoteRef, replyTo: SpiritRef[Ping]) extends Message
+  final case class ReceiveVaultPathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
 
   // behavior
 
@@ -34,7 +41,7 @@ object ActorNotesFolderWatcherActor {
       Behaviors.receiveMessage {
         case StartTinkering(tinker) =>
           context.log.info("Starting tinkering...")
-          stash.unstashAll(initialized(Map.empty)(tinker, actorNotesFolder))
+          stash.unstashAll(finishingInitialization(Map.empty, Map.empty)(tinker, actorNotesFolder))
         case other =>
           context.log.info("Not ready yet, stashing...")
           stash.stash(other)
@@ -43,13 +50,33 @@ object ActorNotesFolderWatcherActor {
     }
   }
 
-  private def initialized(folders: Map[String, SpiritRef[FolderWatcherActor.Message]])(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinker.setup { context =>
+  private def finishingInitialization(
+                           folders: Map[String, SpiritRef[FolderWatcherActor.Message]],
+                           topLevelNoteWatchers: Map[String, SpiritRef[Ping]]
+                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinker.setup { context =>
+
+    @unused // driven by an internal thread
+    val actorNotesFolderWatcher = context.spawn(
+      FolderWatcherActor(
+        actorNotesFolder,
+        context.castAnonymous(VaultPathAdapter(actorNotesFolder, context.messageAdapter(ReceiveVaultPathUpdatedEvent))).underlying
+      ),
+      s"FolderWatcherActor_for_actor_notes"
+    )
+
+    initialized(folders, topLevelNoteWatchers)
+  }
+
+  private def initialized(
+                           folders: Map[String, SpiritRef[FolderWatcherActor.Message]],
+                           topLevelNoteWatchers: Map[String, SpiritRef[Ping]]
+                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinker.setup { context =>
     Tinker.withMessages {
       case StartTinkering(_) =>
         context.actorContext.log.warn("Did not expect a StartTinkering message after initialization, ignoring")
         Tinker.steadily
 
-      case Subscribe(subdirectory, replyTo) =>
+      case SubscribeSubdirectory(subdirectory, replyTo) =>
         folders.get(subdirectory) match {
           case Some(_) =>
             context.actorContext.log.error(s"Subdirectory $subdirectory requested twice, need to add requester tracking to figure out if it's a bug or just needs to be ignored")
@@ -64,8 +91,36 @@ object ActorNotesFolderWatcherActor {
               ).behavior,
               s"FolderWatcherActor_for_$subdirectory"
             )
-            initialized(folders.updated(subdirectory, actorNotesFolderWatcher))
+            initialized(folders.updated(subdirectory, actorNotesFolderWatcher), topLevelNoteWatchers)
         }
+
+      case SubscribeNoteRef(noteRef, replyTo) =>
+        val noteId = noteRef.noteId.id
+        topLevelNoteWatchers.get(noteId) match {
+          case Some(existing) =>
+            context.actorContext.log.warn(s"Ref $replyTo tried to subscribe for $noteId, but $existing had already subscribed; keeping the status quo")
+            Tinker.steadily
+          case None =>
+            context.actorContext.log.info(s"Subscribing $noteId to $replyTo")
+            initialized(folders, topLevelNoteWatchers.updated(noteId, replyTo))
+        }
+
+      case ReceiveVaultPathUpdatedEvent(event) =>
+        event match {
+          case VaultPathAdapter.PathModifiedEvent(path) =>
+            val noteId = path.noteName
+            topLevelNoteWatchers.get(noteId) match {
+              case Some(subscriber) =>
+                implicit val c: TinkerContext[_] = context
+                subscriber !! NoOp
+              case None =>
+                context.actorContext.log.debug(s"No subscriber, ignoring path update for $path")
+            }
+
+          case VaultPathAdapter.PathDeletedEvent(_) | VaultPathAdapter.PathCreatedEvent(_) =>
+        }
+
+        Tinker.steadily
     }
   }
 }

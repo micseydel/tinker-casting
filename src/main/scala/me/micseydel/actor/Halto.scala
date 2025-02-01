@@ -7,8 +7,8 @@ import me.micseydel.actor.Halto._
 import me.micseydel.actor.HungerTracker.HungerState
 import me.micseydel.actor.NutritionListener.LastAte
 import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffect, PushNotification}
-import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetResults, Meta}
-import me.micseydel.actor.perimeter.HueControl
+import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetFailure, AranetResults, Meta}
+import me.micseydel.actor.perimeter.{AranetActor, HueControl}
 import me.micseydel.actor.perimeter.fitbit.FitbitActor
 import me.micseydel.actor.perimeter.fitbit.FitbitModel.{SleepReport, SleepSummary}
 import me.micseydel.app.AppConfiguration.NtfyKeys
@@ -47,8 +47,8 @@ object Halto {
     override def eventTime: ZonedDateTime = sleepReport.sleep.map(_.endTime).max
   }
 
-  case class ReceiveAranetResult(aranetResult: AranetResults) extends Event {
-    override def eventTime: ZonedDateTime = aranetResult.meta.captureTime
+  case class ReceiveAranetResult(aranetResult: AranetActor.Result) extends Event {
+    override def eventTime: ZonedDateTime = aranetResult.getOrFail.meta.captureTime
   }
 
   // for pattern matching
@@ -265,18 +265,23 @@ object Halto {
           }
 
         case ReceiveAranetResult(aranetResult) =>
-          aranetResult.preferred match {
-            case Some(Aranet(_, co2, humidity, _, pressure, _, temperature)) =>
-              val co2CurrentlyHigh = co2 > 1000
-              if (!highCO2.contains(co2CurrentlyHigh)) {
-                val updatedState = this.copy(highCO2 = Some(co2CurrentlyHigh), co2 = Some(co2))
-                (true, updatedState)
-              } else {
-                (false, this)
+          aranetResult match {
+            case AranetActor.AranetFailure(_) => (false, this)
+            case aranetResult@AranetResults(_, _) =>
+              aranetResult.preferred match {
+                case Some(Aranet(_, co2, humidity, _, pressure, _, temperature)) =>
+                  val co2CurrentlyHigh = co2 > 1000
+                  if (!highCO2.contains(co2CurrentlyHigh)) {
+                    val updatedState = this.copy(highCO2 = Some(co2CurrentlyHigh), co2 = Some(co2))
+                    (true, updatedState)
+                  } else {
+                    (false, this)
+                  }
+                case None =>
+                  (false, this)
               }
-            case None =>
-              (false, this)
           }
+
       }
     }
   }
@@ -302,6 +307,34 @@ object Halto {
     implicit val receiveSleepReportFormat: RootJsonFormat[ReceiveSleepReport] = jsonFormat1(ReceiveSleepReport)
 
     import me.micseydel.actor.perimeter.AranetActor.AranetJsonProtocol.payloadFormat
+
+    implicit object AranetFailureJsonFormat extends RootJsonFormat[AranetFailure] {
+      def write(m: AranetFailure): JsValue = {
+        JsString("AranetFailure")
+      }
+
+      def read(value: JsValue): AranetFailure = {
+        AranetFailure(new RuntimeException("placeholder/sentinel"))
+      }
+    }
+
+    implicit object AranetActorResultJsonFormat extends RootJsonFormat[AranetActor.Result] {
+      def write(m: AranetActor.Result): JsValue = {
+        val (jsObj, typ) = m match {
+          case o: AranetFailure => (o.toJson.asJsObject, "AranetFailure")
+          case o: AranetResults => (o.toJson.asJsObject, "AranetResults")
+        }
+        JsObject(jsObj.fields + ("type" -> JsString(typ)))
+      }
+
+      def read(value: JsValue): AranetActor.Result = {
+        value.asJsObject.getFields("type") match {
+          case Seq(JsString("AranetFailure")) => value.convertTo[AranetFailure]
+          case Seq(JsString("AranetResults")) => value.convertTo[AranetResults]
+          case other => throw DeserializationException(s"""Unknown type $other, expected {ReceiveLastAte, ReceiveFrustrationDetected, ReceiveSleepReport, ReceiveAranetResult}""")
+        }
+      }
+    }
 
     implicit val receiveAranetResultFormat: RootJsonFormat[ReceiveAranetResult] = jsonFormat1(ReceiveAranetResult)
 
@@ -380,9 +413,13 @@ private object MarkdownGenerator {
       case Nil =>
         accumulator
 
-      case ReceiveAranetResult(result) :: maybeBatch =>
-        val (line, remaining) = ConsecutiveCO2Batcher.batchConsecutiveCO2(result, maybeBatch)
-        helper(remaining, line :: accumulator)
+      case ReceiveAranetResult(response) :: maybeBatch =>
+        response match {
+          case AranetFailure(_) => helper(maybeBatch, accumulator)
+          case result@AranetResults(_, _) =>
+            val (line, remaining) = ConsecutiveCO2Batcher.batchConsecutiveCO2(result, maybeBatch)
+            helper(remaining, line :: accumulator)
+        }
 
       case head :: tail =>
         helper(tail, messageToString(head) :: accumulator)
@@ -401,7 +438,7 @@ private object MarkdownGenerator {
         val minutes = totalMinutesAsleep % 60
         s"Sleep report, latest $hours hours and $minutes minutes"
       case ReceiveAranetResult(aranetResult) =>
-        s"CO2 ${aranetResult.preferred.map(_.co2).orNull}"
+        s"CO2 ${aranetResult.getOrFail.preferred.map(_.co2).orNull}"
     }
   }
 }
@@ -417,7 +454,7 @@ private object ConsecutiveCO2Batcher {
   private def helper(messages: List[Event], accumulator: Option[Either[CO2Result, BatchResult]]): (Option[Either[CO2Result, BatchResult]], List[Event]) = messages match {
 
       // FIXME: I should log these drops, but for now the note just says "Capture failed" or whatever
-      case ReceiveAranetResult(aranetResult) :: remainder if aranetResult.preferred.isEmpty =>
+      case ReceiveAranetResult(aranetResult) :: remainder if aranetResult.getOrFail.preferred.isEmpty =>
         (accumulator, remainder)
 
       case ReceiveAranetResult(rs@AranetResults(_, Meta(_, captureTime))) :: remainder =>

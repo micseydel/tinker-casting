@@ -14,7 +14,7 @@ object LLMTinkeringActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
 
-    context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.Subscribe(
+    context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(
       Folder,
       context.messageAdapter(ReceivePathUpdatedEvent)
     )

@@ -29,7 +29,7 @@ object OllamaActor {
     context.castAnonymous(FetchModelsActor(context.messageAdapter(ReceiveModels)))
 
     context.actorContext.log.info(s"Subscribing to updates to $OllamaPrompts")
-    context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.Subscribe(OllamaPrompts, context.messageAdapter(ReceivePathUpdatedEvent))
+    context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(OllamaPrompts, context.messageAdapter(ReceivePathUpdatedEvent))
 
     Tinker.withMessages {
       case ReceiveModels(Models(models)) =>

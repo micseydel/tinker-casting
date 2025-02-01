@@ -17,10 +17,10 @@ object HomeMonitorActor {
   sealed trait Message
 
   sealed trait Monitoring extends Message
-  case class SubscribeAranet4(subscriber: SpiritRef[AranetResults]) extends Monitoring
+  case class SubscribeAranet4(subscriber: SpiritRef[AranetActor.Result]) extends Monitoring
 
   private case object HeartBeat extends Message
-  private case class ReceiveForSubscribers(results: AranetResults) extends Message
+  private case class ReceiveForSubscribers(results: AranetActor.Result) extends Message
 
   //
 
@@ -69,16 +69,17 @@ object HomeMonitorActor {
       context.actorContext.log.warn(s"Failed to start AirQualityManagerActor: maybePurpleAirActor=$maybePurpleAirActor, maybeWyzeActor=$maybeWyzeActor, maybeAranetActor=$maybeAranetActor")
     }
 
-    context.actorContext.log.info("Started CO_Monitor; RemindMeEvery(10.minutes) Heartbeat")
+    context.actorContext.log.info("Started CO2_Monitor; RemindMeEvery(10.minutes) Heartbeat")
     val timeKeeper = context.castTimeKeeper()
     timeKeeper !! TimeKeeper.RemindMeEvery(10.minutes, context.self, HeartBeat, None)
+    context.self !! HeartBeat
 
     context.system.operator !! Operator.RegisterHomeMonitor(context.self)
 
     behavior(maybeAranetActor, Set.empty)
   }
 
-  private def behavior(maybeAranet: Option[SpiritRef[AranetActor.Message]], subscribers: Set[SpiritRef[AranetResults]])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(maybeAranet: Option[SpiritRef[AranetActor.Message]], subscribers: Set[SpiritRef[AranetActor.Result]])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val t: TinkerContext[_] = context
     message match {
       case SubscribeAranet4(subscriber) =>

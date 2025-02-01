@@ -4,6 +4,8 @@ import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{Behavior, Scheduler}
 import akka.util.Timeout
+import me.micseydel.actor.ActorNotesFolderWatcherActor
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.{Ability, await}
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.TinkerBrain.RegisterTinkerer
@@ -164,6 +166,13 @@ class Tinker(val tinkerSystem: TinkerSystem) {
       }
     }
   }
+
+  def withWatchedActorNote[T](noteName: String, adapterF: Ping => T)(f: (TinkerContext[T], NoteRef) => Ability[T]): Ability[T] =
+    initializedWithNote(noteName, Some("_actor_notes")) { (context, noteRef) =>
+      implicit val c: TinkerContext[_] = context
+      context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeNoteRef(noteRef, context.messageAdapter(adapterF))
+      f(context, noteRef)
+    }
 }
 
 object TinkerListener {
@@ -172,7 +181,9 @@ object TinkerListener {
   case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
   sealed trait ListenerResult
+
   case object Ignored extends ListenerResult
+
   case class Acknowledged(listenerAcknowledgement: ListenerAcknowledgement) extends ListenerResult
 
   def simpleStateless(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>

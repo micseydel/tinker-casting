@@ -1,8 +1,7 @@
 package me.micseydel.dsl
 
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.actor.perimeter.AranetActor.AranetResults
-import me.micseydel.actor.perimeter.HomeMonitorActor
+import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor}
 import me.micseydel.dsl.Tinker.Ability
 
 object Operator {
@@ -12,7 +11,7 @@ object Operator {
   case class RegisterHomeMonitor(registrant: SpiritRef[HomeMonitorActor.Monitoring]) extends Register
 
   sealed trait Subscribe extends Message
-  case class SubscribeAranet4(subscriber: SpiritRef[AranetResults]) extends Subscribe
+  case class SubscribeAranet4(subscriber: SpiritRef[AranetActor.Result]) extends Subscribe
 
   // behavior
 

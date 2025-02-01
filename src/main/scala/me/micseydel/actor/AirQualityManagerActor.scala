@@ -15,7 +15,7 @@ object AirQualityManagerActor {
 
   case class ReceivePurpleAir(data: RawSensorData) extends Message
 
-  case class ReceiveAranetResults(results: AranetResults) extends Message
+  case class ReceiveAranetResults(results: AranetActor.Result) extends Message
 
 
   private val Filename = "Air Quality Management"
@@ -51,10 +51,11 @@ object AirQualityManagerActor {
             initialized(toMeasurement(raw), co2)
         }
 
-      case ReceiveAranetResults(results) =>
+      case ReceiveAranetResults(result) =>
+        val results = result.getOrFail
         toMeasurement(results) match {
           case None =>
-            context.actorContext.log.warn(s"Aranet results were empty at ${results.meta.captureTime} for elapsed ${results.meta.elapsed}s")
+            context.actorContext.log.warn(s"""Aranet results were empty at ${results.meta.captureTime} for elapsed ${results.meta.elapsed}s""")
             Tinker.steadily
 
           case Some(co2) =>
@@ -65,6 +66,7 @@ object AirQualityManagerActor {
                 initializing(None, Some(co2))
             }
         }
+
     }
   }
 
