@@ -21,6 +21,7 @@ Here, we see atomic agents dedicated to
 - A notification center ❗️
   - Notifications via [Ntfy](https://ntfy.sh/) 📧
 - [HALT](https://health.clevelandclinic.org/halt-hungry-angry-lonely-tired) and CO2 tracking 🛑
+- etc
 
 ## Technical details
 
