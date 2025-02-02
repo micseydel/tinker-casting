@@ -248,8 +248,12 @@ case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] =
   def receive(onMessage: (TinkerContext[T], T) => Ability[T])(implicit Tinker: Tinker): Ability[T] =
     setup(_ => Tinker.receive(onMessage))
 
-  def initializedWithNote(noteName: String, subdirectory: Option[String] = None)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
+  def withNote(noteName: String, subdirectory: Option[String] = None)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
     setup(_ => Tinker.initializedWithNote(noteName, subdirectory)(f))
+  }
+
+  def withWatchedActorNote(noteName: String, adapterF: Ping => T)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
+    Tinker.withWatchedActorNote(noteName, adapterF)(f)
   }
 
   def initializedWithTypedJson[J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {

@@ -26,7 +26,7 @@ object AirQualityManagerActor {
              wyzeActor: SpiritRef[WyzeActor.Message],
              aranetActor: SpiritRef[AranetActor.Message]
            )(implicit Tinker: Tinker): Ability[Message] =
-    Tinkerer(TinkerColor.rgb(255, 255, 255), "🫧").initializedWithNote(Filename, Subdirectory) { (context, noteRef) =>
+    Tinkerer(TinkerColor.rgb(255, 255, 255), "🫧").withNote(Filename, Subdirectory) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
 
       purpleAirActor !! PurpleAirActor.Subscribe(context.messageAdapter(ReceivePurpleAir))

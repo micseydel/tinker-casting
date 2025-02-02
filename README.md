@@ -40,6 +40,7 @@ Inspiration includes
   - You can almost think of this as part 4, "Thinking With Code"
 - The [Thousand Brains hypothesis](https://www.numenta.com/resources/books/a-thousand-brains-by-jeff-hawkins/)
   - You can think of the actors as externalized reference frames
+  - However many cortical columns were dedicated to worrying about before, I got them back; it's kind of like having expanded my cortical column count by adding _specialized_ virtual ones
 
 It can be thought of a civilian version of the "hyper-enabled operator"
 - https://www.wired.com/story/us-military-hyper-enabled-operator/ (paywalled)

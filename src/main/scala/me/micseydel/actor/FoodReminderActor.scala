@@ -35,7 +35,7 @@ object FoodReminderActor {
   val MaxTimeWithoutEating: FiniteDuration = 4.hours
 
   private def setup(hungerTracker: SpiritRef[HungerState], foodTimeNtfyKey: Option[String])(implicit Tinker: Tinker): Ability[Message] = {
-    Tinkerer(rgb(135, 206, 235), "🍲").initializedWithNote(NoteName) { (context, noteRef) =>
+    Tinkerer(rgb(135, 206, 235), "🍲").withNote(NoteName) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 

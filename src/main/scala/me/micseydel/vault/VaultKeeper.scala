@@ -9,6 +9,7 @@ import org.yaml.snakeyaml.Yaml
 import spray.json.{DefaultJsonProtocol, JsonFormat, RootJsonFormat}
 
 import java.nio.file.Path
+import java.util
 import scala.jdk.javaapi.CollectionConverters
 import scala.util.{Failure, Success, Try}
 
@@ -154,14 +155,24 @@ case class Note private[vault] (
   }
 
   def yamlFrontMatter: Option[Map[String, Any]] = frontmatter.map { yaml =>
-    val javaMap: java.util.Map[String, Any] = Note.yaml.load(yaml)
+    val javaMap: java.util.Map[String, Any] = Note.Yaml.load(yaml)
     val scalaMap: Map[String, Any] = CollectionConverters.asScala(javaMap).toMap
     scalaMap
   }
 }
 
 object Note {
-  val yaml = new Yaml()
+  val Yaml = new Yaml()
+
+  def apply(markdown: String, frontmatter: Map[String, Object]): Note  = {
+    // workaround for Yaml library
+    val asJava: util.Map[String, Object] = new java.util.HashMap[String, Object]()
+    for ((key, value) <- frontmatter) {
+      asJava.put(key, value)
+    }
+
+    Note(markdown, Some(Yaml.dump(asJava)))
+  }
 }
 
 case class SpiritId private[vault](id: String)
