@@ -9,6 +9,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.pattern.after
 import akka.util.Timeout
 import cats.data.Validated.{Invalid, Valid}
+import me.micseydel.NoOp
 import me.micseydel.actor.HueListener
 import me.micseydel.actor.notifications.NotificationCenterManager.HueCommand
 import me.micseydel.actor.perimeter.HueControl.{DoALightShow, FlashTheLight, FlashTheLights, HueConfig, SetBrightness, SetLight, TurnOffAllLights, TurnOffLight}
@@ -23,6 +24,7 @@ import me.micseydel.model.Light.AllList
 import me.micseydel.model.LightStates._
 import me.micseydel.model._
 import me.micseydel.vault.NoteId
+import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.Duration
@@ -37,6 +39,7 @@ object HueControl {
   sealed trait Message
 
   case class StartTinkering(tinker: Tinker) extends Message
+  case class NoteUpdated(noOp: NoOp.type) extends Message
 
   // to change the lights
   sealed trait Command extends Message
@@ -105,11 +108,47 @@ object HueControl {
 
   // states / behaviors
 
-  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = Tinker.withWatchedActorNote[Message]("Hue Control", NoteUpdated) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
     implicit val actorSystem: ActorSystem[Nothing] = context.system.actorSystem
 
-    message match {
+    resetMarkdown(noteRef)
+
+    Tinker.withMessages {
+      case NoteUpdated(_) =>
+        val fromDisk = noteRef.readMarkdown() match {
+          case Failure(exception) => throw exception
+          case Success(markdown) =>
+            markdown.split("\n").toList.map { line =>
+              line(3) match {
+                case 'x' => true
+                case _ => false
+              }
+            }
+        }
+
+        fromDisk match {
+          case List(doFlash, doLightShow) =>
+            val doResetMarkdown = if (doFlash) {
+              context.self !! FlashTheLights()
+              true
+            } else if (doLightShow) {
+              context.self !! DoALightShow()
+              true
+            } else {
+              false
+            }
+
+            if (doResetMarkdown) {
+              resetMarkdown(noteRef)
+            }
+
+          case other =>
+            context.actorContext.log.warn(s"Unexpected list contents: $other")
+        }
+
+        Tinker.steadily
+
       case stateUpdate: StateUpdate =>
         context.actorContext.log.debug(s"Was waiting for command, did not expect Hue status update $stateUpdate")
         Tinker.steadily
@@ -200,6 +239,13 @@ object HueControl {
       case StartTinkering(_) =>
         context.actorContext.log.warn("Received a redundant StartTinkering")
         Tinker.steadily
+    }
+  }
+
+  private def resetMarkdown(noteRef: NoteRef): Unit = {
+    noteRef.setMarkdown("- [ ] Flash the lights 💡\n- [ ] Do a light show 🌈\n") match {
+      case Failure(exception) => throw exception
+      case Success(_) =>
     }
   }
 }
