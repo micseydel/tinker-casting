@@ -30,7 +30,7 @@ def to_dict_better(p: Plug):
 
 @app.route('/wyze/plug', methods=['GET'])
 def get_wyze_plug_list():
-    devices = [to_dict_better(e) for e in client.plugs_list()]
+    devices = [to_dict_better(client.get_plug(e.mac)) for e in client.plugs_list()]
     result = {"wyze_plug_list": devices}
     return jsonify(result), 200
 

@@ -46,7 +46,7 @@ async def get_aras_result(addresses, timeout_seconds):
     print(f"Aras fetching took {elapsed:.1f}s")
 
     return {
-        "aras": results,
+        "aras": [r for r in results if r is not None],
         "meta": {
             "elapsed": elapsed,
             "captureTime": int(time.time())
