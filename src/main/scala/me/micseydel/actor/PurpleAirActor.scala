@@ -40,11 +40,23 @@ object PurpleAirActor {
       PurpleAirMarkdown.apply
     ), "DailyNotesRouter")
 
-    val DefaultPollingInterval = 10.minutes
+    val initialPollingInterval = noteRef.read() match {
+      case Failure(exception) => throw exception
+      case Success(note) =>
+        note.yamlFrontMatter.get("polling_interval_minutes") match {
+          case Some(value: Int) =>
+            context.actorContext.log.info(s"Using polling_interval_minutes $value from disk")
+            value.minutes
+          case other =>
+            val default = 10.minutes
+            context.actorContext.log.info(s"Using polling_interval_minutes default ${default.toMinutes} (ignoring $other)")
+            default
+        }
+    }
 
-    val apiPoller: SpiritRef[PurpleAirPollingActor.Message] = context.cast(PurpleAirPollingActor(uri, DefaultPollingInterval, context.messageAdapter(ReceiveRawSensorData)), "PurpleAirPollingActor")
+    val apiPoller: SpiritRef[PurpleAirPollingActor.Message] = context.cast(PurpleAirPollingActor(uri, initialPollingInterval, context.messageAdapter(ReceiveRawSensorData)), "PurpleAirPollingActor")
 
-    behavior(DefaultPollingInterval.toMinutes, Nil)(Tinker, noteRef, dailyNotesAssistant, apiPoller)
+    behavior(initialPollingInterval.toMinutes, Nil)(Tinker, noteRef, dailyNotesAssistant, apiPoller)
   }
 
   private def behavior(
@@ -63,7 +75,6 @@ object PurpleAirActor {
 
           case Success(note@Note(markdown, _)) =>
             val yaml: Option[Map[String, Any]] = note.yamlFrontMatter
-            context.actorContext.log.warn(s"Frontmatter: $yaml")
 
             yaml match {
               case None =>
@@ -81,15 +92,22 @@ object PurpleAirActor {
 
                 val updateIntervalTo: Option[Long] =
                   frontmatter.get("polling_interval_minutes") match {
-                    case Some(value: Int) if value > 0 && value != pollingIntervalMinutes => Some(value.toLong)
+                    case Some(value: Int) if value > 0 =>
+                      if (value == pollingIntervalMinutes) {
+                        context.actorContext.log.debug("polling_interval_minutes, ignoring")
+                        None
+                      } else {
+                        context.actorContext.log.info(s"polling_interval_minutes is now $value")
+                        Some(value.toLong)
+                      }
                     case other =>
-                      context.actorContext.log.warn(s"Ignoring $other")
+                      context.actorContext.log.warn(s"Ignoring polling_interval_minutes $other")
                       None
                   }
 
                 if (refreshNow || updateIntervalTo.nonEmpty) {
                   val alteringPolling = AlterPolling(forceCheckNow = refreshNow, interval = updateIntervalTo.map(_.minutes))
-                  context.actorContext.log.warn(s"Altering polling! $alteringPolling")
+                  context.actorContext.log.debug(s"Altering polling! $alteringPolling")
                   apiPoller !! alteringPolling
                 } else {
                   context.actorContext.log.info("Ignoring Frontmatter update - refreshNow was false and no valid update interval")
@@ -97,7 +115,6 @@ object PurpleAirActor {
 
                 updateIntervalTo match {
                   case Some(updatedInterval) =>
-                    context.actorContext.log.warn(s"Caching updated interval $updatedInterval")
                     behavior(updatedInterval, subscribers)
                   case None => Tinker.steadily
                 }
@@ -205,11 +222,11 @@ private object PurpleAirPollingActor {
         Tinker.steadily
 
       case inert@AlterPolling(false, None) =>
-        context.actorContext.log.warn(s"Received inert AlterPolling request $inert")
+        context.actorContext.log.debug(s"Received inert AlterPolling request $inert")
         Tinker.steadily
 
       case a@AlterPolling(forceCheckNow, maybeDuration) =>
-        context.actorContext.log.warn(s"AlterPolling $a")
+        context.actorContext.log.debug(s"AlterPolling $a")
         if (forceCheckNow) {
           context.actorContext.log.info("A check outside of the usual heartbeat has been requested, making API request now...")
           makeRequest(uri)
