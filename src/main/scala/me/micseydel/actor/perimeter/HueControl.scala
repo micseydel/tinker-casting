@@ -98,17 +98,18 @@ object HueControl {
     }
   }
 
-  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = Tinkerer(rgb(230, 230, 230), "🕹️").setup { context =>
+  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = Tinkerer[Message](rgb(230, 230, 230), "🕹️").withWatchedActorNote("Hue Control", NoteUpdated) { (context, noteRef) =>
     // call this actor if needed
     @unused
     val hueListener = context.cast(HueListener(context.self), "HueListener")
 
+    implicit val nr: NoteRef = noteRef
     behavior(lightKeepersByName, lightKeepersByLight)
   }
 
   // states / behaviors
 
-  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = Tinker.withWatchedActorNote[Message]("Hue Control", NoteUpdated) { (context, noteRef) =>
+  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     implicit val actorSystem: ActorSystem[Nothing] = context.system.actorSystem
 
