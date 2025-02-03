@@ -4,6 +4,7 @@ import me.micseydel.dsl.TinkerClock
 
 import java.time.{Duration, Instant, LocalDate, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 
@@ -57,6 +58,10 @@ object TimeUtil {
 
   def between(from: ZonedDateTime, to: ZonedDateTime): FiniteDuration = {
     FiniteDuration(Duration.between(from, to).toMillis, TimeUnit.MILLISECONDS)
+  }
+
+  def daysSince(from: LocalDate)(implicit tinkerClock: TinkerClock): Long = {
+    ChronoUnit.DAYS.between(from, tinkerClock.now())
   }
 
   val EarliestZonedDateTime: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochMilli(0), ZoneId.systemDefault())

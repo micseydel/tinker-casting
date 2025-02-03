@@ -229,9 +229,9 @@ private object TinkerNoteWriter {
 
     val formattedNodes = nodes.map {
       case TinkerNode(id, color, emoji, x, y, href) =>
-//        s"$id ($color, $emoji, $href)"
-
-        s"`$id`"
+        s"""${id.split('/').last}
+           |    - `${id.drop(17)}`
+           |    - $emoji $color""".stripMargin
     }.mkString("- ", "\n- ", "")
 
     val formattedEdges = edges.map {
@@ -240,7 +240,8 @@ private object TinkerNoteWriter {
     }.mkString("- ", "\n- ", "")
 
     noteRef.setMarkdown(
-      s"""# Nodes
+      s"""- Generated ${context.system.clock.now()}
+         |# Nodes
          |
          |$formattedNodes
          |
@@ -323,10 +324,19 @@ private object TinkerBrainUtil {
 
     // FIXME: hacky but the graph looks awful without this
     (
-      nodes.filterNot(_.id.contains("TranscriptionNoteWrapper_")),
+      nodes
+        .filterNot(_.id.contains("TranscriptionNoteWrapper_"))
+        .filterNot(_.id.contains("ChroniclerMOC"))
+        .filterNot(_.id.contains("Operator"))
+      // ReadingPollingActor temporary, to be removed after a few days
+        .filterNot(_.id.contains("ReadingPollingActor"))
+      ,
       edges.filterNot {
         case TinkerEdge(source, target) =>
-          source.contains("TranscriptionNoteWrapper_") || target.contains("TranscriptionNoteWrapper_")
+          source.contains("TranscriptionNoteWrapper_") || target.contains("TranscriptionNoteWrapper_") ||
+            source.contains("ChroniclerMOC") || target.contains("ChroniclerMOC") ||
+            source.contains("Operator") || target.contains("Operator") ||
+            source.contains("ReadingPollingActor") || target.contains("ReadingPollingActor")
       },
       todaysFrames
     )
@@ -359,11 +369,26 @@ private object TinkerBrainUtil {
 
         case None =>
           log.debug(s"nodeName $nodeName not found in ${tinkerers.keys}")
-          TinkerNode(
-            nodeName,
-            TinkerColor.random().toString,
-            None, None, None, None
-          )
+
+          if (nodeName.endsWith("Operator")) {
+            TinkerNode(
+              nodeName,
+              TinkerColor(0, 0, 0).toString,
+              Some("☎️"), None, None, None
+            )
+          } else if (nodeName.endsWith("VaultKeeper")) {
+            TinkerNode(
+              nodeName,
+              TinkerColor(151, 7, 223).toString,
+              Some("🏦"), None, None, None
+            )
+          } else {
+            TinkerNode(
+              nodeName,
+              TinkerColor.random().toString,
+              None, None, None, None
+            )
+          }
       }
     }
 

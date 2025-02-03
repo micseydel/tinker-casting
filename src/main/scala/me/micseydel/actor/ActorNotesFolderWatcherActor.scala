@@ -8,12 +8,13 @@ import me.micseydel.NoOp
 import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.FolderWatcherActor.PathUpdatedEvent
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext, Tinkerer}
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
 
 import java.nio.file.Path
 import scala.annotation.unused
+import scala.util.{Failure, Success}
 
 /**
  * Provides an easy way to subscribe to watch for updates to \$VAULT_ROOT/_actor_notes/SUBSCRIBED
@@ -53,8 +54,7 @@ object ActorNotesFolderWatcherActor {
   private def finishingInitialization(
                            folders: Map[String, SpiritRef[FolderWatcherActor.Message]],
                            topLevelNoteWatchers: Map[String, SpiritRef[Ping]]
-                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinker.setup { context =>
-
+                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinkerer(TinkerColor(25, 25, 25), "👀").withNote("ActorNotesFolderWatcherActor") { (context, noteRef) =>
     @unused // driven by an internal thread
     val actorNotesFolderWatcher = context.spawn(
       FolderWatcherActor(
@@ -64,13 +64,37 @@ object ActorNotesFolderWatcherActor {
       s"FolderWatcherActor_for_actor_notes"
     )
 
+    implicit val nr: NoteRef = noteRef
     initialized(folders, topLevelNoteWatchers)
   }
 
   private def initialized(
                            folders: Map[String, SpiritRef[FolderWatcherActor.Message]],
                            topLevelNoteWatchers: Map[String, SpiritRef[Ping]]
-                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinker.setup { context =>
+                         )(implicit Tinker: Tinker, actorNotesFolder: Path, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    noteRef.setMarkdown {
+      val formattedFolders = folders.map { case (folder, sub) =>
+        s"- $folder ${sub.path.toString.drop(24).takeWhile(_ != '$')}"
+      }.mkString("\n")
+
+      val formattedTopLevelNoteWatchers = topLevelNoteWatchers.map { case (note, sub) =>
+        s"- $note ${sub.path.toString.drop(24).takeWhile(_ != '$')}"
+      }.mkString("\n")
+
+      s"""- Generated ${context.system.clock.now()}
+         |# Folders
+         |
+         |$formattedFolders
+         |
+         |# Note watchers
+         |
+         |$formattedTopLevelNoteWatchers
+         |""".stripMargin
+    } match {
+      case Failure(exception) => throw exception
+      case Success(_) =>
+    }
+
     Tinker.withMessages {
       case StartTinkering(_) =>
         context.actorContext.log.warn("Did not expect a StartTinkering message after initialization, ignoring")
@@ -94,8 +118,8 @@ object ActorNotesFolderWatcherActor {
             initialized(folders.updated(subdirectory, actorNotesFolderWatcher), topLevelNoteWatchers)
         }
 
-      case SubscribeNoteRef(noteRef, replyTo) =>
-        val noteId = noteRef.noteId.id
+      case SubscribeNoteRef(subscriberNoteRef, replyTo) =>
+        val noteId = subscriberNoteRef.noteId.id
         topLevelNoteWatchers.get(noteId) match {
           case Some(existing) =>
             context.actorContext.log.warn(s"Ref $replyTo tried to subscribe for $noteId, but $existing had already subscribed; keeping the status quo")

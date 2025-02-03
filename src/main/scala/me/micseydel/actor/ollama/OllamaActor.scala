@@ -4,7 +4,7 @@ import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult, Details, Model, Models}
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, VaultPathAdapter}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{Tinker, TinkerContext}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, Tinkerer}
 import spray.json._
 
 import java.time.ZonedDateTime
@@ -22,7 +22,7 @@ object OllamaActor {
 
   private case class ReceivePathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.initializedWithNote("Ollama Testing") { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(7, 164, 223), "🦙").withNote("Ollama Testing") { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
 
     context.actorContext.log.info("Requesting Ollama models....")

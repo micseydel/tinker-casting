@@ -7,7 +7,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.actor.wyze.WyzePlugModel.WyzeAPIJsonProtocol.wyzePlugAPIResultJsonFormat
 import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlugAPIResponse, WyzePlugAPIResponseFailed, WyzePlugAPIResult}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext, Tinkerer}
 import spray.json._
 
 import scala.annotation.unused
@@ -22,7 +22,7 @@ private[wyze] object WyzeAPIActor {
   final case class SetPlugIsOn(deviceMac: String, isOn: Boolean) extends Message
 
 
-  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.rgb(0, 255, 255), "☁️").setup { context =>
     Tinker.withMessages {
       case GetDevices(replyTo) =>
         val request = HttpRequest(

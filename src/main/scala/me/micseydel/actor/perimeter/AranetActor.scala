@@ -7,7 +7,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.Common.ZonedDateTimeJsonFormat
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext, Tinkerer}
 import me.micseydel.vault.Note
 import spray.json._
 
@@ -35,7 +35,7 @@ object AranetActor {
   private val NoteName = "Aranet Devices"
 
   private def behavior(config: Config, lastSeenElevated: Boolean)(implicit Tinker: Tinker): Ability[Message] = {
-    Tinker.withWatchedActorNote[Message](NoteName, ReceiveNoteUpdated.apply) { (context, noteRef) =>
+    Tinkerer[Message](TinkerColor(223, 58, 7), "😶‍🌫️").withWatchedActorNote(NoteName, ReceiveNoteUpdated.apply) { (context, noteRef) =>
       import AranetJsonProtocol.payloadFormat
 
       val httpRequest = HttpRequest(

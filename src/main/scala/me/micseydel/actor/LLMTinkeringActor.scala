@@ -3,7 +3,7 @@ package me.micseydel.actor
 import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.ollama.WhiteSpaceAddingExperimentActor
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{Tinker, TinkerContext}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, Tinkerer}
 
 object LLMTinkeringActor {
   sealed trait Message
@@ -11,7 +11,7 @@ object LLMTinkeringActor {
   private case class ReceivePathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
 
   val Folder = "llmtinkering"
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(71, 255, 84), "🧪").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(

@@ -253,7 +253,7 @@ case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] =
   }
 
   def withWatchedActorNote(noteName: String, adapterF: Ping => T)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
-    Tinker.withWatchedActorNote(noteName, adapterF)(f)
+    setup(_ => Tinker.withWatchedActorNote(noteName, adapterF)(f))
   }
 
   def initializedWithTypedJson[J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
