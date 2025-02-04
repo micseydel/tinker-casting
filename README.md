@@ -38,9 +38,14 @@ Here, we see atomic agents dedicated to
 Inspiration includes
 - [The Extended Mind](https://anniemurphypaul.com/books/the-extended-mind/)
   - You can almost think of this as part 4, "Thinking With Code"
+  - (...and AI if/when needed)
+- [Kasparov's Law](https://news.northeastern.edu/2024/06/17/garry-kasparov-chess-humans-ai/)
+  - > \[...] which states that a human of average intelligence and an AI system working together in harmony is more effective than either working alone, and even more advantageous than a brilliant human working with a system poorly
+  - I personally don't see AI as integral to Kasparov's law, it applies to tech in general
 - The [Thousand Brains hypothesis](https://www.numenta.com/resources/books/a-thousand-brains-by-jeff-hawkins/)
   - You can think of the actors as externalized reference frames
   - However many cortical columns were dedicated to worrying about before, I got them back; it's kind of like having expanded my cortical column count by adding _specialized_ virtual ones
+  - I would say that I'm "**Building a Thousand Brains**" more than "Building a Second Brain" (a productivity brand)
 
 It can be thought of a civilian version of the "hyper-enabled operator"
 - https://www.wired.com/story/us-military-hyper-enabled-operator/ (paywalled)
