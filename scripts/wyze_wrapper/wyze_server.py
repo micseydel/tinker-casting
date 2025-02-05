@@ -82,7 +82,7 @@ class ClientWrapper:
     def devices_list(self) -> List[Device]:
         try:
             return self.client.devices_list()
-        except wyze_sdk.errors.WyzeApiError as e:
+        except WyzeApiError as e:
             if "access token has expired" in str(e):
                 self._refresh()
                 return self.client.devices_list()
