@@ -42,13 +42,7 @@ object CatNotificationsManager {
         context.actorContext.log.info(s"Using delay ${delay.toMinutes} minutes for cat $maybeCat ($timeToWait - $timeSinceEvent)")
 
         val notification = LitterNotification(when.plusMinutes(delay.toMinutes), s"$choice needs sifting", noteId, NotificationId(choice.toString))
-        if (delay.toMinutes <= 0) {
-          context.system.notifier !! NotificationCenterManager.NewNotification(notification)
-          context.actorContext.log.info(s"Delay $delay, triggered a NewNotification immediately ($now)")
-        } else {
-          context.system.notifier !! NotificationCenterManager.UpcomingNotification(notification)
-          context.actorContext.log.info(s"Just sent a UpcomingNotification $notification")
-        }
+        context.system.notifier !! NotificationCenterManager.NewNotification(notification)
 
         Tinker.steadily
 

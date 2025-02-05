@@ -85,7 +85,7 @@ object RootTinkerBehavior {
     val hueControl: typed.ActorRef[HueControl.Message] = context.spawn(HueControl(config.hueConfig.getOrElse(HueConfig("", ""))), "HueControl")
 
     val notificationCenterManager: typed.ActorRef[NotificationCenterManager.Message] =
-      context.spawn(NotificationCenterManager(config.vaultRoot, ntfyAbility, config.chimeHost), "NotificationCenterManager")
+      context.spawn(NotificationCenterManager(ntfyAbility, config.chimeHost), "NotificationCenterManager")
 
     val actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message] = context.spawn(
       ActorNotesFolderWatcherActor(config.vaultRoot),

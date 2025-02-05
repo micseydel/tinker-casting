@@ -2,8 +2,8 @@ package me.micseydel.actor
 
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, TinkerContextImpl, Tinkerer}
+import me.micseydel.dsl.cast.{SystemWideTimeKeeper, TimeKeeper}
+import me.micseydel.dsl.{Operator, SpiritRef, Tinker, TinkerContext, TinkerContextImpl, Tinkerer}
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.VaultPath
 
@@ -13,25 +13,20 @@ import java.time.temporal.ChronoUnit
 
 object PeriodicNotesCreatorActor {
   sealed trait Message
-  private case object ItsMidnight extends Message
+  private case class ItsMidnight(itsMidnight: SystemWideTimeKeeper.ItsMidnight.type) extends Message
 
   def apply(vaultPath: VaultPath)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     context.actorContext.log.info("Starting up")
-//    implicit val c: TinkerContext[_] = context
-//    context.log.info("Triggering ItsMidnight one time just in case...")
-//    context.self !! ItsMidnight
     behavior(vaultPath)
   }
 
   private def behavior(vaultPath: VaultPath)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(255, 222, 71), "🌞").setup { context =>
     implicit val c: TinkerContext[_] = context
-    val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
-
-    context.actorContext.log.info("Subscribing ItsMidnight message through TimeKeeper")
-    timeKeeper !! TimeKeeper.RemindMeDailyAt(0, 0, context.self, ItsMidnight, None)
+    context.actorContext.log.info("Subscribing ItsMidnight message through Operator")
+    context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
 
     Tinker.withMessages {
-      case ItsMidnight =>
+      case ItsMidnight(_) =>
         val dayForNote = {
           val now = context.system.clock.now()
           MillisFromMidnight(now) match {
@@ -79,26 +74,7 @@ object PeriodicNotesCreatorActor {
        |- ${verboseDayFormatter.format(today)}
        |---
        |
-       |- 
-       |
-       |---
-       |
-       |# Daily documentation
-       |
-       |## Bowel Movements
-       |
-       |- time::
-       |    - bristol::
-       |- time::
-       |    - bristol::
-       |
-       |## Cannabis
-       |
-       |- (strain)
-       |    - time::
-       |        - dose::
-       |
-       |---
+       |-
        |
        |# See also
        |

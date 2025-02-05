@@ -5,6 +5,7 @@ import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor.RasaActor
 import me.micseydel.actor.ollama.FetchChatResponseActor
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult}
+import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, ReceiveRasaResult, ReceiveResponseOllama, TranscriptionCompletedEvent}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
@@ -75,6 +76,9 @@ object TranscriptionNoteWrapper {
           listener !! Chronicler.ActOnNoteRef(noteRef.noteId, notedTranscription)
         }
 
+        // FIXME
+        // FIXME instead of storing all prior messages, just update a state json, because we can't/don't want to store any exceptions, which are just for logs; maybe store a string to associate with the stack trace? a uuid?
+        // FIXME
         regenerateMarkdown(priorMessages, capture, noteRef)
 
         if (model == LargeModel && rawText.wordCount > 100) {
@@ -97,13 +101,7 @@ object TranscriptionNoteWrapper {
                 context.actorContext.log.error(s"Ollama failure: $msg")
             }
 
-          case ChatResponseResult(response, model) =>
-            // FIXME: hacky!
-            noteRef.append(
-              s"""# Ollama summary ($model)
-                 |
-                 |$response
-                 |""".stripMargin)
+          case ChatResponseResult(_, _) =>
         }
 
         Tinker.steadily
@@ -124,8 +122,8 @@ object TranscriptionNoteWrapper {
 
   private def regenerateMarkdown(priorMessages: List[Message], capture: NoticedAudioNote, noteRef: NoteRef): Unit = {
     priorMessages match {
-      case (msgs) =>
-        noteRef.setMarkdown(toMarkdown(msgs)(capture)) match {
+      case msgs =>
+        noteRef.setMarkdown(TranscriptionModel.toMarkdown(msgs)(capture)) match {
           case Success(_) =>
           case Failure(exception) => throw exception
         }
@@ -135,31 +133,16 @@ object TranscriptionNoteWrapper {
   private def noteStub(capture: NoticedAudioNote): Note = {
     capture match {
       case NoticedAudioNote(wavPath, captureTime, lengthSeconds, transcriptionStartedTime) =>
-        val frontMatter = s"""transcription_of: ${wavPath.getFileName}
-           |captured_by: $captureTime
-           |duration: ${TimeUtil.getFormattedDuration(lengthSeconds)}
-           |transcriptionStartedTime: ${transcriptionStartedTime.truncatedTo(ChronoUnit.SECONDS)}"""
+//        val frontMatter = s"""transcription_of: ${wavPath.getFileName}
+//           |captured_by: $captureTime
+//           |duration: ${TimeUtil.getFormattedDuration(lengthSeconds)}
+//           |transcriptionStartedTime: ${transcriptionStartedTime.truncatedTo(ChronoUnit.SECONDS)}"""
 
         val body = s"![[${wavPath.getFileName}]]\n"
 
-        Note(body, Some(frontMatter))
+        Note(body, None
+//          Some(frontMatter)
+        )
     }
-  }
-
-  // implementation details
-
-  private def toMarkdown(messages: List[Message])(capture: NoticedAudioNote): String = {
-    val model = TranscriptionModel.MarkdownModel(capture.wavPath, capture.captureTime, capture.lengthSeconds, capture.transcriptionStartedTime)
-
-    messages.foldRight(model) { (message, accumulatingResult) =>
-      message match {
-        case TranscriptionCompletedEvent(wr) =>
-          accumulatingResult.addTranscriptionCompletedEvent(TimedWhisperResult(wr, capture.transcriptionStartedTime))
-        case ReceiveRasaResult(RasaResult(_, Intent(_, intent), _, _, _), _) =>
-          accumulatingResult.withFyi(s"Ignored Rasa result with intent $intent")
-        case ReceiveResponseOllama(_) =>
-          accumulatingResult
-      }
-    }.toMarkdown
   }
 }

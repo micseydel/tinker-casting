@@ -2,11 +2,6 @@ package me.micseydel.actor.notifications
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.NoOp
-import me.micseydel.actor.FolderWatcherActor.{PathModifiedEvent, PathUpdatedEvent}
-import me.micseydel.actor._
-import me.micseydel.actor.notifications.ChimeActor.Message
-import me.micseydel.actor.notifications.ChimeJsonFormat.ChimeMessageJsonFormat
 import me.micseydel.actor.notifications.NotificationCenterManager._
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.dsl.Tinker.Ability
@@ -14,26 +9,19 @@ import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault._
-import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
-import org.slf4j.Logger
+import me.micseydel.vault.persistence.TypedJsonRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
 import java.time.ZonedDateTime
-import scala.annotation.unused
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object NotificationCenterManager {
 
-  private val NoteName = "Notification Center"
   private val JsonName = "notification_center"
-  private val WatchedFilename = s"$NoteName.md"
 
   // mailbox
 
   sealed trait Message
-
-  //  private
-  case class PathUpdated(pathUpdatedEvent: PathUpdatedEvent) extends Message
 
   case class StartTinkering(tinker: Tinker) extends Message
 
@@ -43,12 +31,12 @@ object NotificationCenterManager {
 
   case class CompleteNotification(notificationId: String) extends NotificationMessage
 
-  case class UpcomingNotification(notification: Notification) extends NotificationMessage
-
   case class JustSideEffect(sideEffect: SideEffect) extends NotificationMessage
 
   // FIXME: move this to the Operator?
   case class RegisterReplyTo(replyTo: SpiritRef[NotificationId], id: SpiritId) extends NotificationMessage
+
+  // model
 
   sealed trait SideEffect
 
@@ -84,38 +72,24 @@ object NotificationCenterManager {
     }
   }
 
-  def apply(vaultRoot: VaultPath,
-            ntfyAbility: Tinker => Ability[NtfyerActor.Message],
-            chimeHost: Option[String]): Behavior[Message] = Behaviors.setup { context =>
-    val subdirectory = s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/notification_center"
+  def apply(ntfyAbility: Tinker => Ability[NtfyerActor.Message], chimeHost: Option[String]): Behavior[Message] =
+    Behaviors.withStash(10) { stash =>
+      Behaviors.receiveMessage {
+        case message@(_: NotificationMessage) =>
+          stash.stash(message)
+          Behaviors.same
 
-    @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
-    val folderWatcher = context.spawn(
-      FolderWatcherActor(
-        vaultRoot.resolve(subdirectory),
-        context.messageAdapter(PathUpdated)
-      ),
-      "NotificationCenterFolderWatcherActor"
-    )
-
-    initializing(ntfyAbility, chimeHost)
-  }
-
-  private def initializing(ntfyAbility: Tinker => Ability[NtfyerActor.Message], chimeHost: Option[String]): Behavior[Message] = Behaviors.withStash(10) { stash =>
-    Behaviors.receiveMessage {
-      case message@(PathUpdated(_) | _: NotificationMessage) =>
-        stash.stash(message)
-        Behaviors.same
-
-      case StartTinkering(tinker) =>
-        stash.unstashAll(finishInitializing(ntfyAbility(tinker), chimeHost)(tinker))
+        case StartTinkering(tinker) =>
+          stash.unstashAll(finishInitializing(ntfyAbility(tinker), chimeHost)(tinker))
+      }
     }
-  }
 
   private def finishInitializing(ntfyAbility: Ability[NtfyerActor.Message], maybeChimeHost: Option[String])(implicit Tinker: Tinker): Ability[Message] =
-    Tinker.initializedWithNote(NoteName, "_actor_notes/notification_center") { case (_, noteRef) =>
-      Tinker.initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) { case (context, jsonRef) =>
+    Tinkerer(rgb(205, 205, 0), "❗️").initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) {
+      case (context, jsonRef) =>
+        val notificationCenterActor: SpiritRef[NotificationCenterActor.Message] = context.cast(NotificationCenterActor(context.self), "NotificationCenterActor")
         val upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message] = context.cast(UpcomingNotificationsManager(context.self), "UpcomingNotificationsManager")
+
         val ntfyer = context.cast(ntfyAbility, "Ntfyer")
 
         val chime: SpiritRef[ChimeActor.Message] = maybeChimeHost match {
@@ -126,12 +100,11 @@ object NotificationCenterManager {
             context.cast(Tinker.ignore, "InertChime")
         }
 
-        ability(Map.empty)(Tinker, upcomingNotificationsManager, noteRef, jsonRef, ntfyer, chime)
-      }
+        ability(Map.empty)(Tinker, upcomingNotificationsManager, notificationCenterActor, jsonRef, ntfyer, chime)
     }
 
-  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], noteRef: NoteRef, jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Message]): Ability[Message] =
-    Tinkerer(rgb(205, 205, 0), "❗️").receive { (context, message) =>
+  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Message]): Ability[Message] =
+    Tinker.receive { (context, message) =>
       implicit val c: TinkerContext[_] = context
       message match {
         case RegisterReplyTo(replyTo, id) =>
@@ -148,32 +121,35 @@ object NotificationCenterManager {
             case Chime(message) =>
               chime !! message
           }
-          Behaviors.same
+          Tinker.steadily
 
-        case UpcomingNotification(notification) =>
-          jsonRef.updateOrSetDefault(NotificationCenterState(Map.empty))(_.withIncluded(notification))
-          upcomingNotificationsManager !! UpcomingNotificationsManager.UpcomingNotification(notification)
-          Behaviors.same
-
-        case NewNotification(notification) =>
-          jsonRef.updateOrSetDefault(NotificationCenterState(Map.empty))(_.withIncluded(notification))
-          context.actorContext.log.info(s"Adding notification ${notification.notificationId}")
-          logErrorIfNeeded(
-            context.actorContext.log,
-            NotificationCenterManagerMarkdown.addNotification(noteRef, notification),
-            _ => s"Something went wrong adding notification for time ${notification.time} to notification center"
-          )
-
-          notification.sideEffects.foreach {
-            case PushNotification(key, message) =>
-              ntfyer !! NtfyerActor.DoNotify(key, message)
-            case HueCommand(command) =>
-              context.system.hueControl !! command
-            case Chime(message) =>
-              chime !! message
+        case NewNotification(notification) if notification.time.isAfter(context.system.clock.now()) =>
+          jsonRef.updateOrSetDefault(NotificationCenterState(Map.empty))(_.withIncluded(notification)) match {
+            case Failure(exception) => throw exception
+            case Success(_) =>
+              context.actorContext.log.info(s"Notification with id ${notification.notificationId} being forwarded to upcoming notifications center")
+              upcomingNotificationsManager !! UpcomingNotificationsManager.UpcomingNotification(notification)
+              Tinker.steadily
           }
 
-          Behaviors.same
+        case NewNotification(notification) =>
+          jsonRef.updateOrSetDefault(NotificationCenterState(Map.empty))(_.withIncluded(notification)) match {
+            case Failure(exception) => throw exception
+            case Success(_) =>
+              context.actorContext.log.info(s"Adding notification ${notification.notificationId}")
+              notificationCenterActor !! NotificationCenterActor.AddNotification(notification)
+
+              notification.sideEffects.foreach {
+                case PushNotification(key, message) =>
+                  ntfyer !! NtfyerActor.DoNotify(key, message)
+                case HueCommand(command) =>
+                  context.system.hueControl !! command
+                case Chime(message) =>
+                  chime !! message
+              }
+
+              Tinker.steadily
+          }
 
         case CompleteNotification(id) =>
           // in order to notify the original sender of the completion state, we had to serialize the ref
@@ -197,65 +173,15 @@ object NotificationCenterManager {
             state.removed(id)
           }
 
-          NotificationCenterManagerMarkdown.clearNotification(noteRef, id)
+          notificationCenterActor !! NotificationCenterActor.ClearNotification(id)
           upcomingNotificationsManager !! UpcomingNotificationsManager.MarkNotificationCompleted(id)
-          Behaviors.same
-
-        case PathUpdated(PathModifiedEvent(modifiedPath)) if modifiedPath.toString.endsWith(WatchedFilename) =>
-          context.actorContext.log.info(s"Clearing completed notifications for $modifiedPath...")
-
-          NotificationCenterManagerMarkdown.clearDone(noteRef) match {
-            case Success(cleared) =>
-              context.actorContext.log.info(s"Cleared: $cleared")
-              if (cleared.nonEmpty) {
-                jsonRef.read() match {
-                  case Failure(exception) => context.actorContext.log.error(s"Reading state from JSON failed", exception)
-                  case Success(state) =>
-                    context.actorContext.log.info(s"")
-                    for (done <- cleared) {
-                      state.get(done.id).flatMap(_.requestNotificationOnCompletion) match {
-                        case None =>
-                          context.actorContext.log.info(s"${done.id} (from $done) was not in ${state.map}")
-                        case Some(spiritId) =>
-                          replyTos.get(spiritId) match {
-                            case None =>
-                              context.actorContext.log.warn(s"Unable to update registered listener for missing spirit $spiritId")
-                            case Some(replyTo) =>
-                              context.actorContext.log.info(s"Sending $done to ${replyTo.path} to mark as done")
-                              replyTo !! done
-                          }
-                      }
-                    }
-                }
-              }
-
-            case Failure(exception) =>
-              context.actorContext.log.error(s"Failed to clear done ${noteRef.noteId.asString} elements", exception)
-          }
-
-          Behaviors.same
-
-        case PathUpdated(PathModifiedEvent(modifiedPath)) if modifiedPath.toString.endsWith("Upcoming Notifications.md") =>
-          context.actorContext.log.debug(s"Ignoring [[Upcoming Notifications]] update")
-          Behaviors.same
-
-        case PathUpdated(pathUpdatedEvent) =>
-          context.actorContext.log.warn(s"Expected $WatchedFilename but found $pathUpdatedEvent")
-          Behaviors.same
+          Tinker.steadily
 
         case StartTinkering(_) =>
           context.actorContext.log.warn(s"Already received StartTinkering, ignoring")
-          Behaviors.same
+          Tinker.steadily
       }
     }
-
-  private def logErrorIfNeeded(log: Logger, f: => Try[NoOp.type], message: Throwable => String): Unit = {
-    f match {
-      case Failure(exception) =>
-        log.error(message(exception), exception)
-      case Success(NoOp) =>
-    }
-  }
 
   //
 
@@ -274,15 +200,17 @@ case class NotificationCenterState(map: Map[String, Notification]) {
 
 object NotificationCenterManagerJsonFormat extends DefaultJsonProtocol {
 
-  import me.micseydel.actor.perimeter.HueControlJsonFormat.HueControlCommandJsonFormat
-  import me.micseydel.Common.{OptionalJsonFormat, ZonedDateTimeJsonFormat}
   import LinkIdJsonProtocol.noteIdFormat
+  import me.micseydel.Common.{OptionalJsonFormat, ZonedDateTimeJsonFormat}
+  import me.micseydel.actor.perimeter.HueControlJsonFormat.HueControlCommandJsonFormat
 
   implicit val pushNotificationJsonFormat: RootJsonFormat[PushNotification] = jsonFormat2(PushNotification)
   implicit val hueCommandJsonFormat: RootJsonFormat[HueCommand] = jsonFormat1(HueCommand)
   implicit val maybeNoteIdFormat: JsonFormat[Option[NoteId]] = OptionalJsonFormat(noteIdFormat)
   implicit val notificationIdJsonFormat: JsonFormat[NotificationId] = jsonFormat1(NotificationId)
+
   import ChimeJsonFormat.ChimeMessageJsonFormat
+
   implicit val chimeJsonFormat: JsonFormat[Chime] = jsonFormat1(Chime)
 
   implicit object SideEffectJsonFormat extends RootJsonFormat[SideEffect] {
