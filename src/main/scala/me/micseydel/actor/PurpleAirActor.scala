@@ -17,10 +17,10 @@ import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json._
 
-import java.time.ZonedDateTime
+import java.time.{ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import scala.concurrent.Future
-import scala.concurrent.duration.{DurationInt, DurationLong, FiniteDuration}
+import scala.concurrent.duration.{DurationInt, DurationLong, FiniteDuration, SECONDS}
 import scala.util.{Failure, Success}
 
 object PurpleAirActor {
@@ -356,10 +356,26 @@ case class RawSensorData(
                           //  ssid: String
                         ) {
 
-  def zonedDatetime: ZonedDateTime = ZonedDateTime.parse(DateTime, Formatter)
+  def zonedDatetime: ZonedDateTime =
+    ZonedDateTime.parse(DateTime, Formatter)
+      .withZoneSameInstant(ZoneId.systemDefault())
 }
 
 object RawSensorData {
   val Formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd'T'HH:mm:ss'z'")
     .withZone(java.time.ZoneOffset.UTC)
+
+  // FIXME: tinkering to remove
+  def main(args: Array[String]): Unit = {
+    val oracle = ZonedDateTime.parse("2025-02-04T20:22:51.521144-08:00[America/Los_Angeles]")
+    val underTest = ZonedDateTime.parse("2025/02/05T04:22:51z", Formatter)
+
+    println(oracle.truncatedTo(SECONDS.toChronoUnit))
+    println(underTest)
+    println()
+    println(oracle.truncatedTo(SECONDS.toChronoUnit).toLocalDate)
+    println(underTest.toLocalDate)
+    println(underTest.withZoneSameInstant(oracle.getZone))
+    println(underTest.withZoneSameInstant(oracle.getZone).toLocalDate)
+  }
 }
