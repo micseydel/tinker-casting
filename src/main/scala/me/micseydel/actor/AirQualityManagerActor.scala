@@ -1,5 +1,7 @@
 package me.micseydel.actor
 
+import me.micseydel.NoOp
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.RawSensorData.Formatter
 import me.micseydel.actor.perimeter.AranetActor
 import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
@@ -9,6 +11,7 @@ import me.micseydel.dsl._
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.ZonedDateTime
+import scala.util.{Failure, Success, Try}
 
 object AirQualityManagerActor {
   sealed trait Message
@@ -17,16 +20,17 @@ object AirQualityManagerActor {
 
   case class ReceiveAranetResults(results: AranetActor.Result) extends Message
 
+  private case class ReceiveNoteUpdated(ping: Ping) extends Message
+
 
   private val Filename = "Air Quality Management"
-  private val Subdirectory = Some("_actor_notes/airquality")
 
   def apply(
              purpleAirActor: SpiritRef[PurpleAirActor.Message],
              wyzeActor: SpiritRef[WyzeActor.Message],
              aranetActor: SpiritRef[AranetActor.Message]
            )(implicit Tinker: Tinker): Ability[Message] =
-    Tinkerer(TinkerColor.rgb(245, 245, 250), "🫧").withNote(Filename, Subdirectory) { (context, noteRef) =>
+    Tinkerer[Message](TinkerColor.rgb(245, 245, 250), "🫧").withWatchedActorNote(Filename, ReceiveNoteUpdated) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
 
       purpleAirActor !! PurpleAirActor.Subscribe(context.messageAdapter(ReceivePurpleAir))
@@ -34,11 +38,15 @@ object AirQualityManagerActor {
 
       context.actorContext.log.info("Subscribed to Purple Air and did a fetch for Aranet4")
 
-      initializing(None, None)(Tinker, noteRef, purpleAirActor, wyzeActor, aranetActor)
+      initializing(None, None)(Tinker, new AirQualityNoteRef(noteRef), purpleAirActor, wyzeActor, aranetActor)
     }
 
-  private def initializing(latestAqi: Option[Measurement], latestCO2: Option[Measurement])(implicit Tinker: Tinker, noteRef: NoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], wyzeActor: SpiritRef[WyzeActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
-    noteRef.setMarkdown(s"[${context.system.clock.now()}] initializing")
+  private def initializing(latestAqi: Option[Measurement], latestCO2: Option[Measurement])(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], wyzeActor: SpiritRef[WyzeActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
+    noteRef.initializing(context.system.clock.now(), latestAqi, latestCO2) match {
+      case Failure(exception) => throw exception
+      case Success(_) =>
+    }
+
     context.actorContext.log.info("Just set initial markdown")
 
     Tinker.withMessages {
@@ -48,7 +56,7 @@ object AirQualityManagerActor {
             context.actorContext.log.info("Failed to fetch CO2")
             initializing(Some(toMeasurement(raw)), None)
           case Some(co2) =>
-            initialized(toMeasurement(raw), co2)
+            behavior(toMeasurement(raw), co2)
         }
 
       case ReceiveAranetResults(result) =>
@@ -60,21 +68,37 @@ object AirQualityManagerActor {
 
           case Some(co2) =>
             latestAqi match {
-              case Some(aqi) => initialized(aqi, co2)
+              case Some(aqi) => behavior(aqi, co2)
               case None =>
                 context.actorContext.log.info(s"CO2 is $co2 but no AQI received yet")
                 initializing(None, Some(co2))
             }
         }
 
+      case ReceiveNoteUpdated(_) =>
+        context.actorContext.log.warn("Ignoring updated note")
+        Tinker.steadily
     }
   }
 
-  private def initialized(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: NoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], wyzeActor: SpiritRef[WyzeActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
-    implicit val cl: TinkerClock = context.system.clock
-    Tinker.withMessages { message =>
-      noteRef.setMarkdown(s"- [${context.system.clock.now()}] initialized(latestAqi=$latestAqi, latestCO2=$latestCO2)\n- ignored messaged $message")
-      Tinker.steadily
+  private def behavior(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], wyzeActor: SpiritRef[WyzeActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
+    noteRef.withLatest(context.system.clock.now(), latestAqi, latestCO2)
+
+    Tinker.withMessages {
+      case ReceivePurpleAir(data) =>
+        behavior(toMeasurement(data), latestCO2)
+
+      case ReceiveAranetResults(results) =>
+        toMeasurement(results.getOrFail) match {
+          case Some(measurement) =>
+            behavior(latestAqi, measurement)
+          case None =>
+            Tinker.steadily
+        }
+
+      case ReceiveNoteUpdated(_) =>
+        context.actorContext.log.warn("Ignoring updated note")
+        Tinker.steadily
     }
   }
 
@@ -96,4 +120,23 @@ object AirQualityManagerActor {
         Measurement(pm2_5_aqi, time)
     }
   }
+
+  private class AirQualityNoteRef(noteRef: NoteRef) {
+    def initializing(now: ZonedDateTime, latestAqi: Option[Measurement], latestCO2: Option[Measurement]): Try[NoOp.type] = {
+      noteRef.setMarkdown(
+        s"""- [initializing] Generated at $now
+           |- Latest AQI $latestAqi
+           |- Latest CO2 $latestCO2
+           |""".stripMargin)
+    }
+
+    def withLatest(now: ZonedDateTime, latestAqi: Measurement, latestCo2: Measurement): Try[NoOp.type] = {
+      noteRef.setMarkdown(
+        s"""- Generated at $now
+           |- Latest AQI $latestAqi
+           |- Latest CO2 $latestCo2
+           |""".stripMargin)
+    }
+  }
 }
+
