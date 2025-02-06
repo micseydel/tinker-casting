@@ -16,7 +16,7 @@ private[perimeter] class HueNoteRef(noteRef: NoteRef) {
   //
 
   def setToDefault(): NoOp.type = {
-    val default = commandsMap.keys.mkString("- [ ] ", "\n", "\n")
+    val default = commandsMap.keys.mkString("- [ ] ", "\n- [ ] ", "\n")
     setMarkdown(default)
   }
 
@@ -24,8 +24,8 @@ private[perimeter] class HueNoteRef(noteRef: NoteRef) {
     noteRef.readMarkdown().map { markdown =>
       markdown.split("\n").toList.collectFirst { line =>
         line(3) match {
-          case 'x' => commandsMap.get(line.drop(4))
-          case _ => None
+          case 'x' =>
+            commandsMap.get(line.drop(6))
         }
       }.flatten
     } match {

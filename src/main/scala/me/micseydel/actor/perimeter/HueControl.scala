@@ -8,25 +8,17 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.pattern.after
 import akka.util.Timeout
-import cats.data.Validated.{Invalid, Valid}
 import me.micseydel.NoOp
 import me.micseydel.actor.HueListener
-import me.micseydel.actor.notifications.NotificationCenterManager.HueCommand
-import me.micseydel.actor.perimeter.HueControl.{DoALightShow, FlashTheLight, FlashTheLights, HueConfig, SetBrightness, SetLight, TurnOffAllLights, TurnOffLight}
+import me.micseydel.actor.perimeter.HueControl._
 import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
-import me.micseydel.dsl.cast.Gossiper
-import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
-import me.micseydel.model.KnownIntent.no_intent
 import me.micseydel.model.Light.AllList
-import me.micseydel.model.LightStates._
 import me.micseydel.model._
-import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
-import spray.json.{DefaultJsonProtocol, DeserializationException, JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
+import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.Duration
 import scala.annotation.unused
@@ -104,7 +96,7 @@ object HueControl {
     @unused
     val hueListener = context.cast(HueListener(context.self), "HueListener")
 
-    implicit val markdown: HueNoteRef = new HueNoteRef(noteRef)
+    implicit val hueNote: HueNoteRef = new HueNoteRef(noteRef)
     behavior(lightKeepersByName, lightKeepersByLight)
   }
 
@@ -114,11 +106,16 @@ object HueControl {
     implicit val c: TinkerContext[_] = context
     implicit val actorSystem: ActorSystem[Nothing] = context.system.actorSystem
 
+    hueNote.setToDefault()
+
     Tinker.withMessages {
       case NoteUpdated(_) =>
-        for (command <- hueNote.checkForCheckbox()) {
-          context.self !! command
-          hueNote.setToDefault()
+        hueNote.checkForCheckbox() match {
+          case None => context.actorContext.log.warn("Detected note update but no command checked")
+          case Some(command) =>
+            context.actorContext.log.info(s"Triggering command $command")
+            context.self !! command
+            hueNote.setToDefault()
         }
 
         Tinker.steadily
