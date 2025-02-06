@@ -1,4 +1,4 @@
-As further expansion on [[Applications of my Tinker Cast - cat litter tracking|cat litter tracking]], I built a text-based **notification center**. It's still quite rudimentary but daily-use events include:
+As further expansion on [cat litter tracking](Applications%20of%20my%20Tinker%20Cast%20-%20cat%20litter%20tracking.md), I built a text-based **notification center**. It's still quite rudimentary but daily-use events include:
 - Reminding me to sift the litter, once it clumps
 - Voice notes where I've said, "remind me"
 - My daily plans, pulled from a [[Plans]] note
