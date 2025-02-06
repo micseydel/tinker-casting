@@ -53,7 +53,7 @@ object AranetActor {
               context.actorContext.log.info(s"Setting Markdown...")
               noteRef.setMarkdown {
                 "- [ ] Click to refresh\n" +
-                s"- Captured at ${captureTime.toString.take(19)} taking ${elapsed.toInt}s\n" +
+                s"- Latest capture at ${captureTime.toString.take(19)} taking ${elapsed.toInt}s\n" +
                   aras.map {
                     case Aranet(_, co2, humidity, name, _, _, temperature) =>
                       s"- $name -> **CO2 $co2**  temp $temperature°C  humidity $humidity"

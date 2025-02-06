@@ -13,6 +13,8 @@ import scala.util.{Failure, Success}
 object WyzeActor {
   sealed trait Message
 
+  final case class SetPlug(mac: String, onOffState: Boolean) extends Message
+
   private final case class ReceiveDeviceList(result: WyzePlugAPIResponse) extends Message
 
   private case class ReceiveNoteUpdatedPing(ping: Ping) extends Message
@@ -29,8 +31,13 @@ object WyzeActor {
   }
 
   private def initializing(noteRef: NoteRef, api: SpiritRef[WyzeAPIActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val c: TinkerContext[_] = context
     message match {
       case ReceiveNoteUpdatedPing(_) =>
+        Tinker.steadily
+
+      case SetPlug(mac, onOffState) =>
+        api !! WyzeAPIActor.SetPlugIsOn(mac, onOffState)
         Tinker.steadily
 
       case ReceiveDeviceList(wyzePlugAPIResponse) =>
@@ -122,6 +129,10 @@ object WyzeActor {
         }
 
         initialized(isOnMapFromDisk)
+
+      case SetPlug(mac, onOffState) =>
+        api !! WyzeAPIActor.SetPlugIsOn(mac, onOffState)
+        Tinker.steadily
 
       case ReceiveDeviceList(result) =>
         context.actorContext.log.warn(s"Did not expect to receive a device list, ignoring $result")

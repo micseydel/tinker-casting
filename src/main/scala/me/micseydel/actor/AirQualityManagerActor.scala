@@ -38,10 +38,12 @@ object AirQualityManagerActor {
 
       context.actorContext.log.info("Subscribed to Purple Air and did a fetch for Aranet4")
 
-      initializing(None, None)(Tinker, new AirQualityNoteRef(noteRef), purpleAirActor, wyzeActor, aranetActor)
+      val airPurifier: SpiritRef[AirPurifierActor.Message] = context.cast(AirPurifierActor(wyzeActor), "AirPurifierActor")
+
+      initializing(None, None)(Tinker, new AirQualityNoteRef(noteRef), purpleAirActor, airPurifier, aranetActor)
     }
 
-  private def initializing(latestAqi: Option[Measurement], latestCO2: Option[Measurement])(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], wyzeActor: SpiritRef[WyzeActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
+  private def initializing(latestAqi: Option[Measurement], latestCO2: Option[Measurement])(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], airPurifier: SpiritRef[AirPurifierActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
     noteRef.initializing(context.system.clock.now(), latestAqi, latestCO2) match {
       case Failure(exception) => throw exception
       case Success(_) =>
@@ -96,7 +98,7 @@ object AirQualityManagerActor {
     }
   }
 
-  private def behavior(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], wyzeActor: SpiritRef[WyzeActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], airPurifier: SpiritRef[AirPurifierActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
     noteRef.withLatest(context.system.clock.now(), latestAqi, latestCO2)
 
     Tinker.withMessages {
@@ -191,3 +193,69 @@ object AirQualityManagerActor {
   }
 }
 
+object AirPurifierActor {
+  sealed trait Message
+  final case class SetTo(onOff: Boolean) extends Message
+  private case class ReceiveNotePing(ping: Ping) extends Message
+
+  def apply(wyzeActor: SpiritRef[WyzeActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](TinkerColor(200, 250, 250), "🗼").withWatchedActorNote("Air Purifier", ReceiveNotePing) { (context, noteRef) =>
+    implicit val wa: SpiritRef[WyzeActor.Message] = wyzeActor
+    implicit val nr: NoteRef = noteRef
+    noteRef.getWyzeMac() match {
+      case None =>
+        noteRef.setMarkdown(
+          s"""- set `wyze_mac` property to enable air quality to use the air purifier
+             |
+             |![[Wyze Plugs]]""".stripMargin
+        )
+        initializing()
+
+      case Some(wyzeMac) =>
+        behavior(wyzeMac)
+    }
+  }
+
+  private def initializing()(implicit Tinker: Tinker, wyzeActor: SpiritRef[WyzeActor.Message], noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
+    message match {
+      case command@SetTo(_) =>
+        context.actorContext.log.warn(s"[initializing] Ignoring command $command, set wyze_mac property to enable")
+        Tinker.steadily
+
+      case ReceiveNotePing(_) =>
+        noteRef.getWyzeMac() match {
+          case Some(wyzeMac) =>
+            // FIXME: AirPurifierActor should be used instead of this embed
+            noteRef.setMarkdown(
+              s"""![[Wyze Plugs]]""".stripMargin
+            )
+            behavior(wyzeMac)
+          case None =>
+            context.actorContext.log.debug("[initializing] Note updated but no wyze_mac property found")
+            Tinker.steadily
+        }
+    }
+  }
+
+  private def behavior(wyzeMac: String)(implicit Tinker: Tinker, wyzeActor: SpiritRef[WyzeActor.Message], noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
+    message match {
+      case SetTo(onOff) =>
+        implicit val c: TinkerContext[_] = context
+        wyzeActor !! WyzeActor.SetPlug(wyzeMac, onOff)
+        Tinker.steadily
+
+      case ReceiveNotePing(_) =>
+        context.actorContext.log.warn("Ignoring note update")
+        Tinker.steadily
+    }
+  }
+
+  //
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def getWyzeMac(): Option[String] = noteRef.readNote() match {
+      case Failure(exception) => throw exception
+      case Success(note) =>
+        note.yamlFrontMatter.flatMap(_.get("wyze_mac").map(_.toString))
+    }
+  }
+}
