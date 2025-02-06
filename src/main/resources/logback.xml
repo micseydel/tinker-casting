@@ -9,6 +9,13 @@
         </encoder>
     </appender>
 
+<!--    <appender name="FILE" class="ch.qos.logback.core.FileAppender">-->
+<!--        <file>logs/verbose.log</file>-->
+<!--        <encoder>-->
+<!--            <pattern>[%date{ISO8601}] [%level] [%logger] [%thread] [%X{akkaSource}] - %msg%n</pattern>-->
+<!--        </encoder>-->
+<!--    </appender>-->
+
     <!-- Appender for ERROR and WARN only -->
     <appender name="ERROR-WARN-FILE" class="ch.qos.logback.core.FileAppender">
         <file>logs/error-warn.log</file>

@@ -78,14 +78,17 @@ object UpcomingNotificationsManager {
 
       case MarkNotificationCompleted(noteId) =>
         context.actorContext.log.info(s"Notification id $noteId is complete, removing")
-        UpcomingNotificationMarkdown.removeUpcomingNotification(noteRef, noteId)(context.actorContext.log)
+        UpcomingNotificationMarkdown.removeUpcomingNotification(noteRef, noteId)
         Tinker.steadily
 
       case TimeForNotification(notification) =>
         context.actorContext.log.info(s"Timer up for notification ${notification.notificationId}")
         notificationCenterManager !! NotificationCenterManager.NewNotification(notification)
-        val notificationId = notification.notificationId.toString
-        UpcomingNotificationMarkdown.removeUpcomingNotification(noteRef, notificationId)(context.actorContext.log)
+        val notificationId = notification.notificationId.id
+        UpcomingNotificationMarkdown.removeUpcomingNotification(noteRef, notificationId) match {
+          case Failure(exception) => throw exception
+          case Success(_) =>
+        }
         Tinker.steadily
 
       case ItsMidnight(_) =>

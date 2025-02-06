@@ -123,7 +123,8 @@ object NotificationCenterManager {
           }
           Tinker.steadily
 
-        case NewNotification(notification) if notification.time.isAfter(context.system.clock.now()) =>
+        case NewNotification(notification) if (notification.time.minusSeconds(1)).isAfter(context.system.clock.now()) =>
+          // (we subtract 1 as a fudge factor to prevent race conditions around different clocks varying slightly)
           jsonRef.updateOrSetDefault(NotificationCenterState(Map.empty))(_.withIncluded(notification)) match {
             case Failure(exception) => throw exception
             case Success(_) =>

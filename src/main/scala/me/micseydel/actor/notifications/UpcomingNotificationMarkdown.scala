@@ -58,40 +58,10 @@ object UpcomingNotificationMarkdown {
     }
   }
 
-  def removeUpcomingNotification(noteRef: NoteRef, notificationId: String)(log: Logger): Try[NoOp.type] = {
-    noteRef.updateMarkdown { markdown =>
-      val lines = markdown.split("\\n").filter(_.trim.nonEmpty)
-      lines
-        .filterNot(_.endsWith(s" ^$notificationId"))
-        .mkString("\n")
-    }.map(_ => NoOp)
-
-//    noteRef.updateMarkdown { markdown =>
-//      val lines = markdown.split("\\n").filter(_.trim.nonEmpty)
-//      val target: Option[(LineParseResult[Result], Int)] = lines
-//        .map(LineParser.apply(_, forDay))
-//        .toList
-//        .zipWithIndex
-//        .find {
-//          case (ParseSuccessDatapoint(datapoint), index) =>
-//            datapoint.notificationId.id == notificationId
-//          case (ParseFailure(rawLine, reason, comments), index) =>
-//            log.warn(s"Parse failure for $noteRef at line index $index for raw line `$rawLine` because $reason and $comments")
-//            false
-//        }
-//
-//      target match {
-//        case Some((lineparseResult, index)) =>
-//          log.info(s"Removing index $index, $notificationId because $lineparseResult")
-//          lines
-//            .patch(index, Nil, 1)
-//            .mkString("\n")
-//
-//        case None =>
-//          markdown
-//      }
-//
-//    }.map(_ => NoOp)
+  def removeUpcomingNotification(noteRef: NoteRef, notificationId: String): Try[NoOp.type] = {
+    noteRef
+      .updateMarkdown(MarkdownUtil.removeLinesEndingWithBlockId(notificationId, _))
+      .map(_ => NoOp)
   }
 
   // abstraction
@@ -103,7 +73,7 @@ object UpcomingNotificationMarkdown {
         val maybeWikiLink = wikiLink.map(wl => s"($wl) ")
         MarkdownUtil.listLineWithTimestamp(
           time,
-          s"$contents ${maybeWikiLink}^$notificationId"
+          s"$contents ^$notificationId" // s"$contents ${maybeWikiLink}^$notificationId"
         )
       }
 
@@ -144,7 +114,7 @@ object UpcomingNotificationMarkdown {
         case (theRest, notificationId: NotificationId) =>
           betweenTimeAndNotificationId(theRest).map {
             //case (contents, wikilink) =>
-            case contents =>
+            contents =>
               (contents,
                 //                wikilink,
                 notificationId)
@@ -158,7 +128,7 @@ object UpcomingNotificationMarkdown {
         case Nil =>
           Validated.Invalid(NonEmptyList.of("Expected an Obsidian block id at the end of the line"))
         case notificationIdStr :: theRest if notificationIdStr.startsWith("^") =>
-          Validated.Valid((theRest.reverse, new NotificationId(notificationIdStr.drop(1))))
+          Validated.Valid((theRest.reverse, NotificationId(notificationIdStr.drop(1))))
         case otherStart :: _ =>
           Validated.Invalid(NonEmptyList.of(s"Expected token at end of line `$otherStart` to start with a carrot (^) but it did not"))
       }
@@ -184,95 +154,95 @@ object UpcomingNotificationMarkdown {
       }
     }
 
-    private def getParenthesizedWikilinkFromEnd(tokens: List[String]): ValidatedNel[String, (List[String], WikiLink)] = {
-      // List(litter, will, need, sifting, at, ([[Transcription, for, mobile_audio_capture_20240218-192922.wav|ref]]))
-
-      def splitByBar(s: String): ValidatedNel[String, (String, Option[String])] = {
-        s.split("\\|").toList match {
-          case Nil =>
-            Validated.Valid(s, None)
-
-          case head :: Nil =>
-            Validated.Valid(head, None)
-
-          case left :: right :: Nil =>
-            Validated.Valid(left, Some(right))
-
-          case bigger =>
-            val count = bigger.count(_ == "|")
-            Validated.Invalid(NonEmptyList.of(s"Expected at most one bar (|) but found $count"))
-        }
-      }
-
-      @tailrec
-      def splitTokensByBar(tokensToSplit: List[String], accumulator: List[String]): ValidatedNel[String, (List[String], List[String])] = {
-        tokensToSplit match {
-          case Nil =>
-            Validated.Valid((accumulator.reverse, Nil))
-
-          case head :: tail if head.contains("|") =>
-            if (tail.exists(_.contains("|"))) {
-              Validated.Invalid(NonEmptyList.of(s"Expected at most one bar (|) but found at least two: one in $head and somewhere in $tail"))
-            } else {
-              splitByBar(head).map {
-                case (left, Some(right)) =>
-                  ((left :: accumulator).reverse, right :: tail)
-                case (str, None) =>
-                  ((str :: accumulator).reverse, tail)
-              }
-            }
-
-          case head :: tail =>
-            splitTokensByBar(tail, head :: accumulator)
-        }
-      }
-
-      def getWikilinkFromReversedTokens(wikiLinkTokens: List[String]): ValidatedNel[String, WikiLink] = {
-        def wikiLink(noteIdTokens: List[String], aliasTokens: List[String] = Nil): WikiLink = {
-          WikiLink(NoteId(noteIdTokens.reverse.mkString(" ")), Some(aliasTokens.reverse.mkString(" ")))
-        }
-
-        wikiLinkTokens.indexWhere(_.contains("|")) match {
-          case -1 =>
-            Validated.Valid(wikiLink(wikiLinkTokens))
-          case index =>
-            splitTokensByBar(wikiLinkTokens.slice(0, index), Nil).map {
-              case (noteIdTokens, Nil) =>
-                wikiLink(noteIdTokens)
-              case (noteIdTokens, aliasTokens) =>
-                wikiLink(noteIdTokens, aliasTokens)
-            }
-        }
-      }
-
-      @tailrec
-      def helper(remainingTokens: List[String], accumulator: List[String]): ValidatedNel[String, (List[String], WikiLink)] = {
-        // List(..., ([[Transcription, for, mobile_audio_capture_20240218-192922.wav|ref]]))
-        // List(mobile_audio_capture_20240218-192922.wav|ref]]), for, ([[Transcription, ...)
-        remainingTokens match {
-          case head :: tail if head.startsWith("([[") =>
-            getWikilinkFromReversedTokens(head.drop(3) :: accumulator).map { wikiLink =>
-              (tail, wikiLink)
-            }
-
-          case head :: tail =>
-            helper(tail, head :: accumulator)
-
-          case Nil =>
-            Validated.Invalid(NonEmptyList.of("Expected tokens for a note id, found no tokens"))
-        }
-      }
-
-      val reversed = tokens.reverse
-      reversed.headOption match {
-        case Some(endingToken) if endingToken.endsWith("]])") =>
-          helper(endingToken.dropRight(3) :: reversed.tail, Nil)
-        case other =>
-          val found = other.getOrElse("(nothing)")
-          Validated.Invalid(NonEmptyList.of(s"Expected token ending with `]])` but found: $found"))
-      }
-
-    }
+//    private def getParenthesizedWikilinkFromEnd(tokens: List[String]): ValidatedNel[String, (List[String], WikiLink)] = {
+//      // List(litter, will, need, sifting, at, ([[Transcription, for, mobile_audio_capture_20240218-192922.wav|ref]]))
+//
+//      def splitByBar(s: String): ValidatedNel[String, (String, Option[String])] = {
+//        s.split("\\|").toList match {
+//          case Nil =>
+//            Validated.Valid(s, None)
+//
+//          case head :: Nil =>
+//            Validated.Valid(head, None)
+//
+//          case left :: right :: Nil =>
+//            Validated.Valid(left, Some(right))
+//
+//          case bigger =>
+//            val count = bigger.count(_ == "|")
+//            Validated.Invalid(NonEmptyList.of(s"Expected at most one bar (|) but found $count"))
+//        }
+//      }
+//
+//      @tailrec
+//      def splitTokensByBar(tokensToSplit: List[String], accumulator: List[String]): ValidatedNel[String, (List[String], List[String])] = {
+//        tokensToSplit match {
+//          case Nil =>
+//            Validated.Valid((accumulator.reverse, Nil))
+//
+//          case head :: tail if head.contains("|") =>
+//            if (tail.exists(_.contains("|"))) {
+//              Validated.Invalid(NonEmptyList.of(s"Expected at most one bar (|) but found at least two: one in $head and somewhere in $tail"))
+//            } else {
+//              splitByBar(head).map {
+//                case (left, Some(right)) =>
+//                  ((left :: accumulator).reverse, right :: tail)
+//                case (str, None) =>
+//                  ((str :: accumulator).reverse, tail)
+//              }
+//            }
+//
+//          case head :: tail =>
+//            splitTokensByBar(tail, head :: accumulator)
+//        }
+//      }
+//
+//      def getWikilinkFromReversedTokens(wikiLinkTokens: List[String]): ValidatedNel[String, WikiLink] = {
+//        def wikiLink(noteIdTokens: List[String], aliasTokens: List[String] = Nil): WikiLink = {
+//          WikiLink(NoteId(noteIdTokens.reverse.mkString(" ")), Some(aliasTokens.reverse.mkString(" ")))
+//        }
+//
+//        wikiLinkTokens.indexWhere(_.contains("|")) match {
+//          case -1 =>
+//            Validated.Valid(wikiLink(wikiLinkTokens))
+//          case index =>
+//            splitTokensByBar(wikiLinkTokens.slice(0, index), Nil).map {
+//              case (noteIdTokens, Nil) =>
+//                wikiLink(noteIdTokens)
+//              case (noteIdTokens, aliasTokens) =>
+//                wikiLink(noteIdTokens, aliasTokens)
+//            }
+//        }
+//      }
+//
+//      @tailrec
+//      def helper(remainingTokens: List[String], accumulator: List[String]): ValidatedNel[String, (List[String], WikiLink)] = {
+//        // List(..., ([[Transcription, for, mobile_audio_capture_20240218-192922.wav|ref]]))
+//        // List(mobile_audio_capture_20240218-192922.wav|ref]]), for, ([[Transcription, ...)
+//        remainingTokens match {
+//          case head :: tail if head.startsWith("([[") =>
+//            getWikilinkFromReversedTokens(head.drop(3) :: accumulator).map { wikiLink =>
+//              (tail, wikiLink)
+//            }
+//
+//          case head :: tail =>
+//            helper(tail, head :: accumulator)
+//
+//          case Nil =>
+//            Validated.Invalid(NonEmptyList.of("Expected tokens for a note id, found no tokens"))
+//        }
+//      }
+//
+//      val reversed = tokens.reverse
+//      reversed.headOption match {
+//        case Some(endingToken) if endingToken.endsWith("]])") =>
+//          helper(endingToken.dropRight(3) :: reversed.tail, Nil)
+//        case other =>
+//          val found = other.getOrElse("(nothing)")
+//          Validated.Invalid(NonEmptyList.of(s"Expected token ending with `]])` but found: $found"))
+//      }
+//
+//    }
   }
 
   def main(args: Array[String]): Unit = {
@@ -280,11 +250,24 @@ object UpcomingNotificationMarkdown {
     //    val parsed: LineParseResult[LineParser.Result] = LineParser(toParse, LocalDate.now())
     //    println(parsed)
 
-    println(Notification.toMarkdownListLine(LitterNotification(
-      ZonedDateTime.now(),
-      "FrontLitter needs sifting",
-      NoteId("test"),
-      NotificationId("FrontLitter")
-    ), checkboxes = false))
+    def removeUpcomingNotification(markdown: String, notificationId: String): String = {
+//      noteRef.updateMarkdown { markdown =>
+        val lines = markdown.split("\\n").filter(_.trim.nonEmpty)
+        lines
+          .filterNot(_.endsWith(s" ^$notificationId"))
+          .mkString("\n")
+//      }.map(_ => NoOp)
+    }
+
+    val t = s"""- \\[2:20:33AM\\] BackLitter needs sifting ([[Transcription for mobile_audio_capture_20250206-020633.wav|ref]]) ^BackLitter""".stripMargin
+
+    println(removeUpcomingNotification(t, "BackLitter"))
+
+//    println(Notification.toMarkdownListLine(LitterNotification(
+//      ZonedDateTime.now(),
+//      "FrontLitter needs sifting",
+//      NoteId("test"),
+//      NotificationId("FrontLitter")
+//    ), checkboxes = false))
   }
 }
