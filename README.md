@@ -7,10 +7,21 @@ When I started this project, there was recent context:
 - One of my two cats had recently developed a [life-threatening chronic condition](https://vcahospitals.com/know-your-pet/feline-idiopathic-cystitis)
 - I had started a personal wiki of networked notes
 
+Some example applications today:
+- Single-stream [voice transcriptions](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20voice%20transcriptions.md)
+- Voice-based [cat litter tracking](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20cat%20litter%20tracking.md)
+- [Smart light](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20smart%20lights%20control.md) controls using a note (or voice)
+- Text-centered [notification center](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20notification%20center.md)
+- Air quality monitoring
+- HALT (hungry/angry/lonely/tired)
+
+# Elaboration
+
 So, I wanted to use my data engineering knowledge to automate the process of leveraging my personal wiki in order to help me take care of my cats. Inspired in part by ChatGPT, I wanted my notes to be able to talk to each other like a social network of humans:
 
-![](https://i.imgur.com/ErAay7m.png)
-([click here for an animation](https://imgur.com/a/extended-mind-visualization-2024-10-20-Hygmvkq))
+![](https://i.imgur.com/on94H7Y.png)
+- ([older](https://i.imgur.com/ErAay7m.png))
+- [click here for an animation](https://imgur.com/a/extended-mind-visualization-2024-10-20-Hygmvkq)
 
 Here, we see atomic agents dedicated to
 - My cats 🐱 (in brown)
