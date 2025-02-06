@@ -10,6 +10,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.vault.persistence.NoteRef
 
+import java.io.FileNotFoundException
 import java.time.ZonedDateTime
 import scala.util.{Failure, Success, Try}
 
@@ -201,6 +202,7 @@ object AirPurifierActor {
   def apply(wyzeActor: SpiritRef[WyzeActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](TinkerColor(200, 250, 250), "🗼").withWatchedActorNote("Air Purifier", ReceiveNotePing) { (context, noteRef) =>
     implicit val wa: SpiritRef[WyzeActor.Message] = wyzeActor
     implicit val nr: NoteRef = noteRef
+
     noteRef.getWyzeMac() match {
       case None =>
         noteRef.setMarkdown(
@@ -224,10 +226,7 @@ object AirPurifierActor {
       case ReceiveNotePing(_) =>
         noteRef.getWyzeMac() match {
           case Some(wyzeMac) =>
-            // FIXME: AirPurifierActor should be used instead of this embed
-            noteRef.setMarkdown(
-              s"""![[Wyze Plugs]]""".stripMargin
-            )
+            context.actorContext.log.info(s"Initializing with mac $wyzeMac")
             behavior(wyzeMac)
           case None =>
             context.actorContext.log.debug("[initializing] Note updated but no wyze_mac property found")
@@ -236,8 +235,15 @@ object AirPurifierActor {
     }
   }
 
-  private def behavior(wyzeMac: String)(implicit Tinker: Tinker, wyzeActor: SpiritRef[WyzeActor.Message], noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
-    message match {
+  private def behavior(wyzeMac: String)(implicit Tinker: Tinker, wyzeActor: SpiritRef[WyzeActor.Message], noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    // FIXME: fetch state from Wyze to initialize, then read from this note instead of forcing users to use the embed
+    noteRef.setMarkdown(
+      s"""![[Wyze Plugs]]""".stripMargin
+    ) match {
+      case Failure(exception) => throw exception
+      case Success(_) =>
+    }
+    Tinker.withMessages {
       case SetTo(onOff) =>
         implicit val c: TinkerContext[_] = context
         wyzeActor !! WyzeActor.SetPlug(wyzeMac, onOff)
@@ -253,9 +259,10 @@ object AirPurifierActor {
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def getWyzeMac(): Option[String] = noteRef.readNote() match {
-      case Failure(exception) => throw exception
       case Success(note) =>
         note.yamlFrontMatter.flatMap(_.get("wyze_mac").map(_.toString))
+      case Failure(exception: FileNotFoundException) => None
+      case Failure(exception) => throw exception
     }
   }
 }
