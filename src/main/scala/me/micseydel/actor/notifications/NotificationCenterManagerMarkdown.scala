@@ -18,7 +18,7 @@ object NotificationCenterManagerMarkdown {
       val (done, notDone) = lines.toList.partition(_.startsWith("- [x]"))
 
       val toWrite: Option[String] = if (done.nonEmpty) {
-        Some(notDone.mkString("\n") + "\n")
+        Some(notDone.mkString("", "\n", "\n"))
       } else {
         None
       }
@@ -44,7 +44,7 @@ object NotificationCenterManagerMarkdown {
         updateMarkdown(noteRef) { lines =>
           val newListLine = Notification.toMarkdownListLine(n)
           val newLines = lines.filter(!_.endsWith(notificationId.id)) :+ newListLine
-          Some(newLines.mkString("\n"))
+          Some(newLines.mkString("", "\n", "\n"))
         }
     }
   }
@@ -53,7 +53,7 @@ object NotificationCenterManagerMarkdown {
     updateMarkdown(noteRef) { lines =>
       val updated = lines.filter(!_.endsWith(s" ^$notificationId"))
       if (updated.size < lines.size) {
-        Some(updated.mkString("\n"))
+        Some(updated.mkString("", "\n", "\n"))
       } else {
         None
       }

@@ -37,11 +37,8 @@ private[perimeter] class HueNoteRef(noteRef: NoteRef) {
           case Properties(Some(brightness), Some(color)) =>
             SetAllLights(color.copy(bri = brightness))
         }.orElse {
-          markdown.split("\n").toList.collectFirst { line =>
-            line(3) match {
-              case 'x' =>
-                CommandsMap.get(line.drop(6))
-            }
+          markdown.split("\n").toList.collectFirst { case line if line.length >= 6 && line.charAt(3) == 'x' =>
+            CommandsMap.get(line.drop(6))
           }.flatten
         }
     }

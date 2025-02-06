@@ -112,7 +112,7 @@ object HueControl {
     Tinker.withMessages {
       case NoteUpdated(_) =>
         hueNote.checkForCommand() match {
-          case None => context.actorContext.log.warn("Detected note update but no command checked")
+          case None => context.actorContext.log.debug("Detected note update but no command checked")
           case Some(command) =>
             context.actorContext.log.info(s"Triggering command $command")
             context.self !! command
