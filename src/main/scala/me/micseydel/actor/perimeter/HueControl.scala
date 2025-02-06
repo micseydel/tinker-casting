@@ -13,6 +13,7 @@ import me.micseydel.NoOp
 import me.micseydel.actor.HueListener
 import me.micseydel.actor.notifications.NotificationCenterManager.HueCommand
 import me.micseydel.actor.perimeter.HueControl.{DoALightShow, FlashTheLight, FlashTheLights, HueConfig, SetBrightness, SetLight, TurnOffAllLights, TurnOffLight}
+import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
@@ -103,49 +104,21 @@ object HueControl {
     @unused
     val hueListener = context.cast(HueListener(context.self), "HueListener")
 
-    implicit val nr: NoteRef = noteRef
+    implicit val markdown: HueNoteRef = new HueNoteRef(noteRef)
     behavior(lightKeepersByName, lightKeepersByLight)
   }
 
   // states / behaviors
 
-  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker, hueNote: HueNoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     implicit val actorSystem: ActorSystem[Nothing] = context.system.actorSystem
 
-    resetMarkdown(noteRef)
-
     Tinker.withMessages {
       case NoteUpdated(_) =>
-        val fromDisk = noteRef.readMarkdown() match {
-          case Failure(exception) => throw exception
-          case Success(markdown) =>
-            markdown.split("\n").toList.map { line =>
-              line(3) match {
-                case 'x' => true
-                case _ => false
-              }
-            }
-        }
-
-        fromDisk match {
-          case List(doFlash, doLightShow) =>
-            val doResetMarkdown = if (doFlash) {
-              context.self !! FlashTheLights()
-              true
-            } else if (doLightShow) {
-              context.self !! DoALightShow()
-              true
-            } else {
-              false
-            }
-
-            if (doResetMarkdown) {
-              resetMarkdown(noteRef)
-            }
-
-          case other =>
-            context.actorContext.log.warn(s"Unexpected list contents: $other")
+        for (command <- hueNote.checkForCheckbox()) {
+          context.self !! command
+          hueNote.setToDefault()
         }
 
         Tinker.steadily
