@@ -141,7 +141,7 @@ object RootTinkerBehavior {
 
     config.mqttConfig match {
       case None =>
-        context.log.warn("No mqtt config, nto subscribing to mqtt events")
+        context.log.info("No mqtt config, not subscribing to mqtt events")
       case Some(mqttConfig: AppConfiguration.MqttConfig) =>
         val topics: Set[String] = Set(owntracks.Topic)
         context.log.info(s"Starting mqtt actor, listening to ${topics}")

@@ -26,7 +26,8 @@ import scala.util.{Failure, Success}
 object PurpleAirActor {
   sealed trait Message
 
-  case class Subscribe(subscriber: SpiritRef[RawSensorData]) extends Message
+  final case class Subscribe(subscriber: SpiritRef[RawSensorData]) extends Message
+  final case class DoFetchNow() extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
 
@@ -67,6 +68,11 @@ object PurpleAirActor {
       case Subscribe(subscriber) =>
         behavior(pollingIntervalMinutes, subscriber :: subscribers)
 
+      case DoFetchNow() =>
+        context.actorContext.log.info("Doing a fetch now")
+        apiPoller !! AlterPolling(forceCheckNow = true, intervalUpdate = None)
+        Tinker.steadily
+
       case ReceivePing(_) =>
         noteRef.readNote() match {
           case Failure(exception) =>
@@ -106,7 +112,7 @@ object PurpleAirActor {
                   }
 
                 if (refreshNow || updateIntervalTo.nonEmpty) {
-                  val alteringPolling = AlterPolling(forceCheckNow = refreshNow, interval = updateIntervalTo.map(_.minutes))
+                  val alteringPolling = AlterPolling(forceCheckNow = refreshNow, intervalUpdate = updateIntervalTo.map(_.minutes))
                   context.actorContext.log.debug(s"Altering polling! $alteringPolling")
                   apiPoller !! alteringPolling
                 } else {
@@ -191,7 +197,7 @@ private object PurpleAirPollingActor {
 
   case object HeartBeat extends Message
 
-  case class AlterPolling(forceCheckNow: Boolean, interval: Option[FiniteDuration]) extends Message
+  case class AlterPolling(forceCheckNow: Boolean, intervalUpdate: Option[FiniteDuration]) extends Message
 
   private case class ReceiveHttpResponse(httpResponse: HttpResponse) extends Message
 

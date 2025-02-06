@@ -1,5 +1,6 @@
 package me.micseydel.actor.wyze
 
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlug, WyzePlugAPIResponse, WyzePlugAPIResult}
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, VaultPathAdapter}
@@ -14,27 +15,22 @@ object WyzeActor {
 
   private final case class ReceiveDeviceList(result: WyzePlugAPIResponse) extends Message
 
-  private final case class ReceiveVaultPathUpdatedEvent(vaultPathUpdatedEvent: VaultPathUpdatedEvent) extends Message
+  private case class ReceiveNoteUpdatedPing(ping: Ping) extends Message
 
   private val NoteName = "Wyze Plugs"
 
-  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.rgb(0, 255, 255), "🔌").setup { _ =>
-    Tinker.initializedWithNote(NoteName, "_actor_notes/wyze") { (context, noteRef) =>
-      implicit val c: TinkerContext[_] = context
+  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](TinkerColor.rgb(0, 255, 255), "🔌").withWatchedActorNote(NoteName, ReceiveNoteUpdatedPing) { (context, noteRef) =>
+    implicit val c: TinkerContext[_] = context
 
-      val api = context.cast(WyzeAPIActor(wyzeUri), "WyzeAPIActor")
-      api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
+    val api = context.cast(WyzeAPIActor(wyzeUri), "WyzeAPIActor")
+    api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
 
-      context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory("wyze", context.messageAdapter(ReceiveVaultPathUpdatedEvent))
-
-      initializing(noteRef, api)
-    }
+    initializing(noteRef, api)
   }
 
   private def initializing(noteRef: NoteRef, api: SpiritRef[WyzeAPIActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
-      case ReceiveVaultPathUpdatedEvent(vaultPathUpdatedEvent) =>
-        context.actorContext.log.warn(s"Not yet initialized, ignoring $vaultPathUpdatedEvent")
+      case ReceiveNoteUpdatedPing(_) =>
         Tinker.steadily
 
       case ReceiveDeviceList(wyzePlugAPIResponse) =>
@@ -84,54 +80,48 @@ object WyzeActor {
   private def initialized(isOnMap: Map[String, Boolean])(implicit Tinker: Tinker, noteRef: NoteRef, api: SpiritRef[WyzeAPIActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
-      case ReceiveVaultPathUpdatedEvent(event) =>
-        event match {
-          case VaultPathAdapter.PathModifiedEvent(_) =>
-            context.actorContext.log.info("File updated, reading Markdown...")
-            val isOnMapFromDisk = noteRef.readMarkdown() match {
-              case Failure(exception) => throw exception
-              case Success(markdown) =>
-                markdown.split("\n")
-                  .filter(_.startsWith("- ["))
-                  .flatMap { line =>
-                    val maybeOnOff: Option[Boolean] = line(3) match {
-                      case Off => Some(false)
-                      case On => Some(true)
-                      case '[' => None
-                      case _ =>
-                        context.actorContext.log.warn(s"Weird line: $line")
-                        None
-                    }
+      case ReceiveNoteUpdatedPing(_) =>
+        context.actorContext.log.info("File updated, reading Markdown...")
+        val isOnMapFromDisk = noteRef.readMarkdown() match {
+          case Failure(exception) => throw exception
+          case Success(markdown) =>
+            markdown.split("\n")
+              .filter(_.startsWith("- ["))
+              .flatMap { line =>
+                val maybeOnOff: Option[Boolean] = line(3) match {
+                  case Off => Some(false)
+                  case On => Some(true)
+                  case '[' => None
+                  case _ =>
+                    context.actorContext.log.warn(s"Weird line: $line")
+                    None
+                }
 
-                    maybeOnOff.flatMap { onOff =>
-                      line.drop(18).split("\\|").toList match {
-                        case List(mac, _) =>
-                          Some(mac -> onOff)
-                        case _ =>
-                          context.actorContext.log.warn(s"Expected nickname:mac but got `$line``")
-                          None
-                      }
-                    }
-                  }.toMap
-            }
-
-            isOnMap.foreach { case (mac, cachedState) =>
-              isOnMapFromDisk.get(mac) match {
-                case Some(stateOnDisk) =>
-                  if (stateOnDisk != cachedState) {
-                    context.actorContext.log.info(s"MAC $mac changed its on/off state $cachedState->$stateOnDisk, updating")
-                    api !! WyzeAPIActor.SetPlugIsOn(mac, stateOnDisk)
+                maybeOnOff.flatMap { onOff =>
+                  line.drop(18).split("\\|").toList match {
+                    case List(mac, _) =>
+                      Some(mac -> onOff)
+                    case _ =>
+                      context.actorContext.log.warn(s"Expected nickname:mac but got `$line``")
+                      None
                   }
-
-                case None =>
-              }
-            }
-
-            initialized(isOnMapFromDisk)
-
-          case VaultPathAdapter.PathCreatedEvent(_) | VaultPathAdapter.PathDeletedEvent(_) =>
-            Tinker.steadily
+                }
+              }.toMap
         }
+
+        isOnMap.foreach { case (mac, cachedState) =>
+          isOnMapFromDisk.get(mac) match {
+            case Some(stateOnDisk) =>
+              if (stateOnDisk != cachedState) {
+                context.actorContext.log.info(s"MAC $mac changed its on/off state $cachedState->$stateOnDisk, updating")
+                api !! WyzeAPIActor.SetPlugIsOn(mac, stateOnDisk)
+              }
+
+            case None =>
+          }
+        }
+
+        initialized(isOnMapFromDisk)
 
       case ReceiveDeviceList(result) =>
         context.actorContext.log.warn(s"Did not expect to receive a device list, ignoring $result")

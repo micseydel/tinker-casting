@@ -56,6 +56,7 @@ object AirQualityManagerActor {
             context.actorContext.log.info("Failed to fetch CO2")
             initializing(Some(toMeasurement(raw)), None)
           case Some(co2) =>
+            context.actorContext.log.info("Finishing initializiation...")
             behavior(toMeasurement(raw), co2)
         }
 
@@ -68,7 +69,9 @@ object AirQualityManagerActor {
 
           case Some(co2) =>
             latestAqi match {
-              case Some(aqi) => behavior(aqi, co2)
+              case Some(aqi) =>
+                context.actorContext.log.info("Finishing initializiation...")
+                behavior(aqi, co2)
               case None =>
                 context.actorContext.log.info(s"CO2 is $co2 but no AQI received yet")
                 initializing(None, Some(co2))
@@ -76,7 +79,19 @@ object AirQualityManagerActor {
         }
 
       case ReceiveNoteUpdated(_) =>
-        context.actorContext.log.warn("Ignoring updated note")
+        // FIXME copy-paste
+        implicit val c: TinkerContext[_] = context
+        val (updateAqi, updateCo2) = noteRef.getCheckBoxes()
+
+        if (updateAqi) {
+          context.actorContext.log.info("Requesting an AQI fetch")
+          purpleAirActor !! PurpleAirActor.DoFetchNow()
+        }
+
+        if (updateCo2) {
+          context.actorContext.log.info("Requesting a CO2 fetch")
+          aranetActor !! AranetActor.Fetch(context.messageAdapter(ReceiveAranetResults))
+        }
         Tinker.steadily
     }
   }
@@ -97,7 +112,19 @@ object AirQualityManagerActor {
         }
 
       case ReceiveNoteUpdated(_) =>
-        context.actorContext.log.warn("Ignoring updated note")
+        implicit val c: TinkerContext[_] = context
+        val (updateAqi, updateCo2) = noteRef.getCheckBoxes()
+
+        if (updateAqi) {
+          context.actorContext.log.info("Requesting an AQI fetch")
+          purpleAirActor !! PurpleAirActor.DoFetchNow()
+        }
+
+        if (updateCo2) {
+          context.actorContext.log.info("Requesting a CO2 fetch")
+          aranetActor !! AranetActor.Fetch(context.messageAdapter(ReceiveAranetResults))
+        }
+
         Tinker.steadily
     }
   }
@@ -126,7 +153,9 @@ object AirQualityManagerActor {
       noteRef.setMarkdown(
         s"""- [initializing] Generated at $now
            |- Latest AQI $latestAqi
+           |    - [ ] refresh now
            |- Latest CO2 $latestCO2
+           |    - [ ] refresh now
            |""".stripMargin)
     }
 
@@ -134,8 +163,30 @@ object AirQualityManagerActor {
       noteRef.setMarkdown(
         s"""- Generated at $now
            |- Latest AQI $latestAqi
+           |    - [ ] refresh now
            |- Latest CO2 $latestCo2
+           |    - [ ] refresh now
            |""".stripMargin)
+    }
+
+    /**
+     * @return (doUpdateAQI, doUpdateCO2)
+     */
+    def getCheckBoxes(): (Boolean, Boolean) = {
+      noteRef.readMarkdown() match {
+        case Failure(exception) => throw exception
+        case Success(markdown) =>
+          markdown.split("\\n")
+            .filter(_.startsWith("    - ["))
+            .filter(_.length >= 8)
+            .map(_.charAt(7))
+            .toList match {
+            case List('x', _) => (true, false)
+            case List(_, 'x') => (false, true)
+            case List('x', 'x') => (true, true)
+            case other => (false, false)
+          }
+      }
     }
   }
 }
