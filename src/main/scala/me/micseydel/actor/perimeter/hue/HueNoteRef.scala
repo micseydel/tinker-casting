@@ -2,44 +2,81 @@ package me.micseydel.actor.perimeter.hue
 
 import me.micseydel.NoOp
 import me.micseydel.actor.perimeter.HueControl
+import me.micseydel.actor.perimeter.HueControl.{SetAllBrightness, SetAllLights, SetBrightness}
+import me.micseydel.actor.perimeter.hue.HueNoteRef.{BrightnessKey, ColorKey, CommandsMap, Properties}
+import me.micseydel.model.{Color, LightState}
+import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success}
 
 // FIXME: ideally the underlying reads would return Validated objects, to report parsing and other issues
 private[perimeter] class HueNoteRef(noteRef: NoteRef) {
-  private val commandsMap: Map[String, HueControl.Command] = Map(
-    "Do a light show 🌈" -> HueControl.DoALightShow(),
-    "Flash the lights 💡" -> HueControl.FlashTheLights()
-  )
+  def setToDefault(): Note = {
+    val frontmatter: Map[String, Object] = Map(
+      BrightnessKey -> -1.asInstanceOf[Object],
+      ColorKey -> "?".asInstanceOf[Object]
+    )
 
-  //
-
-  def setToDefault(): NoOp.type = {
-    val default = commandsMap.keys.mkString("- [ ] ", "\n- [ ] ", "\n")
-    setMarkdown(default)
+    val default = Note(
+      CommandsMap.keys.mkString("- [ ] ", "\n- [ ] ", "\n"),
+      frontmatter
+    )
+    setNote(default)
   }
 
-  def checkForCheckbox(): Option[HueControl.Command] = {
-    noteRef.readMarkdown().map { markdown =>
-      markdown.split("\n").toList.collectFirst { line =>
-        line(3) match {
-          case 'x' =>
-            commandsMap.get(line.drop(6))
-        }
-      }.flatten
-    } match {
+  def checkForCommand(): Option[HueControl.Command] = {
+    noteRef.readNote() match {
       case Failure(exception) => throw exception
-      case Success(maybeCommand) => maybeCommand
+      case Success(note@Note(markdown, _)) =>
+        note.yamlFrontMatter.map(Properties.fromMap).collect {
+          case Properties(Some(brightness), None) =>
+            SetAllBrightness(brightness)
+          case Properties(None, Some(color)) =>
+            SetAllLights(color)
+          case Properties(Some(brightness), Some(color)) =>
+            SetAllLights(color.copy(bri = brightness))
+        }.orElse {
+          markdown.split("\n").toList.collectFirst { line =>
+            line(3) match {
+              case 'x' =>
+                CommandsMap.get(line.drop(6))
+            }
+          }.flatten
+        }
     }
   }
 
   //
 
-  private def setMarkdown(markdown: String): NoOp.type = {
-    noteRef.setMarkdown(markdown) match {
+  private def setNote(note: Note): Note = {
+    noteRef.setTo(note) match {
       case Failure(exception) => throw exception
-      case Success(noOp) => noOp
+      case Success(note) => note
+    }
+  }
+}
+
+object HueNoteRef {
+  private val BrightnessKey = "brightness"
+  private val ColorKey = "color"
+
+  private val CommandsMap: Map[String, HueControl.Command] = Map(
+    "Do a light show 🌈" -> HueControl.DoALightShow(),
+    "Flash the lights 💡" -> HueControl.FlashTheLights()
+  )
+
+  case class Properties(brightness: Option[Int], color: Option[LightState])
+
+  object Properties {
+    def fromMap(map: Map[String, Any]): Properties = {
+      val brightness = map.get(BrightnessKey).collect {
+        case int: Int if int >= 0 && int <= 100 => int
+      }
+
+      val color = map.get(ColorKey).map(_.toString).flatMap(Color.unapply)
+
+      Properties(brightness, color)
     }
   }
 }

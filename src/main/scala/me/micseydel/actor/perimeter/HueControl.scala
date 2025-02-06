@@ -17,7 +17,6 @@ import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
 import me.micseydel.model.Light.AllList
 import me.micseydel.model._
-import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.Duration
@@ -49,11 +48,13 @@ object HueControl {
 
 
   case class SetLight(light: Light, lightState: LightState) extends Command
+  case class SetAllLights(lightState: LightState) extends Command
 
   /**
    * @param brightnessPct [0, 100]
    */
   case class SetBrightness(light: Light, brightnessPct: Int) extends Command
+  case class SetAllBrightness(brightnessPct: Int) extends Command
 
 
   private case class LogLightKeeperResponseInfo(message: String) extends StateUpdate
@@ -110,7 +111,7 @@ object HueControl {
 
     Tinker.withMessages {
       case NoteUpdated(_) =>
-        hueNote.checkForCheckbox() match {
+        hueNote.checkForCommand() match {
           case None => context.actorContext.log.warn("Detected note update but no command checked")
           case Some(command) =>
             context.actorContext.log.info(s"Triggering command $command")
@@ -142,20 +143,18 @@ object HueControl {
 
         lightKeepersByLight.get(light) match {
           case Some(actorRef) =>
-            val fut = actorRef.underlying.ask(HueLightKeeper.GetLightState)
-              .map { capturedLightState =>
-                actorRef !! HueLightKeeper.SetLight(capturedLightState)
-                LogLightKeeperResponseInfo(s"Captured $capturedLightState for light $light, setting brightness to $brightnessPct%")
-              }
-            context.pipeToSelf(fut) {
-              case Success(value) => value
-              case Failure(exception) =>
-                LogLightKeeperFailure(s"Failed to set light $light brightness to $brightnessPct%, probably failed to capture existing to restore it after", Some(exception))
-            }
+            actorRef !! HueLightKeeper.SetBrightness(brightnessPct)
           case None =>
             context.actorContext.log.error(s"Light $light not in lightKeepersByLight; keys = ${lightKeepersByLight.keySet}")
         }
 
+        Tinker.steadily
+
+      case SetAllBrightness(pct) =>
+        context.actorContext.log.info(s"Setting all lights to $pct%")
+        for (light <- AllList) {
+          context.self !! SetBrightness(light, pct)
+        }
         Tinker.steadily
 
       case FlashTheLight(light) =>
@@ -207,16 +206,15 @@ object HueControl {
 
         behavior(lightKeepersByName, lightKeepersByLight)
 
+      case SetAllLights(state) =>
+        for (light <- AllList) {
+          context.self !! HueControl.SetLight(light, state)
+        }
+        Tinker.steadily
+
       case StartTinkering(_) =>
         context.actorContext.log.warn("Received a redundant StartTinkering")
         Tinker.steadily
-    }
-  }
-
-  private def resetMarkdown(noteRef: NoteRef): Unit = {
-    noteRef.setMarkdown("- [ ] Flash the lights 💡\n- [ ] Do a light show 🌈\n") match {
-      case Failure(exception) => throw exception
-      case Success(_) =>
     }
   }
 }
@@ -321,6 +319,8 @@ object HueControlJsonFormat extends DefaultJsonProtocol {
   implicit val doALightShowJsonFormat: RootJsonFormat[DoALightShow] = jsonFormat0(DoALightShow)
   implicit val setLightJsonFormat: RootJsonFormat[SetLight] = jsonFormat2(SetLight)
   implicit val setBrightnessJsonFormat: RootJsonFormat[SetBrightness] = jsonFormat2(SetBrightness)
+  implicit val setTheLightsJsonFormat: RootJsonFormat[SetAllLights] = jsonFormat1(SetAllLights)
+  implicit val setAllBrightnessJsonFormat: RootJsonFormat[SetAllBrightness] = jsonFormat1(SetAllBrightness)
 
   implicit object HueControlCommandJsonFormat extends RootJsonFormat[HueControl.Command] {
     def write(m: HueControl.Command): JsValue = {
@@ -331,7 +331,9 @@ object HueControlJsonFormat extends DefaultJsonProtocol {
         case l: TurnOffAllLights => (l.toJson.asJsObject, "TurnOffAllLights")
         case l: DoALightShow => (l.toJson.asJsObject, "DoALightShow")
         case l: SetLight => (l.toJson.asJsObject, "SetLight")
+        case l: SetAllLights => (l.toJson.asJsObject, "SetAllLights")
         case l: SetBrightness => (l.toJson.asJsObject, "SetBrightness")
+        case l: SetAllBrightness => (l.toJson.asJsObject, "SetAllBrightness")
       }
       JsObject(jsObj.fields + ("type" -> JsString(typ)))
     }
@@ -345,7 +347,9 @@ object HueControlJsonFormat extends DefaultJsonProtocol {
         case Seq(JsString("DoALightShow")) => value.convertTo[DoALightShow]
         case Seq(JsString("SetLight")) => value.convertTo[SetLight]
         case Seq(JsString("SetBrightness")) => value.convertTo[SetBrightness]
-        case other => throw DeserializationException(s"Unknown type, expected Seq(JsString(_)) for one of {PushNotification, HueCommand} but got $other")
+        case Seq(JsString("SetAllLights")) => value.convertTo[SetAllLights]
+        case Seq(JsString("SetAllBrightness")) => value.convertTo[SetAllBrightness]
+        case other => throw DeserializationException(s"Unknown type $other, check the code")
       }
     }
   }

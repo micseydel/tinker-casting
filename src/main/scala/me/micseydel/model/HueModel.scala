@@ -43,7 +43,9 @@ final class Light(val lightId: Int) extends AnyVal
  * @param hue white=13248?
  * @param sat [0, 255]?
  */
-case class LightState(on: Boolean, bri: Int, hue: Int, sat: Int)
+case class LightState(on: Boolean, bri: Int, hue: Int, sat: Int) {
+  def withLightPct(pct: Int): LightState = this.copy(bri = pct * 255 / 100)
+}
 
 object LightStates {
   val WhiteLight: LightState = LightState(on = true, bri = 254, hue = 13248, sat = 5)
