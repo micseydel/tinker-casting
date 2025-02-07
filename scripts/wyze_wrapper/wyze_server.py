@@ -92,7 +92,7 @@ class ClientWrapper:
     def plugs_list(self):
         try:
             return self.client.plugs.list()
-        except wyze_sdk.errors.WyzeApiError as e:
+        except WyzeApiError as e:
             if "access token has expired" in str(e):
                 self._refresh()
                 return self.client.plugs.list()
@@ -102,7 +102,7 @@ class ClientWrapper:
     def get_plug(self, device_mac):
         try:
             return self.client.plugs.info(device_mac=device_mac)
-        except wyze_sdk.errors.WyzeApiError as e:
+        except WyzeApiError as e:
             if "access token has expired" in str(e):
                 self._refresh()
                 return self.client.plugs.info(device_mac=device_mac)
@@ -112,7 +112,7 @@ class ClientWrapper:
     def turn_on_plug(self, mac, model):
         try:
             return self.client.plugs.turn_on(device_mac=mac, device_model=model)
-        except wyze_sdk.errors.WyzeApiError as e:
+        except WyzeApiError as e:
             if "access token has expired" in str(e):
                 self._refresh()
                 return self.client.plugs.turn_on(device_mac=mac, device_model=model)
@@ -122,7 +122,7 @@ class ClientWrapper:
     def turn_off_plug(self, mac, model):
         try:
             return self.client.plugs.turn_off(device_mac=mac, device_model=model)
-        except wyze_sdk.errors.WyzeApiError as e:
+        except WyzeApiError as e:
             if "access token has expired" in str(e):
                 self._refresh()
                 return self.client.plugs.turn_off(device_mac=mac, device_model=model)
