@@ -39,7 +39,7 @@ object Chronicler {
 
   case class ActOnNoteRef(noteId: NoteId, event: NotedTranscription) extends PostInitMessage
 
-  case class ListenerAcknowledgement(noteRef: NoteId, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends PostInitMessage
+  case class ListenerAcknowledgement(noteId: NoteId, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends PostInitMessage
 
 
   def apply(config: AppConfig, vaultKeeper: ActorRef[VaultKeeper.Message], gossiper: ActorRef[Gossiper.Message], tinkerBrain: ActorRef[TinkerBrain.Message])(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>

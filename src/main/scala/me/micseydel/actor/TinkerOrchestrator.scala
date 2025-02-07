@@ -28,6 +28,8 @@ object TinkerOrchestrator {
 
   def apply(config: Config)(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
 //    val locationTracker: SpiritRef[LocationTracker.Message] = context.cast(LocationTracker(), "LocationTracker")
+    
+    val hypothesisListener = context.cast(HypothesisListener(), "HypothesisListener")
 
     // !! specializations
 
