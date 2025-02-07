@@ -21,8 +21,7 @@ object DailyMarkdownFromPersistedMessagesActor {
    * Persistence via JSON.
    */
   def apply[M](noteName: String, color: TinkerColor, emoji: String, jsonName: String, jsonFormat: JsonFormat[M], messagesToMarkdown: (List[M], TinkerClock) => String)(implicit Tinker: Tinker): Ability[Message[M]] = {
-    val href = NoteMakingTinkerer.noteNameToObsidianUrl(noteName)
-    NoteMakingTinkerer[Message[M]](noteName, color, emoji, Some(href)) { (context, noteRef) =>
+    NoteMakingTinkerer[Message[M]](noteName, color, emoji) { (context, noteRef) =>
       Tinker.withPersistedMessages(jsonName, jsonFormat) { typedJsonRef =>
         context.actorContext.log.info(s"Starting for noteName $noteName and jsonName $jsonName")
         behavior(noteRef, typedJsonRef, messagesToMarkdown)
