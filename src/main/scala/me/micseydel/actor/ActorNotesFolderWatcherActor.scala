@@ -135,7 +135,11 @@ object ActorNotesFolderWatcherActor {
           case VaultPathAdapter.PathModifiedEvent(path) =>
             path.noteName match {
               case None =>
-                context.actorContext.log.warn(s"unable to hand event $event because a filename ending with .md was expected")
+                if (path.toString.endsWith("ollamaprompts")) {
+                  context.actorContext.log.debug(s"it looks like a file in ollamaprompts was deleted $event")
+                } else {
+                  context.actorContext.log.warn(s"unable to handle event $event because a filename ending with .md was expected")
+                }
               case Some(noteId) =>
                 topLevelNoteWatchers.get(noteId) match {
                   case Some(subscriber) =>

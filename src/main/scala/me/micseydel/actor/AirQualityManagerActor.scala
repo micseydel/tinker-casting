@@ -252,7 +252,7 @@ object AirPurifierActor {
         Tinker.steadily
 
       case ReceiveNotePing(_) =>
-        context.actorContext.log.warn("Ignoring note update")
+        context.actorContext.log.debug("Ignoring note update")
         Tinker.steadily
     }
   }
