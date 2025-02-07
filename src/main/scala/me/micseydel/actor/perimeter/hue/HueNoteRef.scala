@@ -1,14 +1,13 @@
 package me.micseydel.actor.perimeter.hue
 
-import me.micseydel.NoOp
 import me.micseydel.actor.perimeter.HueControl
-import me.micseydel.actor.perimeter.HueControl.{SetAllBrightness, SetAllLights, SetBrightness}
+import me.micseydel.actor.perimeter.HueControl.{SetAllBrightness, SetAllLights}
 import me.micseydel.actor.perimeter.hue.HueNoteRef.{BrightnessKey, ColorKey, CommandsMap, Properties}
 import me.micseydel.model.{Color, LightState}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 // FIXME: ideally the underlying reads would return Validated objects, to report parsing and other issues
 private[perimeter] class HueNoteRef(noteRef: NoteRef) {

@@ -25,7 +25,7 @@ object PeriodicNotesCreatorActor {
     context.actorContext.log.info("Subscribing ItsMidnight message through Operator")
     context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ItsMidnight(_) =>
         val dayForNote = {
           val now = context.system.clock.now()

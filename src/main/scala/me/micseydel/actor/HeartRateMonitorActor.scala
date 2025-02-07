@@ -11,7 +11,7 @@ object HeartRateMonitorActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     context.system.eventReceiver ! EventReceiver.ClaimEventType(HeartRate, context.messageAdapter(Receive).underlying)
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case Receive(payload) =>
         context.actorContext.log.info(s"Received $payload")
         Tinker.steadily

@@ -39,7 +39,7 @@ object ChimeActor {
     implicit val actorSystem: ActorSystem[_] = context.system.actorSystem
     implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case Success(theme) =>
         context.actorContext.log.info(s"Calling chime.success with theme $theme")
         doAsyncHttp(host, "success", theme)

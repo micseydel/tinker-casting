@@ -2,8 +2,10 @@ package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{Event, KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
 import me.micseydel.actor.kitties.kibble.KibbleModel._
-import me.micseydel.dsl.Tinker
+import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TinkerColor.CatBrown
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
@@ -31,33 +33,36 @@ object KibbleManagerActor {
 
   private[kitties] case class KibbleDiscarded(massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends Event
 
-  def apply()(implicit Tinker: Tinker): Ability[Event] = Tinker.initializedWithNoteAndPersistedMessages(
-    "Kibble Tinkering", "kibble_tinkering", KibbleEventListJsonProtocol.EventJsonFormat
-  ) { case (context, noteRef, jsonlRef) =>
-    @unused
-    val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
+  private val NoteName = "Kibble Tinkering"
 
-    context.actorContext.log.info("Refreshing Markdown")
-    jsonlRef.get() match {
-      case Failure(exception) => throw exception
-      case Success(events) =>
-        noteRef.setMarkdown(KibbleMarkdownGenerator(events)(context.actorContext.log)) match {
-          case Failure(exception) => throw exception
-          case Success(_) =>
-        }
-    }
+  def apply()(implicit Tinker: Tinker): Ability[Event] = NoteMakingTinkerer[Event](NoteName, CatBrown, "🍚") { (context, noteRef) =>
+    Tinker.withPersistedMessages("kibble_tinkering", KibbleEventListJsonProtocol.EventJsonFormat) { jsonlRef =>
 
-    Tinker.withMessages { m =>
-      val allEvents: List[Event] = jsonlRef.appendAndGet(m) match {
+      @unused
+      val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
+
+      context.actorContext.log.info("Refreshing Markdown")
+      jsonlRef.get() match {
         case Failure(exception) => throw exception
-        case Success(events) => events
+        case Success(events) =>
+          noteRef.setMarkdown(KibbleMarkdownGenerator(events)(context.actorContext.log)) match {
+            case Failure(exception) => throw exception
+            case Success(_) =>
+          }
       }
 
-      context.actorContext.log.debug(s"Now have ${allEvents.size}, added $m")
+      Tinker.receiveMessage { m =>
+        val allEvents: List[Event] = jsonlRef.appendAndGet(m) match {
+          case Failure(exception) => throw exception
+          case Success(events) => events
+        }
 
-      noteRef.setMarkdown(KibbleMarkdownGenerator(allEvents)(context.actorContext.log))
+        context.actorContext.log.debug(s"Now have ${allEvents.size}, added $m")
 
-      Tinker.steadily
+        noteRef.setMarkdown(KibbleMarkdownGenerator(allEvents)(context.actorContext.log))
+
+        Tinker.steadily
+      }
     }
   }
 }

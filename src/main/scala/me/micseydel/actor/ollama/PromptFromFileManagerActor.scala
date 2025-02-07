@@ -1,8 +1,9 @@
 package me.micseydel.actor.ollama
 
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult}
-import me.micseydel.dsl.Tinker
+import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
@@ -18,19 +19,19 @@ object PromptFromFileManagerActor {
 
   private case class ReceivePromptResponse(response: ChatResponse) extends Message
 
-  def apply(filename: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.initializedWithNote(
-    dropDotMdFromEndOfFileNameIfPresent(filename), // FIXME: hack for .md suffix becoming duplicated
-    OllamaActor.OllamaPromptsSubdirectory
-  ) { (context, noteRef) =>
-    context.actorContext.log.info(s"Initialized prompt manager for $filename, doing an async file read...")
+  def apply(filename: String)(implicit Tinker: Tinker): Ability[Message] = {
+    val noteName = dropDotMdFromEndOfFileNameIfPresent(filename) // FIXME: hack for .md suffix becoming duplicated
+    NoteMakingTinkerer[Message](noteName, TinkerColor.random(), "🥼", Some(OllamaActor.OllamaPromptsSubdirectory)) { (context, noteRef) =>
+      context.actorContext.log.info(s"Initialized prompt manager for $filename, doing an async file read...")
 
-    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
-    context.pipeToSelf(noteRef.readNoteAsync()) {
-      case Failure(exception) => ReceiveException(exception)
-      case Success(note) => ReceiveNoteContents(note)
+      implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
+      context.pipeToSelf(noteRef.readNoteAsync()) {
+        case Failure(exception) => ReceiveException(exception)
+        case Success(note) => ReceiveNoteContents(note)
+      }
+
+      initializing(noteRef)
     }
-
-    initializing(noteRef)
   }
 
   private def initializing(noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>

@@ -38,7 +38,7 @@ object NutritionListener {
     context.actorContext.log.info("Subscribing to accurate transcriptions")
     context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case TranscriptionEvent(m) =>
         context.actorContext.log.debug(s"Received $m")
         markdownCalorieConsumptionTime(m) match {

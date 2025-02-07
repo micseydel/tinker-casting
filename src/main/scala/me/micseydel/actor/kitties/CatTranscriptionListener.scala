@@ -28,7 +28,7 @@ object CatTranscriptionListener {
     override def when: ZonedDateTime = notedTranscription.capture.captureTime
   }
 
-  def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(CatBrown, "🐱").setup { context =>
+  def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
     implicit val c: TinkerContext[_] = context
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[TranscriptionEvent]]] = context.cast(DailyNotesRouter(
       "CatsTranscriptions notes",

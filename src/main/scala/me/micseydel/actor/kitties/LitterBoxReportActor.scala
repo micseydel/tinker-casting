@@ -7,6 +7,8 @@ import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
 import me.micseydel.dsl._
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TinkerColor.CatBrown
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
@@ -39,9 +41,9 @@ object LitterBoxReportActor {
   private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
 
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_)), "DailyNotesRouter")
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _)), "DailyNotesRouter")
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
         dailyNotesAssistant !! DailyNotesRouter.Envelope(ec, ec.event.when)
         Tinker.steadily
@@ -50,20 +52,18 @@ object LitterBoxReportActor {
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate)(implicit Tinker: Tinker): Ability[EventCapture] = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String)(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
-    Tinker.initializedWithNoteAndPersistedMessages(s"Litter boxes sifting ($isoDate)", s"litter_boxes_sifting_$isoDate", LitterBoxEventCaptureListJsonProtocol.ReportEventCaptureJsonFormat) {
-      case (context, noteRef, typedJsonRef) =>
-        Tinker.withMessages {
+    val noteName = s"Litter boxes sifting ($isoDate)"
+//    val jsonName = s"litter_boxes_sifting_$isoDate"
+
+    noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
+        Tinker.receiveMessage {
           case observation@LitterSiftedObservation(capture: LitterSifted) =>
             noteRef.read() match {
               case Success(Note(markdown, frontmatter)) =>
                 MarkdownWithoutJsonExperiment(markdown, capture.when.toLocalDate) match {
                   case Validated.Valid(reportFromMarkdownParsing: Report) =>
-                    //                  val newNote = Note(reportFromExistingJson.toMarkdown, frontmatter)
-                    //                  noteRef.setTo(newNote)
-
-                    // FIXME: capture needs to be added to the stored Markdown!
                     val newNote = Note(reportFromMarkdownParsing.append {
                       capture match {
                         case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
@@ -76,19 +76,20 @@ private[kitties] object DailyAbility {
                 }
 
               case Failure(_: FileNotFoundException) =>
-                context.actorContext.log.info(s"File $noteRef did not exist, creating for the first time")
-
-                val todaysCaptures = typedJsonRef.appendAndGet(observation) match {
-                  case Failure(exception) => throw exception
-                  case Success(latest) => latest
-                }
-
-                val reportFromExistingJson = Report(todaysCaptures.collect {
-                  case LitterSiftedObservation(LitterSifted(LitterSiftedEvent(when, _, contents), ref)) =>
-                    DataPoint(when, contents, ref)
-                })
-
-                noteRef.setRaw(reportFromExistingJson.toMarkdown)
+//                context.actorContext.log.info(s"File $noteRef did not exist, creating for the first time")
+//
+//                val todaysCaptures = typedJsonRef.appendAndGet(observation) match {
+//                  case Failure(exception) => throw exception
+//                  case Success(latest) => latest
+//                }
+//
+//                val reportFromExistingJson = Report(todaysCaptures.collect {
+//                  case LitterSiftedObservation(LitterSifted(LitterSiftedEvent(when, _, contents), ref)) =>
+//                    DataPoint(when, contents, ref)
+//                })
+//
+//                noteRef.setRaw(reportFromExistingJson.toMarkdown)
+              context.actorContext.log.warn("File not found, taking no action")
 
               case Failure(exception) =>
                 context.actorContext.log.warn(s"Unexpected failure fetching the note", exception)

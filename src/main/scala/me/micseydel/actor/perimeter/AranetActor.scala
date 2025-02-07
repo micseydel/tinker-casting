@@ -7,7 +7,8 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.Common.ZonedDateTimeJsonFormat
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext, Tinkerer}
+import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.Note
 import spray.json._
 
@@ -35,7 +36,7 @@ object AranetActor {
   private val NoteName = "Aranet Devices"
 
   private def behavior(config: Config, lastSeenElevated: Boolean)(implicit Tinker: Tinker): Ability[Message] = {
-    Tinkerer[Message](TinkerColor(223, 58, 7), "😶‍🌫️").withWatchedActorNote(NoteName, ReceiveNoteUpdated.apply) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated.apply) { (context, noteRef) =>
       import AranetJsonProtocol.payloadFormat
 
       val httpRequest = HttpRequest(
@@ -45,7 +46,7 @@ object AranetActor {
 
       noteRef.setMarkdown(s"[${ZonedDateTime.now()}] initializing...")
 
-      Tinker.withMessages {
+      Tinker.receiveMessage {
         case ReceiveResult(result) =>
           result match {
             case AranetFailure(throwable) => context.actorContext.log.error("Aranet fetching failed", throwable)
@@ -145,9 +146,8 @@ private object HttpFetchAndUnmarshall {
   private case class ReceiveUnmarshalling[T](reply: T) extends Message[T]
 
   // behavior
-  def apply[T, E <: T, R <: T](httpRequest: HttpRequest, replyTo: SpiritRef[T], failureWrapper: Throwable => E, cc: SpiritRef[T])(implicit Tinker: Tinker, jsonFormat: RootJsonFormat[R]): Ability[Message[T]] = Tinker.setup { context =>
+  def apply[T, E <: T, R <: T](httpRequest: HttpRequest, replyTo: SpiritRef[T], failureWrapper: Throwable => E, cc: SpiritRef[T])(implicit Tinker: Tinker, jsonFormat: RootJsonFormat[R]): Ability[Message[T]] =
     apply(httpRequest, replyTo, failureWrapper, Some(cc))
-  }
 
   def apply[T, E <: T, R <: T](httpRequest: HttpRequest, replyTo: SpiritRef[T], failureWrapper: Throwable => E, cc: Option[SpiritRef[T]] = None)(implicit Tinker: Tinker, jsonFormat: RootJsonFormat[R]): Ability[Message[T]] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
@@ -158,7 +158,7 @@ private object HttpFetchAndUnmarshall {
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received HttpResponse, beginning unmarshalling process")
 

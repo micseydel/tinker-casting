@@ -8,7 +8,8 @@ import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEven
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext}
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResult
 import me.micseydel.model.WhisperResultJsonProtocol._
 import me.micseydel.util.TimeUtil
@@ -54,10 +55,10 @@ object AudioNoteCapturer {
   private val NoteName = "audio_note_capture (tinkering)"
   private val NoteFolder = "_actor_notes/audio_note_capture"
 
-  // FIXME: Chronicler shouldn't need to be passed here, should it?
+  // FIXME: Chronicler is passed here because it takes a broader message
   def apply(config: Config, chronicler: ActorRef[Chronicler.Message])(
     implicit Tinker: Tinker, httpExecutionContext: ExecutionContext
-  ): Ability[Message] = Tinker.initializedWithNote(NoteName, NoteFolder) { case (context, noteRef) =>
+  ): Ability[Message] = NoteMakingTinkerer(NoteName, TinkerColor.random(), "🎤", Some(NoteFolder)) { case (context, noteRef) =>
     val newFileCreationEventAdapter = context.messageAdapter(PathUpdatedEvent).underlying
     @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
     val folderWatcherActor = context.spawn(

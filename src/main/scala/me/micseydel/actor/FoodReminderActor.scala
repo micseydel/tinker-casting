@@ -8,7 +8,8 @@ import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffec
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
@@ -17,7 +18,7 @@ import java.io.FileNotFoundException
 import java.time.format.DateTimeParseException
 import java.time.{Duration, ZonedDateTime}
 import java.util.concurrent.TimeUnit
-import scala.concurrent.duration.{DurationInt, FiniteDuration, HOURS, MILLISECONDS}
+import scala.concurrent.duration.{DurationInt, FiniteDuration, MILLISECONDS}
 import scala.util.{Failure, Success, Try}
 
 object FoodReminderActor {
@@ -35,7 +36,7 @@ object FoodReminderActor {
   val MaxTimeWithoutEating: FiniteDuration = 4.hours
 
   private def setup(hungerTracker: SpiritRef[HungerState], foodTimeNtfyKey: Option[String])(implicit Tinker: Tinker): Ability[Message] = {
-    Tinkerer(rgb(135, 206, 235), "🍲").withNote(NoteName) { (context, noteRef) =>
+    NoteMakingTinkerer(NoteName, rgb(135, 206, 235), "🍲") { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 

@@ -78,7 +78,7 @@ private object ImageFetchChatResponseActor {
     context.actorContext.log.info(s"Requesting ${attachmentNames.size} attachments...")
     context.system.vaultKeeper !! VaultKeeper.RequestAttachmentsContents(attachmentNames, context.messageAdapter(Receive).underlying)
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case Receive(Right(contents)) =>
         context.actorContext.log.info(s"Received ${contents.size} attachments, making Ollama request...")
         val payload = JsObject(
@@ -135,7 +135,7 @@ private object EXPERIMENTHttpFetchAndUnmarshall {
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received HttpResponse, beginning unmarshalling process")
         context.pipeToSelf(Unmarshal(httpResponse.entity).to[R]) {

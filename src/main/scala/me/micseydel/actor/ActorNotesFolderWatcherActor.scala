@@ -5,10 +5,11 @@ import akka.actor.typed.scaladsl.Behaviors
 import cats.data.Validated
 import cats.data.Validated.{Invalid, Valid}
 import me.micseydel.NoOp
-import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.FolderWatcherActor.PathUpdatedEvent
+import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext, Tinkerer}
+import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
 
@@ -54,7 +55,7 @@ object ActorNotesFolderWatcherActor {
   private def finishingInitialization(
                            folders: Map[String, SpiritRef[FolderWatcherActor.Message]],
                            topLevelNoteWatchers: Map[String, SpiritRef[Ping]]
-                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = Tinkerer(TinkerColor(25, 25, 25), "👀").withNote("ActorNotesFolderWatcherActor") { (context, noteRef) =>
+                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = NoteMakingTinkerer("ActorNotesFolderWatcherActor", TinkerColor(25, 25, 25), "👀") { (context, noteRef) =>
     @unused // driven by an internal thread
     val actorNotesFolderWatcher = context.spawn(
       FolderWatcherActor(
@@ -95,7 +96,7 @@ object ActorNotesFolderWatcherActor {
       case Success(_) =>
     }
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case StartTinkering(_) =>
         context.actorContext.log.warn("Did not expect a StartTinkering message after initialization, ignoring")
         Tinker.steadily

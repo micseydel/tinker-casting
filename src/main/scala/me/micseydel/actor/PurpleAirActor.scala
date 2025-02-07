@@ -10,6 +10,7 @@ import me.micseydel.actor.RawSensorData.Formatter
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.Series
 import me.micseydel.util.TimeUtil
@@ -33,7 +34,7 @@ object PurpleAirActor {
 
   private case class ReceiveRawSensorData(data: RawSensorData) extends Message
 
-  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](TinkerColor(185, 96, 203), "💨").withWatchedActorNote("PurpleAir AQI measurements", ReceivePing) { (context, noteRef) =>
+  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("PurpleAir AQI measurements", TinkerColor(185, 96, 203), "💨", ReceivePing) { (context, noteRef) =>
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]] = context.cast(DailyNotesRouter(
       "PurpleAir AQI measurements",
       "purpleair",

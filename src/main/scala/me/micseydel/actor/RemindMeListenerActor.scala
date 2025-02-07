@@ -7,6 +7,7 @@ import me.micseydel.dsl.TinkerColor.Yellow
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerContext, Tinkerer}
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent, WhisperSegment}
 import me.micseydel.util.MarkdownUtil
@@ -31,15 +32,16 @@ object RemindMeListenerActor {
   private val NoteName = "Reminders"
   private val JsonName = "reminders_tinkering"
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.initializedWithNoteAndTypedPersistence(NoteName, JsonName, StateJsonProtocol.stateFormat) {
-    (context, noteRef, jsonRef) =>
-      implicit val c: TinkerContext[_] = context
-      context.actorContext.log.info(s"Starting RemindMeListenerActor(note=$NoteName, json=$JsonName): sending Gossiper.SubscribeAccurate")
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, Yellow, "⚠️") { (context, noteRef) =>
+    Tinker.withTypedJson(JsonName, StateJsonProtocol.stateFormat) { jsonRef =>
+        implicit val c: TinkerContext[_] = context
+        context.actorContext.log.info(s"Starting RemindMeListenerActor(note=$NoteName, json=$JsonName): sending Gossiper.SubscribeAccurate")
 
-      context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
-      context.system.notifier !! NotificationCenterManager.RegisterReplyTo(context.messageAdapter(MarkAsDone), SpiritId)
+        context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+        context.system.notifier !! NotificationCenterManager.RegisterReplyTo(context.messageAdapter(MarkAsDone), SpiritId)
 
-      behavior(noteRef, jsonRef)
+        behavior(noteRef, jsonRef)
+    }
   }
 
   private def behavior(noteRef: NoteRef, jsonRef: TypedJsonRef[State])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(Yellow, "⚠️").receive { (context, message) =>

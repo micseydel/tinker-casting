@@ -8,6 +8,7 @@ import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
 import me.micseydel.actor.wyze.WyzeActor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
@@ -17,9 +18,9 @@ import scala.util.{Failure, Success, Try}
 object AirQualityManagerActor {
   sealed trait Message
 
-  case class ReceivePurpleAir(data: RawSensorData) extends Message
+  private case class ReceivePurpleAir(data: RawSensorData) extends Message
 
-  case class ReceiveAranetResults(results: AranetActor.Result) extends Message
+  private case class ReceiveAranetResults(results: AranetActor.Result) extends Message
 
   private case class ReceiveNoteUpdated(ping: Ping) extends Message
 
@@ -31,7 +32,7 @@ object AirQualityManagerActor {
              wyzeActor: SpiritRef[WyzeActor.Message],
              aranetActor: SpiritRef[AranetActor.Message]
            )(implicit Tinker: Tinker): Ability[Message] =
-    Tinkerer[Message](TinkerColor.rgb(245, 245, 250), "🫧").withWatchedActorNote(Filename, ReceiveNoteUpdated) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](Filename, TinkerColor.rgb(245, 245, 250), "🫧", ReceiveNoteUpdated) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
 
       purpleAirActor !! PurpleAirActor.Subscribe(context.messageAdapter(ReceivePurpleAir))
@@ -52,7 +53,7 @@ object AirQualityManagerActor {
 
     context.actorContext.log.info("Just set initial markdown")
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceivePurpleAir(raw@RawSensorData(_, _)) =>
         latestCO2 match {
           case None =>
@@ -102,7 +103,7 @@ object AirQualityManagerActor {
   private def behavior(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], airPurifier: SpiritRef[AirPurifierActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
     noteRef.withLatest(context.system.clock.now(), latestAqi, latestCO2)
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceivePurpleAir(data) =>
         behavior(toMeasurement(data), latestCO2)
 
@@ -175,6 +176,7 @@ object AirQualityManagerActor {
     /**
      * @return (doUpdateAQI, doUpdateCO2)
      */
+    //noinspection AccessorLikeMethodIsEmptyParen
     def getCheckBoxes(): (Boolean, Boolean) = {
       noteRef.readMarkdown() match {
         case Failure(exception) => throw exception
@@ -187,7 +189,7 @@ object AirQualityManagerActor {
             case List('x', _) => (true, false)
             case List(_, 'x') => (false, true)
             case List('x', 'x') => (true, true)
-            case other => (false, false)
+            case _ => (false, false)
           }
       }
     }
@@ -196,10 +198,10 @@ object AirQualityManagerActor {
 
 object AirPurifierActor {
   sealed trait Message
-  final case class SetTo(onOff: Boolean) extends Message
+  final case class SetTo(onOff: Boolean) extends Message // FIXME: needs testing
   private case class ReceiveNotePing(ping: Ping) extends Message
 
-  def apply(wyzeActor: SpiritRef[WyzeActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](TinkerColor(200, 250, 250), "🗼").withWatchedActorNote("Air Purifier", ReceiveNotePing) { (context, noteRef) =>
+  def apply(wyzeActor: SpiritRef[WyzeActor.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Air Purifier", TinkerColor(200, 250, 250), "🗼", ReceiveNotePing) { (context, noteRef) =>
     implicit val wa: SpiritRef[WyzeActor.Message] = wyzeActor
     implicit val nr: NoteRef = noteRef
 
@@ -243,7 +245,7 @@ object AirPurifierActor {
       case Failure(exception) => throw exception
       case Success(_) =>
     }
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case SetTo(onOff) =>
         implicit val c: TinkerContext[_] = context
         wyzeActor !! WyzeActor.SetPlug(wyzeMac, onOff)
@@ -258,10 +260,11 @@ object AirPurifierActor {
   //
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    //noinspection AccessorLikeMethodIsEmptyParen
     def getWyzeMac(): Option[String] = noteRef.readNote() match {
       case Success(note) =>
         note.yamlFrontMatter.toOption.flatMap(_.get("wyze_mac").map(_.toString))
-      case Failure(exception: FileNotFoundException) => None
+      case Failure(_: FileNotFoundException) => None
       case Failure(exception) => throw exception
     }
   }

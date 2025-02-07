@@ -1,11 +1,10 @@
 package me.micseydel.actor.wyze
 
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlug, WyzePlugAPIResponse, WyzePlugAPIResult}
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, VaultPathAdapter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success}
@@ -21,7 +20,7 @@ object WyzeActor {
 
   private val NoteName = "Wyze Plugs"
 
-  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](TinkerColor.rgb(0, 255, 255), "🔌").withWatchedActorNote(NoteName, ReceiveNoteUpdatedPing) { (context, noteRef) =>
+  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdatedPing](NoteName, TinkerColor.rgb(0, 255, 255), "🔌", ReceiveNoteUpdatedPing) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
 
     val api = context.cast(WyzeAPIActor(wyzeUri), "WyzeAPIActor")

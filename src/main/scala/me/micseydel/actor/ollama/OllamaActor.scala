@@ -1,14 +1,14 @@
 package me.micseydel.actor.ollama
 
 import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
-import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult, Details, Model, Models}
+import me.micseydel.actor.ollama.OllamaModel._
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, VaultPathAdapter}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, Tinkerer}
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import spray.json._
 
 import java.time.ZonedDateTime
-import scala.util.matching.Regex
 
 // FIXME https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion
 object OllamaActor {
@@ -18,11 +18,11 @@ object OllamaActor {
 
   sealed trait Message
 
-  final case class ReceiveModels(models: Models) extends Message
+  private case class ReceiveModels(models: Models) extends Message
 
   private case class ReceivePathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(7, 164, 223), "🦙").withNote("Ollama Testing") { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Ollama Testing", TinkerColor(7, 164, 223), "🦙") { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
 
     context.actorContext.log.info("Requesting Ollama models....")
@@ -31,11 +31,11 @@ object OllamaActor {
     context.actorContext.log.info(s"Subscribing to updates to $OllamaPrompts")
     context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(OllamaPrompts, context.messageAdapter(ReceivePathUpdatedEvent))
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveModels(Models(models)) =>
         context.actorContext.log.info(s"Received ${models.size} models, writing to markdown")
         val lines = models.map {
-          case Model(name, modified_at, size, digest, Details(format, family, families, parameter_size, quantization_level)) =>
+          case Model(name, _, _, _, Details(_, _, _, parameter_size, quantization_level)) =>
             s"- $name ($parameter_size at $quantization_level)"
         }
         noteRef.setMarkdown(lines.mkString("\n"))

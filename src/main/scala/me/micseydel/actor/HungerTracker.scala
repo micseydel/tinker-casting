@@ -35,7 +35,7 @@ object HungerTracker {
     val nutritionHelperActor: SpiritRef[NutritionListener.Message] = context.cast(NutritionListener(context.messageAdapter(ReceiveLastAte)), "NutritionHelper")
     val foodReminder: SpiritRef[FoodReminderActor.Message] = context.cast(FoodReminderActor(context.messageAdapter(ReceiveHungerState), foodTimeNtfyKey), "FoodReminder")
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveLastAte(lastAte) =>
         context.actorContext.log.info(s"Forwarding last ate to ${foodReminder.path}, hunger state to ${hungerSubscriber.path}")
         foodReminder !! FoodReminderActor.CaloriesConsumed(lastAte.at)

@@ -13,7 +13,7 @@ import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
 import me.micseydel.model.NotedTranscription
 import me.micseydel.vault.VaultKeeper
 import me.micseydel.vault.VaultKeeper.{JsonRefResponse, NoteRefResponse}
-import me.micseydel.vault.persistence._
+import me.micseydel.vault.persistence.{TypedJsonRef, _}
 import spray.json.JsonFormat
 
 import java.net.{URI, URLEncoder}
@@ -32,30 +32,36 @@ class Tinker(val tinkerSystem: TinkerSystem) {
     onMessage(tinkerSystem.newContext(ctx), message)
   }
 
-  def initializedWithTypedJson[T, J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], TypedJsonRef[J]) => Ability[T]): Ability[T] = {
-    setup { context =>
-      implicit val scheduler: Scheduler = context.system.actorSystem.scheduler
-      val duration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
-      implicit val timeout: Timeout = Timeout(duration)
-      val jsonRef: TypedJsonRef[J] = Await.ready[JsonRefResponse](context.system.vaultKeeper.underlying.ask { replyTo =>
-        VaultKeeper.RequestExclusiveJsonRef(jsonName, replyTo)
-      }, duration).value match {
-        case Some(Success(JsonRefResponse(responseJsonName, jsonRefOrWhyNot))) =>
-          jsonRefOrWhyNot match {
-            case Right(jsonRef) =>
-              new TypedJsonRef(jsonRef)(jsonFormat)
-            case Left(whyNot) =>
-              throw new RuntimeException(s"Failed to get JsonRef for $jsonName (responseJsonName=$responseJsonName): $whyNot")
-          }
+  private[dsl] def withJson[T](jsonName: String)(f: JsonRef => Ability[T]): Ability[T] = setup { context =>
+    implicit val scheduler: Scheduler = context.system.actorSystem.scheduler
+    val duration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
+    implicit val timeout: Timeout = Timeout(duration)
+    val jsonRef = Await.ready[JsonRefResponse](context.system.vaultKeeper.underlying.ask { replyTo =>
+      VaultKeeper.RequestExclusiveJsonRef(jsonName, replyTo)
+    }, duration).value match {
+      case Some(Success(JsonRefResponse(responseJsonName, jsonRefOrWhyNot))) =>
+        jsonRefOrWhyNot match {
+          case Right(jsonRef) =>
+            jsonRef
+          case Left(whyNot) =>
+            throw new RuntimeException(s"Failed to get JsonRef for $jsonName (responseJsonName=$responseJsonName): $whyNot")
+        }
 
-        case Some(Failure(throwable)) =>
-          throw throwable
-        case None =>
-          throw new RuntimeException(s"Expected VaultKeeper.RequestExclusiveNoteRef ask to be non-empty")
-      }
-
-      f(context, jsonRef)
+      case Some(Failure(throwable)) =>
+        throw throwable
+      case None =>
+        throw new RuntimeException(s"Expected VaultKeeper.RequestExclusiveNoteRef ask to be non-empty")
     }
+
+    f(jsonRef)
+  }
+
+  def withTypedJson[T, J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TypedJsonRef[J]) => Ability[T]): Ability[T] = withJson(jsonName) { jsonJref =>
+    f(new TypedJsonRef(jsonJref)(jsonFormat))
+  }
+
+  def withPersistedMessages[T, J](jsonName: String, jsonFormat: JsonFormat[J])(f: JsonlRef[J] => Ability[T]): Ability[T] = withJson(jsonName) { jsonJref =>
+    f(new JsonlRef[J](jsonJref)(jsonFormat))
   }
 
   private def initializedWithNoteAndJsonPersistence[T](noteName: String, jsonName: String)(f: (TinkerContext[T], NoteRef, JsonRef) => Ability[T]): Ability[T] = {
@@ -85,7 +91,7 @@ class Tinker(val tinkerSystem: TinkerSystem) {
       })
 
       val jsonRef: JsonRef = await[JsonRefResponse, JsonRef](jsonFut, {
-        case JsonRefResponse(_jsonName, noteRefOrWhyNot) =>
+        case JsonRefResponse(_, noteRefOrWhyNot) =>
           noteRefOrWhyNot match {
             case Right(jsonRef) =>
               jsonRef
@@ -98,24 +104,15 @@ class Tinker(val tinkerSystem: TinkerSystem) {
     }
   }
 
-  def initializedWithNoteAndTypedPersistence[T, J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, TypedJsonRef[J]) => Ability[T]): Ability[T] = {
-    initializedWithNoteAndJsonPersistence(noteName, jsonName) { case (context, noteRef, jsonRef) =>
-      val typedJsonRef = new TypedJsonRef[J](jsonRef)(jsonFormat)
-      f(context, noteRef, typedJsonRef)
-    }
-  }
-
-  def initializedWithNoteAndPersistedMessages[T, J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, JsonlRefT[J]) => Ability[T]): Ability[T] = {
+  // FIXME: remove
+  private[dsl] def initializedWithNoteAndPersistedMessages[T, J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, JsonlRefT[J]) => Ability[T]): Ability[T] = {
     initializedWithNoteAndJsonPersistence(noteName, jsonName) { case (context, noteRef, jsonRef) =>
       val jsonlRef = new JsonlRef[J](jsonRef)(jsonFormat)
       f(context, noteRef, jsonlRef)
     }
   }
 
-  def initializedWithNote[T](noteName: String, subdirectory: String)(f: (TinkerContext[T], NoteRef) => Ability[T]): Ability[T] =
-    initializedWithNote(noteName, Some(subdirectory))(f)
-
-  def initializedWithNote[T](noteName: String, subdirectory: Option[String] = None)(f: (TinkerContext[T], NoteRef) => Ability[T]): Ability[T] = {
+  private[dsl] def initializedWithNote[T](noteName: String, subdirectory: Option[String] = None)(f: (TinkerContext[T], NoteRef) => Ability[T]): Ability[T] = {
     setup { context =>
       implicit val scheduler: Scheduler = context.system.actorSystem.scheduler
       implicit val duration: FiniteDuration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
@@ -139,7 +136,7 @@ class Tinker(val tinkerSystem: TinkerSystem) {
     }
   }
 
-  def withMessages[T](onMessage: T => Ability[T]): Ability[T] = setup { _ =>
+  def receiveMessage[T](onMessage: T => Ability[T]): Ability[T] = setup { _ =>
     Behaviors.receiveMessage(onMessage)
   }
 
@@ -156,8 +153,9 @@ class Tinker(val tinkerSystem: TinkerSystem) {
   /**
    * message processing throws if appending to disk or fetching after fails
    */
+    // FIXME: refactor
   def withPriorMessages[T](jsonlRef: JsonlRefT[T])(ability: (TinkerContext[T], T, List[T]) => Ability[T]): Ability[T] = setup { context =>
-    withMessages[T] { message =>
+    receiveMessage[T] { message =>
       jsonlRef.appendAndGet(message) match {
         case Failure(exception) =>
           throw throw new RuntimeException(s"Failed to appendAndGet jsonl", exception)
@@ -175,35 +173,6 @@ class Tinker(val tinkerSystem: TinkerSystem) {
       context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeNoteRef(noteRef, context.messageAdapter(adapterF))
       f(context, noteRef)
     }
-}
-
-object TinkerListener {
-  sealed trait Message
-
-  case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
-
-  sealed trait ListenerResult
-
-  case object Ignored extends ListenerResult
-
-  case class Acknowledged(listenerAcknowledgement: ListenerAcknowledgement) extends ListenerResult
-
-  def simpleStateless(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    implicit val tc: TinkerContext[_] = context
-
-    context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
-
-    Tinker.withMessages {
-      case TranscriptionEvent(notedTranscription) =>
-        behavior(context, notedTranscription) match {
-          case Ignored =>
-          case Acknowledged(listenerAcknowledgement) =>
-            context.system.chronicler !! listenerAcknowledgement
-        }
-
-        Tinker.steadily
-    }
-  }
 }
 
 object Tinker {
@@ -244,44 +213,36 @@ case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] =
     val registering = RegisterTinkerer(context.self.path, this)
     // FIXME: investigate this further, but this line seems to cause a CACHED logger where the calling class
     //   ends up as "me.micseydel.dsl.Tinkerer" which messages with custom logback stuff
-//    context.actorContext.log.info(s"registering $registering")
+    //    context.actorContext.log.info(s"registering $registering")
+
     context.system.tinkerBrain ! registering
+
     factory(context)
   }
 
   def receive(onMessage: (TinkerContext[T], T) => Ability[T])(implicit Tinker: Tinker): Ability[T] =
     setup(_ => Tinker.receive(onMessage))
 
-  def withNote(noteName: String, subdirectory: Option[String] = None)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
+  private[dsl] def withNote(noteName: String, subdirectory: Option[String] = None)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
     setup(_ => Tinker.initializedWithNote(noteName, subdirectory)(f))
   }
 
-  def withWatchedActorNote(noteName: String, adapterF: Ping => T)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
-    setup(_ => Tinker.withWatchedActorNote(noteName, adapterF)(f))
-  }
+  // FIXME: remove?
+  //  private[dsl] def withWatchedActorNote(noteName: String, adapterF: Ping => T)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
+  //    setup(_ => Tinker.withWatchedActorNote(noteName, adapterF)(f))
+  //  }
 
   def initializedWithTypedJson[J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
-    setup(_ => Tinker.initializedWithTypedJson(jsonName, jsonFormat)(f))
+    setup(context => Tinker.withTypedJson(jsonName, jsonFormat)(f(context, _)))
   }
 
-  def initializedWithNoteAndTypedPersistence[J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
-    setup(_ => Tinker.initializedWithNoteAndTypedPersistence(noteName, jsonName, jsonFormat)(f))
-  }
-}
-
-object NoteMakingTinkerer {
-  def apply[M, PR <: M](noteName: String, color: TinkerColor, emoji: String, pingReceiver: Ping => PR)(ability: (TinkerContext[M], NoteRef) => Ability[M])(implicit Tinker: Tinker): Ability[M] = {
-    val notePath = s"_actor_notes/$noteName"
-    val href = "obsidian://open?vault=deliberate_knowledge_accretion&file=" + encode(notePath)
-
-    Tinkerer[M](color, emoji, Some(href)).withWatchedActorNote(noteName, pingReceiver)(ability)
+  def initializedWithPersistedMessages[J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], JsonlRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
+    setup(context => Tinker.withPersistedMessages(jsonName, jsonFormat)(f(context, _)))
   }
 
-  private def encode(raw: String): String = {
-    // FIXME https://chatgpt.com/c/67a64145-bc64-800e-bf91-c807c196fe5b
-    // omg FUCK Java, I wasted an hour on this and still worry it's wrong
-    URLEncoder.encode(raw, StandardCharsets.UTF_8.toString).replace("+", "%20")
-  }
+  //  def initializedWithNoteAndTypedPersistence[J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
+  //    setup(_ => Tinker.initializedWithNoteAndTypedPersistence(noteName, jsonName, jsonFormat)(f))
+  //  }
 }
 
 case class TinkerColor(r: Int, g: Int, b: Int, o: Double = 1.0) {

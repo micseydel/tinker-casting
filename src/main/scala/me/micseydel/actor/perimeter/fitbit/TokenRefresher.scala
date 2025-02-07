@@ -57,7 +57,7 @@ private[fitbit] object TokenRefresher {
       request
     ))(ReceiveHttpResponse)
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveHttpResponse(response) =>
         response match {
           case Success(httpResponse) =>

@@ -56,7 +56,7 @@ object TinkerOrchestrator {
       context.cast(PeriodicNotesCreatorActor(config.vaultRoot), "PeriodicNotesCreatorActor")
 
     implicit val tc: TinkerContext[_] = context
-    Tinker.withMessages {
+    Tinker.receiveMessage {
 //      case event@ReceiveMqttEvent(owntracks.Topic, _) =>
 ////        locationTracker !! LocationTracker.ReceiveMqtt(event)
 //        Tinker.steadily

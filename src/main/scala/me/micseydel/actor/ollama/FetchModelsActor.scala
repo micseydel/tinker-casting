@@ -36,7 +36,7 @@ object FetchModelsActor {
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received request response...")
 

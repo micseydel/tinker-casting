@@ -23,7 +23,7 @@ private[wyze] object WyzeAPIActor {
 
 
   def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.rgb(0, 255, 255), "☁️").setup { context =>
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case GetDevices(replyTo) =>
         val request = HttpRequest(
           method = HttpMethods.GET,
@@ -100,7 +100,7 @@ private object HttpFetchAndUnmarshall {
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received HttpResponse, beginning unmarshalling process")
 
@@ -150,7 +150,7 @@ private object HttpFetchUnmarshallAndLog {
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received HttpResponse, discarding rather than unmarshalling")
         httpResponse.discardEntityBytes()

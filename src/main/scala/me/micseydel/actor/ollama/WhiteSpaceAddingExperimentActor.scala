@@ -2,8 +2,9 @@ package me.micseydel.actor.ollama
 
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, LLMTinkeringActor}
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult}
-import me.micseydel.dsl.Tinker
+import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
@@ -20,19 +21,21 @@ object WhiteSpaceAddingExperimentActor {
 
   private case class ReceivePromptResponse(response: ChatResponse) extends Message
 
-  def apply(filename: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.initializedWithNote(
-    dropDotMdFromEndOfFileNameIfPresent(filename), // FIXME: hack for .md suffix becoming duplicated
-    s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/${LLMTinkeringActor.Folder}"
-  ) { (context, noteRef) =>
-    context.actorContext.log.info(s"Initialized for $filename, doing an async file read...")
+  def apply(filename: String)(implicit Tinker: Tinker): Ability[Message] = {
+    val noteName = dropDotMdFromEndOfFileNameIfPresent(filename)
+    val subfolder = s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/${LLMTinkeringActor.Folder}"
 
-    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
-    context.pipeToSelf(noteRef.readNoteAsync()) {
-      case Failure(exception) => ReceiveException(exception)
-      case Success(note) => ReceiveNoteContents(note)
+    NoteMakingTinkerer[Message](noteName, TinkerColor.random(), "🪐", Some(subfolder)) { (context, noteRef) =>
+      context.actorContext.log.info(s"Initialized for $filename, doing an async file read...")
+
+      implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
+      context.pipeToSelf(noteRef.readNoteAsync()) {
+        case Failure(exception) => ReceiveException(exception)
+        case Success(note) => ReceiveNoteContents(note)
+      }
+
+      fetchingNoteContents(noteRef)
     }
-
-    fetchingNoteContents(noteRef)
   }
 
   private val PromptPrefix = "Please take the following block of text without newlines, and add them where they should be. Do not, otherwise, modify the text and do not add commentary."

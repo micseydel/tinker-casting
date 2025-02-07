@@ -15,6 +15,7 @@ import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.Light.AllList
 import me.micseydel.model._
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
@@ -92,7 +93,7 @@ object HueControl {
     }
   }
 
-  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = Tinkerer[Message](rgb(230, 230, 230), "🕹️").withWatchedActorNote("Hue Control", NoteUpdated) { (context, noteRef) =>
+  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
     // call this actor if needed
     @unused
     val hueListener = context.cast(HueListener(context.self), "HueListener")
@@ -109,7 +110,7 @@ object HueControl {
 
     hueNote.setToDefault()
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case NoteUpdated(_) =>
         hueNote.checkForCommand() match {
           case None => context.actorContext.log.debug("Detected note update but no command checked")

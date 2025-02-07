@@ -1,7 +1,8 @@
 package me.micseydel.actor
 
-import me.micseydel.dsl.{Tinker, TinkerClock}
+import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.persistence.{JsonlRefT, NoteRef}
 import spray.json.JsonFormat
 
@@ -9,7 +10,7 @@ import scala.util.{Failure, Success}
 
 object DailyMarkdownFromPersistedMessagesActor {
   sealed trait Message[+Wrapped] {
-//    def wrapped: Wrapped
+    //    def wrapped: Wrapped
   }
 
   final case class StoreAndRegenerateMarkdown[Wrapped](wrapped: Wrapped) extends Message[Wrapped]
@@ -19,11 +20,15 @@ object DailyMarkdownFromPersistedMessagesActor {
   /**
    * Persistence via JSON.
    */
-  def apply[M](noteName: String, jsonName: String, jsonFormat: JsonFormat[M], messagesToMarkdown: (List[M], TinkerClock) => String)(implicit Tinker: Tinker): Ability[Message[M]] =
-    Tinker.initializedWithNoteAndPersistedMessages(noteName, jsonName, jsonFormat) { (context, noteRef, typedJsonRef) =>
-      context.actorContext.log.info(s"Starting for noteName $noteName and jsonName $jsonName")
-      behavior(noteRef, typedJsonRef, messagesToMarkdown)
+  def apply[M](noteName: String, color: TinkerColor, emoji: String, jsonName: String, jsonFormat: JsonFormat[M], messagesToMarkdown: (List[M], TinkerClock) => String)(implicit Tinker: Tinker): Ability[Message[M]] = {
+    val href = NoteMakingTinkerer.noteNameToObsidianUrl(noteName)
+    NoteMakingTinkerer[Message[M]](noteName, color, emoji, Some(href)) { (context, noteRef) =>
+      Tinker.withPersistedMessages(jsonName, jsonFormat) { typedJsonRef =>
+        context.actorContext.log.info(s"Starting for noteName $noteName and jsonName $jsonName")
+        behavior(noteRef, typedJsonRef, messagesToMarkdown)
+      }
     }
+  }
 
   private def behavior[M](noteRef: NoteRef, jsonlRef: JsonlRefT[M], messagesToMarkdown: (List[M], TinkerClock) => String)(implicit Tinker: Tinker): Ability[Message[M]] = Tinker.receive { (context, message) =>
     context.actorContext.log.debug(s"Received message wrapping type $message")

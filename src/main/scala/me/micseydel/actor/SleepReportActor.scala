@@ -6,6 +6,7 @@ import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepReport
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.Series
@@ -30,43 +31,44 @@ object SleepReportActor {
   // behaviors
 
   def apply(fitbitActor: SpiritRef[FitbitActor.Message], subscriber: SpiritRef[SleepReport])(implicit Tinker: Tinker): Ability[Message] =
-    Tinkerer(rgb(20, 20, 20), "😴").initializedWithNoteAndTypedPersistence("Sleep Report", "sleep_report", StateJsonProtocol.stateJsonFormat) {
-      case (context, noteRef, jsonRef) =>
-        implicit val c: TinkerContext[Message] = context
+    NoteMakingTinkerer("Sleep Report", rgb(20, 20, 20), "😴") { case (context, noteRef) =>
+      implicit val c: TinkerContext[Message] = context
 
-        //        val interval = 4.hours
-        //        context.log.info(s"Initializing sleep report with refresh interval $interval, but doing a a pull right now too")
+      //        val interval = 4.hours
+      //        context.log.info(s"Initializing sleep report with refresh interval $interval, but doing a a pull right now too")
 
-        val timekeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
-        //        timekeeper !! TimeKeeper.RemindMeEvery(interval, context.self, HeartBeat(), Some(HeartBeat.getClass))
-        val hours = List(3, 7, 13, 16, 19)
-        context.actorContext.log.info(s"Just set reminders for 10 minutes after each of these hours after midnight: $hours")
-        hours.foreach { hour =>
-          timekeeper !! TimeKeeper.RemindMeDailyAt(hour, 10, context.self, HeartBeat(), None)
-        }
+      val timekeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
+      //        timekeeper !! TimeKeeper.RemindMeEvery(interval, context.self, HeartBeat(), Some(HeartBeat.getClass))
+      val hours = List(3, 7, 13, 16, 19)
+      context.actorContext.log.info(s"Just set reminders for 10 minutes after each of these hours after midnight: $hours")
+      hours.foreach { hour =>
+        timekeeper !! TimeKeeper.RemindMeDailyAt(hour, 10, context.self, HeartBeat(), None)
+      }
 
-        context.actorContext.log.debug(s"Uncomment RequestSleep(context.messageAdapter(ReceiveSleepReport) line to fetch sleep data at startup")
+      context.actorContext.log.debug(s"Uncomment RequestSleep(context.messageAdapter(ReceiveSleepReport) line to fetch sleep data at startup")
 
-        // uncomment this to fetch today's Fitbit sleep report on startup (instead of just at scheduled times)
-//                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
+      // uncomment this to fetch today's Fitbit sleep report on startup (instead of just at scheduled times)
+      //                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
 
-        // uncomment to refresh Markdown on startup (e.g. if you're tinkering)
-        //        jsonRef.read() match {
-        //          case Failure(_: FileNotFoundException) =>
-        //            context.actorContext.log.debug(s"File $jsonRef not found, deferring Markdown creation")
-        //          case Failure(exception) => throw exception
-        //
-        //          case Success(reportState) =>
-        //            context.actorContext.log.info("Regenerating markdown")
-        //            noteRef.setMarkdown(SleepReportMarkdown(reportState, context.system.clock.today()))
-        //        }
+      // uncomment to refresh Markdown on startup (e.g. if you're tinkering)
+      //        jsonRef.read() match {
+      //          case Failure(_: FileNotFoundException) =>
+      //            context.actorContext.log.debug(s"File $jsonRef not found, deferring Markdown creation")
+      //          case Failure(exception) => throw exception
+      //
+      //          case Success(reportState) =>
+      //            context.actorContext.log.info("Regenerating markdown")
+      //            noteRef.setMarkdown(SleepReportMarkdown(reportState, context.system.clock.today()))
+      //        }
 
+      Tinker.withTypedJson("sleep_report", StateJsonProtocol.stateJsonFormat) { jsonRef =>
         behavior(fitbitActor, subscriber, jsonRef, noteRef)
+      }
     }
 
   private def behavior(fitbitActor: SpiritRef[FitbitActor.Message], subscriber: SpiritRef[SleepReport], jsonRef: TypedJsonRef[SleepReportState], noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceiveSleepReport(receivedReport) =>
         receivedReport.sleep.headOption match {
           case Some(sleepEntry) =>
@@ -132,7 +134,9 @@ object SleepReportActor {
   }
 
   object StateJsonProtocol extends DefaultJsonProtocol {
+
     import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
+
     implicit val stateJsonFormat: RootJsonFormat[SleepReportState] = jsonFormat1(SleepReportState.apply)
   }
 }
@@ -200,17 +204,17 @@ object SleepReportMarkdown {
       )
 
       s"""## Last 7 days
-          |
-          |$last7DaysChart
-          |
-          |## Last 14 days
-          |
-          |$last14DaysChart
-          |
-          |## Last 30 days
-          |
-          |$last30DaysChart
-          |""".stripMargin
+         |
+         |$last7DaysChart
+         |
+         |## Last 14 days
+         |
+         |$last14DaysChart
+         |
+         |## Last 30 days
+         |
+         |$last30DaysChart
+         |""".stripMargin
     } else {
       ""
     }

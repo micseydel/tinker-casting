@@ -7,6 +7,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.Purple
 import me.micseydel.dsl._
 import me.micseydel.dsl.cast.SystemWideTimeKeeper
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
@@ -35,7 +36,7 @@ object UpcomingNotificationsManager {
   //
 
   def apply(notificationCenterManager: SpiritRef[NotificationCenterManager.Message])(implicit Tinker: Tinker): Ability[Message] =
-    Tinkerer[Message](Purple, "⏳").withWatchedActorNote(NoteName, ReceiveNotePing) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, Purple, "⏳", ReceiveNotePing) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
 
       context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))

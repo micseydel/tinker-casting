@@ -19,7 +19,7 @@ object LLMTinkeringActor {
       context.messageAdapter(ReceivePathUpdatedEvent)
     )
 
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case ReceivePathUpdatedEvent(event) =>
         event match {
           case VaultPathAdapter.PathCreatedEvent(path) =>

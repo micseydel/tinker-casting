@@ -8,7 +8,8 @@ import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure,
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, ReceiveRasaResult, ReceiveResponseOllama, TranscriptionCompletedEvent}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.model._
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.util.TimeUtil
@@ -41,16 +42,18 @@ object TranscriptionNoteWrapper {
                      listener: SpiritRef[Chronicler.ActOnNoteRef]
                    )(implicit Tinker: Tinker): Ability[Message] = {
     val jsonFilenameWithoutExtension = capture.transcriptionNoteName.replace(" ", "_").toLowerCase
-    Tinker.initializedWithNoteAndPersistedMessages(capture.transcriptionNoteName, jsonFilenameWithoutExtension, TranscriptionMessageListJsonProtocol.TranscriptionNoteWrapperMessageJsonFormat) { (context, noteRef, jsonlRef) =>
-      context.actorContext.log.info(s"Setting stub for ${capture.transcriptionNoteName}")
+    Tinker.withPersistedMessages(jsonFilenameWithoutExtension, TranscriptionMessageListJsonProtocol.TranscriptionNoteWrapperMessageJsonFormat) { jsonlRef =>
+      NoteMakingTinkerer[Message](capture.transcriptionNoteName, TinkerColor.Purple, "🎵") { (context, noteRef) =>
+        context.actorContext.log.info(s"Setting stub for ${capture.transcriptionNoteName}")
 
-      val stub = noteStub(capture)
-      noteRef.setTo(stub) match {
-        case Failure(exception) => throw exception
-        case Success(value) => context.actorContext.log.info(s"wrote $value")
+        val stub = noteStub(capture)
+        noteRef.setTo(stub) match {
+          case Failure(exception) => throw exception
+          case Success(value) => context.actorContext.log.info(s"wrote $value")
+        }
+
+        behavior(capture, noteRef, jsonlRef)(Tinker, rasaActor, listener)
       }
-
-      behavior(capture, noteRef, jsonlRef)(Tinker, rasaActor, listener)
     }
   }
 

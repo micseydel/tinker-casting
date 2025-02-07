@@ -1,12 +1,13 @@
 package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularL, RectangularS}
-import me.micseydel.dsl.TinkerListener.{Acknowledged, Ignored}
+import me.micseydel.dsl.tinkerer.TinkerListener.{Acknowledged, Ignored}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
-import me.micseydel.dsl.{SpiritRef, TinkerListener, Tinker, TinkerContext}
+import me.micseydel.dsl.tinkerer.TinkerListener
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent}
 import me.micseydel.util.StringImplicits.RichString
 

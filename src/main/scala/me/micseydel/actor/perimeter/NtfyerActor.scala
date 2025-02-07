@@ -25,7 +25,7 @@ object NtfyerActor {
   // behavior
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(0, 255, 255), "📧").setup { context =>
-    Tinker.withMessages {
+    Tinker.receiveMessage {
       case DoNotify(key, message) =>
         val url = s"https://ntfy.sh/$key"
         val perimeterKey = UUID.randomUUID().toString

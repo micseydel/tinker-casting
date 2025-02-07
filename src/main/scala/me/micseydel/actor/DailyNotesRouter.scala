@@ -3,6 +3,7 @@ package me.micseydel.actor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.Purple
 import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.TimeUtil
 import spray.json.JsonFormat
 
@@ -20,10 +21,12 @@ object DailyNotesRouter {
   def apply[T](baseNoteName: String, jsonName: String, jsonFormat: JsonFormat[T], toMarkdown: (List[T], TinkerClock) => String)(implicit Tinker: Tinker): Ability[Envelope[DailyMarkdownFromPersistedMessagesActor.Message[T]]] = Tinkerer(Purple, "☸️").setup { context =>
     context.actorContext.log.info(s"Creating daily router for base note name $baseNoteName")
     // in the case of DailyMarkdownFromPersistedMessagesActor, we discard the day (for now at least)
-    val abilityForDay: LocalDate => Ability[DailyMarkdownFromPersistedMessagesActor.Message[T]] = (captureDate: LocalDate) => {
+    val abilityForDay: (LocalDate, TinkerColor, String) => (String, Ability[DailyMarkdownFromPersistedMessagesActor.Message[T]]) = (captureDate: LocalDate, color: TinkerColor, emoji: String) => {
       val isoDate = TimeUtil.localDateTimeToISO8601Date(captureDate)
-      DailyMarkdownFromPersistedMessagesActor(
-        s"$baseNoteName ($isoDate)",
+      val noteName = s"$baseNoteName ($isoDate)"
+      noteName -> DailyMarkdownFromPersistedMessagesActor(
+        noteName,
+        color, emoji,
         s"${jsonName}_$isoDate",
         jsonFormat,
         toMarkdown
@@ -33,7 +36,7 @@ object DailyNotesRouter {
     apply[DailyMarkdownFromPersistedMessagesActor.Message[T]](abilityForDay)
   }
 
-  def apply[M](ability: LocalDate => Ability[M])(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinker.setup { context =>
+  def apply[M](abilityGenerator: (LocalDate, TinkerColor, String) => (String, Ability[M]))(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinker.setup { context =>
     context.actorContext.log.info(s"Creating spirit lookup")
     val freshLokUpSpiritByDay = LookUpSpiritByDay[M] { (context, captureDate) =>
       val opaqacity = TimeUtil.daysSince(captureDate)(context.system.clock) match {
@@ -45,9 +48,9 @@ object DailyNotesRouter {
           0.1
       }
 
-      context.cast(Tinkerer[M](Purple.copy(o = opaqacity), "📝️").setup { _ =>
-        ability(captureDate)
-      }, TimeUtil.localDateTimeToISO8601Date(captureDate))
+      val (noteName, abilityForDay) = abilityGenerator(captureDate, Purple.copy(o = opaqacity), "📝️")
+
+      context.cast(abilityForDay, TimeUtil.localDateTimeToISO8601Date(captureDate))
     }
 
     val today = context.system.clock.today()
