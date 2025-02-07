@@ -36,10 +36,10 @@ object PromptFromFileManagerActor {
   private def initializing(noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
       case ReceiveNoteContents(note) =>
-        val model = note.yamlFrontMatter.flatMap(_.get("model")) match {
-          case Some(value: String) =>
-            value
-          case other =>
+        val model = note.yamlFrontMatter.map(_.get("model")) match {
+          case Failure(exception) => throw exception
+          case Success(Some(model: String)) => model
+          case Success(other) =>
             context.actorContext.log.debug(s"$other not expected, expected Some(string), defaulting to llama3")
             "llama3"
         }

@@ -154,10 +154,15 @@ case class Note private[vault] (
     }
   }
 
-  def yamlFrontMatter: Option[Map[String, Any]] = frontmatter.map { yaml =>
-    val javaMap: java.util.Map[String, Any] = Note.Yaml.load(yaml)
-    val scalaMap: Map[String, Any] = CollectionConverters.asScala(javaMap).toMap
-    scalaMap
+  def yamlFrontMatter: Try[Map[String, Any]] = frontmatter match {
+    case Some(frontmatter) =>
+      Try {
+        val javaMap: java.util.Map[String, Any] = Note.Yaml.load(frontmatter)
+        val scalaMap: Map[String, Any] = CollectionConverters.asScala(javaMap).toMap
+        scalaMap
+      }
+    case None =>
+      Success(Map.empty)
   }
 }
 

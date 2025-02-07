@@ -12,11 +12,12 @@ final class VaultPath private (val path: Path) extends AnyVal {
 
   override def toString: String = path.toString
 
-  def noteName: String = {
+  def noteName: Option[String] = {
     if (path.toString.toLowerCase.endsWith(".md")) {
-      path.getFileName.toString.dropRight(3)
+      Some(path.getFileName.toString.dropRight(3))
     } else {
-      throw new RuntimeException(s"Path $path did not end with `.md`")
+//      throw new RuntimeException(s"Path $path did not end with `.md`")
+      None
     }
   }
 }

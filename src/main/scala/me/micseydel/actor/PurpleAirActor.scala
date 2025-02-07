@@ -44,7 +44,7 @@ object PurpleAirActor {
     val initialPollingInterval = noteRef.read() match {
       case Failure(exception) => throw exception
       case Success(note) =>
-        note.yamlFrontMatter.flatMap(_.get("polling_interval_minutes")) match {
+        note.yamlFrontMatter.toOption.flatMap(_.get("polling_interval_minutes")) match {
           case Some(value: Int) =>
             context.actorContext.log.info(s"Using polling_interval_minutes $value from disk")
             value.minutes
@@ -80,7 +80,7 @@ object PurpleAirActor {
             Tinker.steadily
 
           case Success(note@Note(markdown, _)) =>
-            val yaml: Option[Map[String, Any]] = note.yamlFrontMatter
+            val yaml: Option[Map[String, Any]] = note.yamlFrontMatter.toOption
 
             yaml match {
               case None =>

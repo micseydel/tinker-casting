@@ -8,7 +8,7 @@ import me.micseydel.model.{Color, LightState}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 // FIXME: ideally the underlying reads would return Validated objects, to report parsing and other issues
 private[perimeter] class HueNoteRef(noteRef: NoteRef) {
@@ -29,7 +29,7 @@ private[perimeter] class HueNoteRef(noteRef: NoteRef) {
     noteRef.readNote() match {
       case Failure(exception) => throw exception
       case Success(note@Note(markdown, _)) =>
-        note.yamlFrontMatter.map(Properties.fromMap).collect {
+        note.yamlFrontMatter.toOption.map(Properties.fromMap).collect {
           case Properties(Some(brightness), None) =>
             SetAllBrightness(brightness)
           case Properties(None, Some(color)) =>

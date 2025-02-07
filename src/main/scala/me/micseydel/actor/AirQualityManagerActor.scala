@@ -260,7 +260,7 @@ object AirPurifierActor {
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def getWyzeMac(): Option[String] = noteRef.readNote() match {
       case Success(note) =>
-        note.yamlFrontMatter.flatMap(_.get("wyze_mac").map(_.toString))
+        note.yamlFrontMatter.toOption.flatMap(_.get("wyze_mac").map(_.toString))
       case Failure(exception: FileNotFoundException) => None
       case Failure(exception) => throw exception
     }

@@ -2,7 +2,7 @@ package me.micseydel.actor.notifications
 
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.Notification
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{NoteMakingTinkerer, SpiritRef, Tinker, TinkerContext, Tinkerer}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 
@@ -15,7 +15,7 @@ object NotificationCenterActor {
   private[notifications] case class ClearNotification(id: String) extends Message
 
   private val NoteName = "Notification Center"
-  def apply(completeNotification: SpiritRef[NotificationCenterManager.CompleteNotification])(implicit Tinker: Tinker): Ability[Message] = Tinkerer[Message](rgb(205, 205, 0), "❗️").withWatchedActorNote(NoteName, ReceiveNotePing) { (context, noteRef) =>
+  def apply(completeNotification: SpiritRef[NotificationCenterManager.CompleteNotification])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(205, 205, 0), "❗️", ReceiveNotePing) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
     Tinker.withMessages {
       case ReceiveNotePing(_) =>

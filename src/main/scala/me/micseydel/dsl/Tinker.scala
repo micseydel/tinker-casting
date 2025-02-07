@@ -16,6 +16,8 @@ import me.micseydel.vault.VaultKeeper.{JsonRefResponse, NoteRefResponse}
 import me.micseydel.vault.persistence._
 import spray.json.JsonFormat
 
+import java.net.{URI, URLEncoder}
+import java.nio.charset.StandardCharsets
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, Future}
@@ -264,6 +266,21 @@ case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] =
 
   def initializedWithNoteAndTypedPersistence[J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
     setup(_ => Tinker.initializedWithNoteAndTypedPersistence(noteName, jsonName, jsonFormat)(f))
+  }
+}
+
+object NoteMakingTinkerer {
+  def apply[M, PR <: M](noteName: String, color: TinkerColor, emoji: String, pingReceiver: Ping => PR)(ability: (TinkerContext[M], NoteRef) => Ability[M])(implicit Tinker: Tinker): Ability[M] = {
+    val notePath = s"_actor_notes/$noteName"
+    val href = "obsidian://open?vault=deliberate_knowledge_accretion&file=" + encode(notePath)
+
+    Tinkerer[M](color, emoji, Some(href)).withWatchedActorNote(noteName, pingReceiver)(ability)
+  }
+
+  private def encode(raw: String): String = {
+    // FIXME https://chatgpt.com/c/67a64145-bc64-800e-bf91-c807c196fe5b
+    // omg FUCK Java, I wasted an hour on this and still worry it's wrong
+    URLEncoder.encode(raw, StandardCharsets.UTF_8.toString).replace("+", "%20")
   }
 }
 
