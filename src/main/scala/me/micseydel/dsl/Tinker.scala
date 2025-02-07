@@ -240,7 +240,9 @@ class TinkerClockImpl extends TinkerClock {
 case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] = None) {
   def setup(factory: TinkerContext[T] => Ability[T])(implicit Tinker: Tinker): Ability[T] = Tinker.setup { context =>
     val registering = RegisterTinkerer(context.self.path, this)
-    context.actorContext.log.info(s"registering $registering")
+    // FIXME: investigate this further, but this line seems to cause a CACHED logger where the calling class
+    //   ends up as "me.micseydel.dsl.Tinkerer" which messages with custom logback stuff
+//    context.actorContext.log.info(s"registering $registering")
     context.system.tinkerBrain ! registering
     factory(context)
   }

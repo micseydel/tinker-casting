@@ -44,7 +44,7 @@ object PurpleAirActor {
     val initialPollingInterval = noteRef.read() match {
       case Failure(exception) => throw exception
       case Success(note) =>
-        note.yamlFrontMatter.get("polling_interval_minutes") match {
+        note.yamlFrontMatter.flatMap(_.get("polling_interval_minutes")) match {
           case Some(value: Int) =>
             context.actorContext.log.info(s"Using polling_interval_minutes $value from disk")
             value.minutes
