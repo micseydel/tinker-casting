@@ -132,13 +132,17 @@ object ActorNotesFolderWatcherActor {
       case ReceiveVaultPathUpdatedEvent(event) =>
         event match {
           case VaultPathAdapter.PathModifiedEvent(path) =>
-            val noteId = path.noteName
-            topLevelNoteWatchers.get(noteId) match {
-              case Some(subscriber) =>
-                implicit val c: TinkerContext[_] = context
-                subscriber !! NoOp
+            path.noteName match {
               case None =>
-                context.actorContext.log.debug(s"No subscriber, ignoring path update for $path")
+                context.actorContext.log.warn(s"unable to hand event $event because a filename ending with .md was expected")
+              case Some(noteId) =>
+                topLevelNoteWatchers.get(noteId) match {
+                  case Some(subscriber) =>
+                    implicit val c: TinkerContext[_] = context
+                    subscriber !! NoOp
+                  case None =>
+                    context.actorContext.log.debug(s"No subscriber, ignoring path update for $path")
+                }
             }
 
           case VaultPathAdapter.PathDeletedEvent(_) | VaultPathAdapter.PathCreatedEvent(_) =>
