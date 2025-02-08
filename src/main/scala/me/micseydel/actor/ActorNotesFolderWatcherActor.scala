@@ -79,7 +79,7 @@ object ActorNotesFolderWatcherActor {
       }.mkString("\n")
 
       val formattedTopLevelNoteWatchers = topLevelNoteWatchers.map { case (note, sub) =>
-        s"- $note ${sub.path.toString.drop(24).takeWhile(_ != '$')}"
+        s"- [[$note]] ${sub.path.toString.drop(24).takeWhile(_ != '$')}"
       }.mkString("\n")
 
       s"""- Generated ${context.system.clock.now()}
