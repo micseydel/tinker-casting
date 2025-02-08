@@ -2,7 +2,7 @@ package me.micseydel.actor
 
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.RawSensorData.Formatter
+import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.actor.perimeter.AranetActor
 import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
 import me.micseydel.actor.wyze.WyzeActor
@@ -13,12 +13,13 @@ import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
 import java.time.ZonedDateTime
+import scala.annotation.unused
 import scala.util.{Failure, Success, Try}
 
 object AirQualityManagerActor {
   sealed trait Message
 
-  private case class ReceivePurpleAir(data: RawSensorData) extends Message
+  private case class ReceivePurpleAir(data: PurpleAirSensorData) extends Message
 
   private case class ReceiveAranetResults(results: AranetActor.Result) extends Message
 
@@ -38,6 +39,9 @@ object AirQualityManagerActor {
       purpleAirActor !! PurpleAirActor.Subscribe(context.messageAdapter(ReceivePurpleAir))
       aranetActor !! AranetActor.Fetch(context.messageAdapter(ReceiveAranetResults))
 
+      @unused // internally driven
+      val airGradientActor = context.cast(AirGradientActor("http://192.168.50.252/measures/current"), "AirGradientActor")
+
       context.actorContext.log.info("Subscribed to Purple Air and did a fetch for Aranet4")
 
       val airPurifier: SpiritRef[AirPurifierActor.Message] = context.cast(AirPurifierActor(wyzeActor), "AirPurifierActor")
@@ -54,7 +58,7 @@ object AirQualityManagerActor {
     context.actorContext.log.info("Just set initial markdown")
 
     Tinker.receiveMessage {
-      case ReceivePurpleAir(raw@RawSensorData(_, _)) =>
+      case ReceivePurpleAir(raw@PurpleAirSensorData(_, _)) =>
         latestCO2 match {
           case None =>
             context.actorContext.log.info("Failed to fetch CO2")
@@ -144,9 +148,9 @@ object AirQualityManagerActor {
     }
   }
 
-  private def toMeasurement(rawSensorData: RawSensorData): Measurement = {
+  private def toMeasurement(rawSensorData: PurpleAirSensorData): Measurement = {
     rawSensorData match {
-      case RawSensorData(dateTime, pm2_5_aqi) =>
+      case PurpleAirSensorData(dateTime, pm2_5_aqi) =>
         val time = ZonedDateTime.parse(dateTime, Formatter)
         Measurement(pm2_5_aqi, time)
     }

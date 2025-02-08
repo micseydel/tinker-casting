@@ -6,7 +6,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirPollingActor.AlterPolling
-import me.micseydel.actor.RawSensorData.Formatter
+import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl._
@@ -27,15 +27,15 @@ import scala.util.{Failure, Success}
 object PurpleAirActor {
   sealed trait Message
 
-  final case class Subscribe(subscriber: SpiritRef[RawSensorData]) extends Message
+  final case class Subscribe(subscriber: SpiritRef[PurpleAirSensorData]) extends Message
   final case class DoFetchNow() extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
 
-  private case class ReceiveRawSensorData(data: RawSensorData) extends Message
+  private case class ReceiveRawSensorData(data: PurpleAirSensorData) extends Message
 
   def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("PurpleAir AQI measurements", TinkerColor(185, 96, 203), "💨", ReceivePing) { (context, noteRef) =>
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]] = context.cast(DailyNotesRouter(
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[PurpleAirSensorData]]] = context.cast(DailyNotesRouter(
       "PurpleAir AQI measurements",
       "purpleair",
       PurpleAirJsonFormat.rawSensorDataJsonFormat,
@@ -63,7 +63,7 @@ object PurpleAirActor {
 
   private def behavior(
                         pollingIntervalMinutes: Long,
-                        subscribers: List[SpiritRef[RawSensorData]])(implicit Tinker: Tinker, noteRef: NoteRef, dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]], apiPoller: SpiritRef[PurpleAirPollingActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
+                        subscribers: List[SpiritRef[PurpleAirSensorData]])(implicit Tinker: Tinker, noteRef: NoteRef, dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[PurpleAirSensorData]]], apiPoller: SpiritRef[PurpleAirPollingActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
       case Subscribe(subscriber) =>
@@ -171,7 +171,7 @@ object PurpleAirActor {
   }
 
   private object PurpleAirMarkdown {
-    def apply(items: List[RawSensorData], clock: TinkerClock): String = {
+    def apply(items: List[PurpleAirSensorData], clock: TinkerClock): String = {
       items match {
         case Nil =>
           "No measurements\n"
@@ -204,9 +204,9 @@ private object PurpleAirPollingActor {
 
   private case class ReceiveFailedHttpResponse(exception: Throwable) extends Message
 
-  private case class ReceiveUnmarshalling(rawSensorData: RawSensorData) extends Message
+  private case class ReceiveUnmarshalling(rawSensorData: PurpleAirSensorData) extends Message
 
-  def apply(uri: String, initialInterval: FiniteDuration, replyTo: SpiritRef[RawSensorData])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(uri: String, initialInterval: FiniteDuration, replyTo: SpiritRef[PurpleAirSensorData])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val s: ActorSystem[_] = context.system.actorSystem
     implicit val c: TinkerContext[Message] = context
 
@@ -218,7 +218,7 @@ private object PurpleAirPollingActor {
     behavior(uri, replyTo, timeKeeper)
   }
 
-  private def behavior(uri: String, replyTo: SpiritRef[RawSensorData], timeKeeper: SpiritRef[TimeKeeper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(uri: String, replyTo: SpiritRef[PurpleAirSensorData], timeKeeper: SpiritRef[TimeKeeper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val s: ActorSystem[_] = context.system.actorSystem
     implicit val c: TinkerContext[Message] = context
 
@@ -251,14 +251,14 @@ private object PurpleAirPollingActor {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received request response...")
 
-        implicit val rawSensorJsonFormat: RootJsonFormat[RawSensorData] = PurpleAirJsonFormat.rawSensorDataJsonFormat
+        implicit val rawSensorJsonFormat: RootJsonFormat[PurpleAirSensorData] = PurpleAirJsonFormat.rawSensorDataJsonFormat
         val umarshal: Unmarshal[ResponseEntity] = Unmarshal(httpResponse.entity)
         val fut: Future[String] = umarshal.to[String]
         context.pipeToSelf(fut) {
           case Failure(exception) => ReceiveFailedHttpResponse(exception)
           case Success(models) =>
             try {
-              ReceiveUnmarshalling(models.parseJson.convertTo[RawSensorData])
+              ReceiveUnmarshalling(models.parseJson.convertTo[PurpleAirSensorData])
             } catch {
               case e: DeserializationException =>
                 ReceiveFailedHttpResponse(new RuntimeException(s"failed to parse: $models", e))
@@ -301,15 +301,15 @@ private object PurpleAirPollingActor {
 }
 
 object PurpleAirJsonFormat extends DefaultJsonProtocol {
-  implicit val rawSensorDataJsonFormat: RootJsonFormat[RawSensorData] =
+  implicit val rawSensorDataJsonFormat: RootJsonFormat[PurpleAirSensorData] =
     jsonFormat(
-      RawSensorData.apply,
+      PurpleAirSensorData.apply,
       "DateTime",
       "pm2.5_aqi"
     )
 }
 
-case class RawSensorData(
+case class PurpleAirSensorData(
                           //                          SensorId: String,
                           DateTime: String,
                           //  Geo: String,
@@ -368,7 +368,7 @@ case class RawSensorData(
       .withZoneSameInstant(ZoneId.systemDefault())
 }
 
-object RawSensorData {
+object PurpleAirSensorData {
   val Formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd'T'HH:mm:ss'z'")
     .withZone(java.time.ZoneOffset.UTC)
 
