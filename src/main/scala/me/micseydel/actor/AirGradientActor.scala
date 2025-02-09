@@ -88,20 +88,17 @@ object AirGradientActor {
             context.actorContext.log.error("Failure reading from disk", exception)
             Tinker.steadily
 
-          case Success(note@Note(markdown, _)) =>
-            val yaml: Option[Map[String, Any]] = note.yamlFrontMatter.toOption
-
-            yaml match {
-              case None =>
-                context.actorContext.log.warn("No Frontmatter")
+          case Success(note) =>
+            note.yamlFrontMatter match {
+              case Failure(exception) =>
+                context.actorContext.log.warn(s"failed to parse frontmatter ${note.frontmatter}", exception)
                 Tinker.steadily
-
-              case Some(frontmatter) =>
-                val refreshNow = markdown(3) match {
+              case Success(frontmatter) =>
+                val refreshNow = note.markdown(3) match {
                   case 'x' => true
                   case ' ' => false
                   case other =>
-                    context.actorContext.log.warn(s"Unexpected char $other for $markdown")
+                    context.actorContext.log.warn(s"Unexpected char $other for ${note.markdown}")
                     false
                 }
 
