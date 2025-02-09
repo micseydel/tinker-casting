@@ -1,6 +1,6 @@
 package me.micseydel.actor
 
-import me.micseydel.dsl.Tinker
+import me.micseydel.dsl.{Tinker, TinkerColor, Tinkerer}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
 import me.micseydel.dsl.tinkerer.TinkerListener
@@ -15,7 +15,7 @@ object HypothesisListener {
     behavior()
   }
 
-  private def behavior()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = {
+  private def behavior()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = Tinkerer(TinkerColor.rgb(30, 250, 70), "🥼").setup { _ =>
     TinkerListener.simpleStateless { (context, transcription) =>
       transcription match {
         case NotedTranscription(capture, noteId, rasaResult) =>

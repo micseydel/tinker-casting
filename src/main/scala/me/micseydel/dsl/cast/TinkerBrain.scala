@@ -241,6 +241,8 @@ private object TinkerNoteWriter {
 
     noteRef.setMarkdown(
       s"""- Generated ${context.system.clock.now()}
+         |- Nodes: ${nodes.size}
+         |- Edges: ${edges.size}
          |# Nodes
          |
          |$formattedNodes

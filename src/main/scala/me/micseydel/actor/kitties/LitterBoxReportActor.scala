@@ -88,7 +88,9 @@ private[kitties] object DailyAbility {
 //                    DataPoint(when, contents, ref)
 //                })
 //
-//                noteRef.setRaw(reportFromExistingJson.toMarkdown)
+
+
+              noteRef.setRaw(Report(List(DataPoint(observation.event.when, observation.capture.event.contents, observation.capture.ref))).toMarkdown)
               context.actorContext.log.warn("File not found, taking no action")
 
               case Failure(exception) =>
