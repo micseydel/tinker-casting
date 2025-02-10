@@ -61,6 +61,8 @@ Here, we see atomic agents dedicated to
 # Related ideas
 
 - "[Cognitive light cones](https://www.youtube.com/watch?v=YnObwxJZpZc)" by [Michael Levin](https://www.youtube.com/watch?v=WLHO39qvcO4)
+  - Related to the [similarly-named idea from physics](https://en.wikipedia.org/wiki/Light_cone), our cognitive light cones include the potential inputs to our current moment
+  - My Tinker Cast helps provide the right past information at the right moment to inform future decisions
 - The [Thousand Brains hypothesis](https://www.numenta.com/resources/books/a-thousand-brains-by-jeff-hawkins/)
   - You can think of the actors as **externalized reference frames**
   - However many cortical columns were dedicated to worrying about before, I got them back; it's kind of like having **expanded my cortical column count** by adding _specialized_ virtual ones
@@ -70,6 +72,11 @@ Here, we see atomic agents dedicated to
 It can be thought of a civilian version of the "hyper-enabled operator"
 - [AI-Powered Super Soldiers Are More Than Just a Pipe Dream](https://www.wired.com/story/us-military-hyper-enabled-operator/) (_Wired_, may be paywalled)
 - [The Hyper-Enabled Operator](https://web.archive.org/web/20241103233351/https://smallwarsjournal.com/jrnl/art/hyper-enabled-operator) (Small Wars Journal linked to by _Wired_ above, archived link)
+  - > USSOCOM defines HEO as _a SOF professional empowered by technologies that enhance the operator’s cognition at the edge by increasing situational awareness, reducing cognitive load, and accelerating decision making._  In short, HEO hyper-enables the operator by providing technological aids to shorten the time within his OODA loop, thereby providing him with cognitive overmatch.
+  - I have my situational awareness around: my cats, my air quality, and HALT-related things
+  - I have less cognitive load, more peace of mind
+  - I can make faster decisions because data has already been gathered and digested
+  - If applied to video games (say, Age of Empires or DOTA2) I might achieve "**cognitive overmatch**"
 
 # See also
 
