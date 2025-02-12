@@ -5,17 +5,17 @@
 ## Applying my Tinker Cast
 
 - Single-stream [voice transcriptions](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20voice%20transcriptions.md)
-- Voice-based [cat litter tracking](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20cat%20litter%20tracking.md)
+- ⭐️Voice-based [cat litter tracking](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20cat%20litter%20tracking.md) ⭐️
 - [Smart light](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20smart%20lights%20control.md) controls using a note (or voice)
-- A text-centered [notification center](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20notification%20center.md)
+- ⭐️A text-centered [notification center](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20notification%20center.md) ⭐️
 - Air quality monitoring
 - HALT (hungry/angry/lonely/tired)
 
 ## Some Context
 
-- I had left a hybrid backend and data engineering [role](https://techblog.livongo.com/etl-from-mongo-to-redshift/)
+- I had recently left a hybrid backend and data engineering [role](https://techblog.livongo.com/etl-from-mongo-to-redshift/), where I worked with a [former Evernote CTO](https://hackernoon.com/livongos-cto-dave-engberg-on-servant-leadership-communicating-with-executive-peers-more-620a2a92b203)
 - One of my two cats had recently developed a [life-threatening chronic condition](https://vcahospitals.com/know-your-pet/feline-idiopathic-cystitis)
-- I had started a personal wiki of networked notes
+- I had started a personal wiki of networked notes ("PKMS" = personal knowledge management system)
 
 This project represents the intersection of those things. The name is a play on words, with "Cast" referring to the underlying actor model from computer science, as well as an allusion to casting magic spells.
 
@@ -44,14 +44,17 @@ Here, we see atomic agents dedicated to
   - Akka 2.6 (Scala) for the actor model
   - OpenAI Whisper for transcription
   - Rasa open source for entity extraction
-- The actors/atomic agents are generally explicit encodings in Scala, rather than AI
+- The actors/atomic agents are generally **explicit encodings** in Scala, rather than AI
 - Most of it works fully offline
 - The visualization is a hack, frontend is my biggest weakness
 
 # Inspiration includes
 
-- [A text renaissance](https://www.mentalnodes.com/a-text-renaissance) and [networked thinking](https://www.appsntips.com/what-is-networked-thinking/)
-- [The Extended Mind](https://anniemurphypaul.com/books/the-extended-mind/)
+- Knowledge management (links)
+  - [A text renaissance](https://www.mentalnodes.com/a-text-renaissance) (yay for explicit encodings)
+  - [Networked thinking](https://www.appsntips.com/what-is-networked-thinking/)
+  - [Mind gardening](https://www.refinery29.com/en-us/2022/04/10953988/mind-gardening-organize-thoughts-increase-productivity)
+- [The Extended Mind](https://anniemurphypaul.com/books/the-extended-mind/) (2021 book)
   - You can almost think of this as part 4, "Thinking With Code"
   - (...and AI if/when needed)
 - [Kasparov's Law](https://news.northeastern.edu/2024/06/17/garry-kasparov-chess-humans-ai/)
@@ -60,7 +63,8 @@ Here, we see atomic agents dedicated to
 
 # Related ideas
 
-- "[Cognitive light cones](https://www.youtube.com/watch?v=YnObwxJZpZc)" by [Michael Levin](https://www.youtube.com/watch?v=WLHO39qvcO4)
+- "Cognitive light cones" by [Michael Levin](https://www.youtube.com/watch?v=WLHO39qvcO4)
+  - You can learn more on [Youtube](https://www.youtube.com/watch?v=YnObwxJZpZc) or through [his paper](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2019.02688/full)
   - Related to the [similarly-named idea from physics](https://en.wikipedia.org/wiki/Light_cone), our cognitive light cones include the potential inputs to our current moment
   - My Tinker Cast helps provide the right past information at the right moment to inform future decisions
 - The [Thousand Brains hypothesis](https://www.numenta.com/resources/books/a-thousand-brains-by-jeff-hawkins/)

@@ -91,7 +91,7 @@ private[kitties] object DailyAbility {
 
 
               noteRef.setRaw(Report(List(DataPoint(observation.event.when, observation.capture.event.contents, observation.capture.ref))).toMarkdown)
-              context.actorContext.log.warn("File not found, taking no action")
+              context.actorContext.log.warn(s"File not found, started new report with $observation")
 
               case Failure(exception) =>
                 context.actorContext.log.warn(s"Unexpected failure fetching the note", exception)
