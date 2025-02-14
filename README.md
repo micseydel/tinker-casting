@@ -60,6 +60,7 @@ Here, we see atomic agents dedicated to
 - [Kasparov's Law](https://news.northeastern.edu/2024/06/17/garry-kasparov-chess-humans-ai/)
   - > \[...] which states that a human of average intelligence and an AI system working together in harmony is more effective than either working alone, and even more advantageous than a brilliant human working with a system poorly
   - I personally don't see AI as integral to Kasparov's law, it applies to tech in general
+  - As a specific example, my [cat litter tracking](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20cat%20litter%20tracking.md) was initially supposed to answer the question, **"When did Peanut last pee?"** but I built the summary report along the way, and that (combined with infrequent manual investigations) has probably been a better trade-off for now 
 
 # Related ideas
 
