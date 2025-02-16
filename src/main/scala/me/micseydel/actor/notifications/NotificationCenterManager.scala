@@ -129,6 +129,7 @@ object NotificationCenterManager {
             case Failure(exception) => throw exception
             case Success(_) =>
               context.actorContext.log.info(s"Notification with id ${notification.notificationId} being forwarded to upcoming notifications center")
+              notificationCenterActor !! NotificationCenterActor.ClearNotification(notification.notificationId.id)
               upcomingNotificationsManager !! UpcomingNotificationsManager.UpcomingNotification(notification)
               Tinker.steadily
           }
