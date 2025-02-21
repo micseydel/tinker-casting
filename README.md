@@ -41,10 +41,11 @@ Here, we see atomic agents dedicated to
 
 ## Technical details
 
-- Tech used includes
-  - Akka 2.6 (Scala) for the actor model
+- Tech stack includes
+  - Akka 2.6's Behaviors DSL for the actor model (Scala)
   - OpenAI Whisper for transcription
   - Rasa open source for entity extraction
+  - Python/Flask for surfacing Whisper, Rasa, and other libraries
 - The actors/atomic agents are generally **explicit encodings** in Scala, rather than AI
 - Most of it works fully offline
 - The visualization is a hack, frontend is my biggest weakness
@@ -81,9 +82,9 @@ Here, we see atomic agents dedicated to
 It can be thought of a civilian version of the "hyper-enabled operator"
 - [AI-Powered Super Soldiers Are More Than Just a Pipe Dream](https://www.wired.com/story/us-military-hyper-enabled-operator/) (_Wired_, may be paywalled)
 - [The Hyper-Enabled Operator](https://web.archive.org/web/20241103233351/https://smallwarsjournal.com/jrnl/art/hyper-enabled-operator) (Small Wars Journal linked to by _Wired_ above, archived link)
-  - > USSOCOM defines HEO as _a SOF professional empowered by technologies that enhance the operator’s cognition at the edge by increasing situational awareness, reducing cognitive load, and accelerating decision making._  In short, HEO hyper-enables the operator by providing technological aids to shorten the time within his OODA loop, thereby providing him with cognitive overmatch.
+  - > USSOCOM defines HEO as _a SOF \[special operation forces] professional empowered by technologies that enhance the operator’s cognition at the edge by increasing situational awareness, reducing cognitive load, and accelerating decision making._  In short, HEO hyper-enables the operator by providing technological aids to shorten the time within his OODA \[observe, orient, decide, act] loop, thereby providing him with cognitive overmatch.
   - I have my situational awareness around: my cats, my air quality, and HALT-related things
-  - I have less cognitive load, more peace of mind
+  - I have less cognitive load, more peace of mind, fewer context switches
   - I can make faster decisions because data has already been gathered and digested
   - If applied to video games (say, Age of Empires or DOTA2) I might achieve "**cognitive overmatch**"
 
@@ -96,6 +97,7 @@ It can be thought of a civilian version of the "hyper-enabled operator"
 - [Luck Surface Area](https://github.com/readme/guides/publishing-your-work)
   - `Luck = [Doing Things] * [Telling People]`
 - [Spoon Theory](https://www.webmd.com/multiple-sclerosis/features/spoon-theory)
+- ["power armor without the armor" and "pattern specialist"](https://docs.google.com/document/d/1_OO7evm907wyO7ledSL-obxrLvQ6XzpkuTcRqJAhZV4/edit?tab=t.0) 
 
 Currently listening to: [_How to Measure Anything_](https://www.audible.com/pd/How-to-Measure-Anything-Audiobook/B005MZW54M?qid=1739746410&sr=1-1&ref_pageloadid=not_applicable&pf_rd_p=83218cca-c308-412f-bfcf-90198b687a2f&pf_rd_r=FQVPYG99FJGBFJ7S4B06&plink=wcyet2e2Xy6Jpnx6&pageLoadId=zqvfstnVJ4airW5j&creativeId=0d6f6720-f41c-457e-a42b-8c8dceb62f2c&ref=a_search_c3_lProduct_1_1)
 
