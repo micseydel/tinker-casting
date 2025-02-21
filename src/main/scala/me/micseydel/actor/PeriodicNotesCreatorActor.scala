@@ -76,6 +76,10 @@ object PeriodicNotesCreatorActor {
        |
        |-
        |
+       |# I/O
+       |
+       |- 
+       |
        |# See also
        |
        |- Prior day: [[${isoDateFormatter.format(yesterday)}]]
