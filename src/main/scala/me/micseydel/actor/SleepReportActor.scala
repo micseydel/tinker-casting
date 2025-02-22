@@ -7,12 +7,11 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.Series
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
-import spray.json.DefaultJsonProtocol._
 import spray.json._
 
 import java.io.FileNotFoundException
@@ -21,7 +20,6 @@ import java.time.{LocalDate, ZonedDateTime}
 import scala.util.{Failure, Success}
 
 object SleepReportActor {
-  // inbox
   sealed trait Message
 
   private final case class ReceiveSleepReport(report: SleepReport) extends Message
@@ -161,11 +159,6 @@ object SleepReportMarkdown {
         }.toList
       }
 
-      val formatted7daysData = last7Days.reverse.toJson.compactPrint
-      val formatted14daysData = last14Days.reverse.toJson.compactPrint
-      val formatted30daysData = last30Days.reverse.toJson.compactPrint
-      val formatted30daysRunningAverageData = runningAverage(last37Days, 7).reverse.toJson.compactPrint
-
       val last30daysLabels: List[String] = (0 until 30).map { daysAgo =>
         if (daysAgo == 0) {
           "Today"
@@ -219,6 +212,8 @@ object SleepReportMarkdown {
       ""
     }
 
+    val last7Days: List[SleepReport] = lastNdays(7).flatten
+
     lastNdays(3) match {
       case List(Some(todaysReport), Some(yesterdaysReport), Some(dayBeforeYesterdaysPost)) =>
         val recentDays = List(todaysReport, yesterdaysReport, dayBeforeYesterdaysPost)
@@ -226,9 +221,16 @@ object SleepReportMarkdown {
         val totalSleptMinutesLast3Days = recentDays.sum
         val averageSleptMinutesLast3Days = totalSleptMinutesLast3Days / 3
 
+        val averageLast7Days = Some({
+          val averageMinutesLast7Days = TimeUtil.minuteToHoursAndMinutes(last7Days.map(_.summary.totalMinutesAsleep).sum / 7)
+          s"- Average last 7 days: **$averageMinutesLast7Days**"
+        })
+          .filter(_ => last7Days.size == 7)
+          .getOrElse("")
+
         s"""- Last night's total: **${TimeUtil.minuteToHoursAndMinutes(todaysReport.summary.totalMinutesAsleep)}**
            |- Average last 3 days: **${TimeUtil.minuteToHoursAndMinutes(averageSleptMinutesLast3Days)}**
-           |- Total days captured: ***${reports.rawByDay.size}*
+           |$averageLast7Days
            |- This report was generated ${ZonedDateTime.now()}
            |
            |# Charts
