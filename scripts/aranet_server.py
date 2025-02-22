@@ -8,18 +8,25 @@ from claranet4.lib import discover, Device, DeviceError, request_measurements, R
 
 app = Flask(__name__)
 
+def log(s) -> None:
+    print(f"[{time.ctime()}] {s}")
+
 # FIXME: copy paste from the library, changed for async
 async def discover_ara4s(substring: str = "Aranet4") -> list[Device]:
     devices = await discover()
     ara4_devices = [d for d in devices if substring in d.name]
     return ara4_devices
 
+all_seen_addresses = set()
+
 @app.route('/ara4s', methods=['GET'])
 async def get_ara4s():
     aras = await discover_ara4s()
 
     addresses = [ara.address for ara in aras]
-    result = await get_aras_result(addresses, 15)
+    all_seen_addresses.update(addresses)
+    log(f"All seen addresses: {all_seen_addresses}")
+    result = await get_aras_result(all_seen_addresses, 15)
 
     return jsonify(result)
 
@@ -29,9 +36,9 @@ async def read_ara(address, timeout_seconds):
         result = await asyncio.wait_for(claranet_read_async(address), timeout_seconds)
         return result
     except asyncio.TimeoutError:
-        print(f"Read timed out for address {address} after {timeout_seconds} seconds")
+        log(f"Read timed out for address {address} after {timeout_seconds} seconds")
     except Exception as e:
-        print(f"An error occurred while reading address {address}: {e}")
+        log(f"An error occurred while reading address {address}: {e}")
     return None
 
 
@@ -43,7 +50,7 @@ async def get_aras_result(addresses, timeout_seconds):
     )
 
     elapsed = time.perf_counter() - start
-    print(f"Aras fetching took {elapsed:.1f}s")
+    log(f"Aras fetching took {elapsed:.1f}s")
 
     return {
         "aras": [r for r in results if r is not None],
@@ -88,7 +95,7 @@ if __name__ == '__main__':
         _, port = sys.argv
         port = int(port)
     except ValueError as e:
-        print("Expected: a port (int)")
+        log("Expected: a port (int)")
         raise e
     else:
         app.run(
