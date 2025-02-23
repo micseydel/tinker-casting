@@ -2,13 +2,14 @@ package me.micseydel.actor
 
 import akka.actor.typed.{ActorRef, Behavior}
 import com.softwaremill.quicklens._
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.EventReceiver.TranscriptionCompleted
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResult
 import me.micseydel.model.WhisperResultJsonProtocol._
@@ -18,12 +19,12 @@ import me.micseydel.vault.persistence.NoteRef
 import spray.json._
 
 import java.io.File
-import java.nio.file.Path
+import java.nio.file.{Files, Path, Paths}
 import java.time.ZonedDateTime
 import java.util.UUID
 import javax.sound.sampled.UnsupportedAudioFileException
 import scala.annotation.unused
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 
@@ -48,22 +49,53 @@ object AudioNoteCapturer {
 
   case class TranscriptionEvent(payload: String) extends Message
 
-  private case class PathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+  private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+  private case class ReceivePing(ping: Ping) extends Message
 
   // behavior
 
-  private val NoteName = "audio_note_capture (tinkering)"
-  private val NoteFolder = "_actor_notes/audio_note_capture"
+  private val NoteName = "Audio Note Capture"
 
   // FIXME: Chronicler is passed here because it takes a broader message
-  def apply(config: Config, chronicler: ActorRef[Chronicler.Message])(
-    implicit Tinker: Tinker, httpExecutionContext: ExecutionContext
-  ): Ability[Message] = NoteMakingTinkerer(NoteName, TinkerColor.random(), "🎤", Some(NoteFolder)) { case (context, noteRef) =>
-    val newFileCreationEventAdapter = context.messageAdapter(PathUpdatedEvent).underlying
+  def apply(config: Config, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
+    initializing(config, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
+  }
+
+  def initializing(config: Config, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
+    noteRef.properties match {
+      case Success(Some((audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort))) =>
+        context.actorContext.log.info("Finishing initializing")
+        finishInitializing(config.vaultRoot, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)
+
+      case nonSuccess =>
+        nonSuccess match {
+          case Failure(exception) =>
+            context.actorContext.log.warn(s"Something went wrong reading the properties from disk; will wait for disk update", exception)
+
+          case Success(None) =>
+            context.actorContext.log.warn("Read from disk successfully but no frontmatter/properties; will wait for disk update")
+
+          case Success(Some(_)) => ??? // FIXME: for the compiler
+        }
+
+        Tinker.receiveMessage {
+          case ReceivePing(_) =>
+            context.actorContext.log.warn("Received ping, trying to read from disk again")
+            initializing(config, chronicler)
+
+          case e =>
+            context.actorContext.log.warn(s"Ignoring event $e")
+            Tinker.steadily
+        }
+    }
+  }
+
+  private def finishInitializing(vaultRoot: VaultPath, audioWatchPath: Path, whisperLarge: String, whisperBase: String, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
+    val newFileCreationEventAdapter = context.messageAdapter(AudioPathUpdatedEvent).underlying
     @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
     val folderWatcherActor = context.spawn(
       FolderWatcherActor(
-        config.audioNoteWatchPath, newFileCreationEventAdapter
+        audioWatchPath, newFileCreationEventAdapter
       ),
       "MobileAudioFolderWatcherActor"
     )
@@ -76,20 +108,20 @@ object AudioNoteCapturer {
     // maybe on_host, on_local_network?
     val primaryWhisperFlaskAmbassador: ActorRef[WhisperFlaskAmbassador.Message] = context.spawn(
       SecondaryWhisperFlaskAmbassador(SecondaryWhisperFlaskAmbassador.Config(
-        config.whisperLargeHost,
-        config.eventReceiverHost,
-        config.eventReceiverPort,
-        config.vaultRoot
+        whisperLarge,
+        whisperEventReceiverHost,
+        whisperEventReceiverPort,
+        vaultRoot
       )),
       "PrimaryWhisperFlaskAmbassador"
     )
 
     val secondaryWhisperFlaskAmbassador = context.spawn(
       SecondaryWhisperFlaskAmbassador(SecondaryWhisperFlaskAmbassador.Config(
-        config.whisperBaseHost,
-        config.eventReceiverHost,
-        config.eventReceiverPort,
-        config.vaultRoot
+        whisperBase,
+        whisperEventReceiverHost,
+        whisperEventReceiverPort,
+        vaultRoot
       )),
       "SecondaryWhisperFlaskAmbassador"
     )
@@ -110,7 +142,7 @@ object AudioNoteCapturer {
           val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
           chronicler ! Chronicler.TranscriptionStartedEvent(capture)
 
-          val enqueueRequest = WhisperFlaskAmbassador.Enqueue(audioPath.toString.replace(config.vaultRoot.toString + "/", ""))
+          val enqueueRequest = WhisperFlaskAmbassador.Enqueue(audioPath.toString.replace(vaultRoot.toString + "/", ""))
           primaryWhisperFlaskAmbassador ! enqueueRequest
           secondaryWhisperFlaskAmbassador ! enqueueRequest
       }
@@ -122,7 +154,7 @@ object AudioNoteCapturer {
     val timeKeeper: ActorRef[UntrackedTimeKeeper.Message] = context.spawn(UntrackedTimeKeeper(), "UntrackedTimeKeeper")
 
     idle(
-      config.vaultRoot,
+      vaultRoot,
       chronicler,
       timerKey,
       timeKeeper,
@@ -133,7 +165,7 @@ object AudioNoteCapturer {
   private def idle(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], timerKey: Option[UUID], timeKeeper: ActorRef[UntrackedTimeKeeper.Message], triggerTranscriptionForWavPath: Path => Unit)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
-      case PathUpdatedEvent(PathCreatedEvent(audioPath)) if audioPath.toString.split("\\.").lastOption.exists(AcceptableFileExts.contains) =>
+      case AudioPathUpdatedEvent(PathCreatedEvent(audioPath)) if audioPath.toString.split("\\.").lastOption.exists(AcceptableFileExts.contains) =>
         context.actorContext.log.info(s"New audio ${audioPath.getFileName} (size=${new File(audioPath.toString).length()})")
         val seconds: Double = Common.getWavLength(audioPath.toString)
         if (seconds > 58 && seconds < 61) {
@@ -147,7 +179,7 @@ object AudioNoteCapturer {
           Tinker.steadily
         }
 
-      case PathUpdatedEvent(PathModifiedEvent(modifiedPath)) if modifiedPath.toString.split("\\.").lastOption.exists(AcceptableFileExts.contains) =>
+      case AudioPathUpdatedEvent(PathModifiedEvent(modifiedPath)) if modifiedPath.toString.split("\\.").lastOption.exists(AcceptableFileExts.contains) =>
         context.actorContext.log.warn(s"(need to fix this inefficiency) Re-transcribing $modifiedPath")
 
         triggerTranscriptionForWavPath(modifiedPath)
@@ -156,10 +188,10 @@ object AudioNoteCapturer {
 
         Tinker.steadily
 
-      case PathUpdatedEvent(PathModifiedEvent(modifiedPath)) =>
+      case AudioPathUpdatedEvent(PathModifiedEvent(modifiedPath)) =>
         context.actorContext.log.debug(s"MODIFICATION ${modifiedPath.getFileName} (was this Syncthing doing a partial sync? size=${new File(modifiedPath.toString).length()})")
         Tinker.steadily
-      case PathUpdatedEvent(other) =>
+      case AudioPathUpdatedEvent(other) =>
         context.actorContext.log.debug(s"Ignoring event $other")
         Tinker.steadily
 
@@ -168,6 +200,10 @@ object AudioNoteCapturer {
           case Failure(exception) => throw exception
           case Success(NoOp) =>
         }
+        Tinker.steadily
+
+      case ReceivePing(_) =>
+        context.actorContext.log.debug("Ignoring ping, already initialized")
         Tinker.steadily
     }
   }
@@ -182,7 +218,7 @@ object AudioNoteCapturer {
         }
         Tinker.steadily
 
-      case PathUpdatedEvent(PathCreatedEvent(path)) =>
+      case AudioPathUpdatedEvent(PathCreatedEvent(path)) =>
         if (!path.endsWith(".tmp")) {
           context.actorContext.log.info(s"Detected updated path $path")
           triggerTranscriptionForWavPath(path)
@@ -194,7 +230,7 @@ object AudioNoteCapturer {
           Tinker.steadily
         }
 
-      case PathUpdatedEvent(PathModifiedEvent(wavPath)) =>
+      case AudioPathUpdatedEvent(PathModifiedEvent(wavPath)) =>
         Try(Common.getWavLength(wavPath.toString)) match {
           case Failure(exception: UnsupportedAudioFileException) =>
             context.actorContext.log.error(s"Failed to get wav length for $wavPath", exception)
@@ -208,7 +244,7 @@ object AudioNoteCapturer {
             // if this was completed within 2 seconds of a full minute...
             if (Math.abs(durationSeconds / 60 % 60 - 50) < 2) {
               context.actorContext.log.info(s"Setting a ~1-minute (75s) timer because durationSeconds looked suspicious...")
-              timeKeeper ! UntrackedTimeKeeper.RemindMeIn(75.seconds, context.self.underlying, PathUpdatedEvent(PathCreatedEvent(wavPath)), timerKey)
+              timeKeeper ! UntrackedTimeKeeper.RemindMeIn(75.seconds, context.self.underlying, AudioPathUpdatedEvent(PathCreatedEvent(wavPath)), timerKey)
               noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] setting a timer for ${wavPath.toString} and switching to idle")
               Tinker.steadily
             } else {
@@ -220,8 +256,12 @@ object AudioNoteCapturer {
             }
         }
 
-      case PathUpdatedEvent(FolderWatcherActor.PathDeletedEvent(path)) =>
+      case AudioPathUpdatedEvent(FolderWatcherActor.PathDeletedEvent(path)) =>
         context.actorContext.log.debug(s"Ignoring path deletion for $path")
+        Tinker.steadily
+
+      case ReceivePing(_) =>
+        context.actorContext.log.debug("Ignoring ping, already initialized")
         Tinker.steadily
     }
   }
@@ -258,4 +298,18 @@ object AudioNoteCapturer {
   }
 
   private def now(clock: TinkerClock): String = TimeUtil.zonedDateTimeToISO8601(clock.now())
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def properties: Try[Option[(Path, String, String, String, Int)]] = {
+      noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
+          (for {
+            audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
+            whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
+            whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
+            whisperEventReceiverHost <- properties.get("whisperEventReceiverHost").map(_.asInstanceOf[String])
+            whisperEventReceiverPort <- properties.get("whisperEventReceiverPort").map(_.asInstanceOf[Int])
+          } yield (audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort))
+      }
+    }
+  }
 }
