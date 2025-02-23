@@ -96,7 +96,7 @@ object HueLightKeeper {
         Tinker.steadily
 
       case FlashTheLight =>
-        implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
+        implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(30.seconds.toMillis))
         implicit val s: typed.Scheduler = context.system.actorSystem.scheduler
         val log = context.actorContext.log
         context.pipeToSelf(context.self.underlying.ask(HueLightKeeper.GetLightState).map { capturedLightState =>
