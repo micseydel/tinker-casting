@@ -28,7 +28,7 @@ lazy val additionalLibraryDependencies = Seq(
   // for mqtt
   "com.sandinh" %% "paho-akka" % "1.6.1",
 
-  "org.yaml" % "snakeyaml" % "2.3",
+  "org.yaml" % "snakeyaml" % "2.4",
 //  "org.virtuslab" %% "scala-yaml" % "0.1.0",
 
   // testing
