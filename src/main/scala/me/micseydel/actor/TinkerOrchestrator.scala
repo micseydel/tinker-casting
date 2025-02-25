@@ -14,10 +14,7 @@ import scala.annotation.unused
 
 object TinkerOrchestrator {
   case class Config(vaultRoot: VaultPath,
-                    audioNoteWatchPath: Path,
                     aranetConfig: Option[AranetConfig],
-                    eventReceiverHost: String,
-                    eventReceiverPort: Int,
                     ntfyKeys: NtfyKeys,
                     fitbitAuthorizationBasic: Option[String],
                     chimeHost: Option[String],

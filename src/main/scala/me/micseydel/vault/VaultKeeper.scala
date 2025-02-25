@@ -139,10 +139,10 @@ case class HeadingId private (heading: String, noteId: NoteId) extends LinkId {
 case class Note private[vault] (
                                  markdown: String,
                                  // FIXME https://github.com/jcazevedo/moultingyaml
-                                 frontmatter: Option[String]
+                                 maybeFrontmatter: Option[String]
                ) {
   def raw: String = {
-    frontmatter match {
+    maybeFrontmatter match {
       case Some(yaml) =>
         s"""---
            |$yaml
@@ -154,7 +154,7 @@ case class Note private[vault] (
     }
   }
 
-  def yamlFrontMatter: Try[Map[String, Any]] = frontmatter match {
+  def yamlFrontMatter: Try[Map[String, Any]] = maybeFrontmatter match {
     case Some(frontmatter) =>
       Try {
         val javaMap: java.util.Map[String, Any] = Note.Yaml.load(frontmatter)

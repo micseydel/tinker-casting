@@ -91,7 +91,7 @@ object AirGradientActor {
           case Success(note) =>
             note.yamlFrontMatter match {
               case Failure(exception) =>
-                context.actorContext.log.warn(s"failed to parse frontmatter ${note.frontmatter}", exception)
+                context.actorContext.log.warn(s"failed to parse frontmatter ${note.maybeFrontmatter}", exception)
                 Tinker.steadily
               case Success(frontmatter) =>
                 val refreshNow = note.markdown(3) match {

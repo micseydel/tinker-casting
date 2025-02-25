@@ -9,7 +9,7 @@ import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEven
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResult
 import me.micseydel.model.WhisperResultJsonProtocol._
@@ -29,15 +29,6 @@ import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 
 object AudioNoteCapturer {
-  case class Config(
-                     vaultRoot: VaultPath,
-                     audioNoteWatchPath: Path,
-                     whisperBaseHost: String,
-                     whisperLargeHost: String,
-                     eventReceiverHost: String,
-                     eventReceiverPort: Int
-                   )
-
   val AcceptableFileExts: Set[String] = Set(
     "wav", "mp3", "flac", "m4a",
     "mp4", "mkv", "wmv", "flv"
@@ -57,37 +48,8 @@ object AudioNoteCapturer {
   private val NoteName = "Audio Note Capture"
 
   // FIXME: Chronicler is passed here because it takes a broader message
-  def apply(config: Config, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
-    initializing(config, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
-  }
-
-  def initializing(config: Config, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
-    noteRef.properties match {
-      case Success(Some((audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort))) =>
-        context.actorContext.log.info("Finishing initializing")
-        finishInitializing(config.vaultRoot, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)
-
-      case nonSuccess =>
-        nonSuccess match {
-          case Failure(exception) =>
-            context.actorContext.log.warn(s"Something went wrong reading the properties from disk; will wait for disk update", exception)
-
-          case Success(None) =>
-            context.actorContext.log.warn("Read from disk successfully but no frontmatter/properties; will wait for disk update")
-
-          case Success(Some(_)) => ??? // FIXME: for the compiler
-        }
-
-        Tinker.receiveMessage {
-          case ReceivePing(_) =>
-            context.actorContext.log.warn("Received ping, trying to read from disk again")
-            initializing(config, chronicler)
-
-          case e =>
-            context.actorContext.log.warn(s"Ignoring event $e")
-            Tinker.steadily
-        }
-    }
+  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], audioWatchPath: Path, whisperLarge: String, whisperBase: String, whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
+    finishInitializing(vaultRoot, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
   }
 
   private def finishInitializing(vaultRoot: VaultPath, audioWatchPath: Path, whisperLarge: String, whisperBase: String, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
@@ -298,18 +260,4 @@ object AudioNoteCapturer {
   }
 
   private def now(clock: TinkerClock): String = TimeUtil.zonedDateTimeToISO8601(clock.now())
-
-  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def properties: Try[Option[(Path, String, String, String, Int)]] = {
-      noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
-          (for {
-            audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
-            whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
-            whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
-            whisperEventReceiverHost <- properties.get("whisperEventReceiverHost").map(_.asInstanceOf[String])
-            whisperEventReceiverPort <- properties.get("whisperEventReceiverPort").map(_.asInstanceOf[Int])
-          } yield (audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort))
-      }
-    }
-  }
 }

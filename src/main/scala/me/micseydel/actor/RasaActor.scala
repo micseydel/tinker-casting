@@ -20,7 +20,7 @@ object RasaActor {
   private final case class ReceiveRasaResult(result: RasaResult, replyTo: ActorRef[RasaResult]) extends Message
   private final case class RasaRequestFailed(message: String, throwable: Throwable) extends Message
 
-  def apply(whisperHost: String)(implicit httpExecutionContext: ExecutionContext): Behavior[Message] = Behaviors.setup { context =>
+  def apply(host: String)(implicit httpExecutionContext: ExecutionContext): Behavior[Message] = Behaviors.setup { context =>
     import context.system
     Behaviors.receiveMessage {
       case GetRasaResult(string, replyTo) =>
@@ -28,7 +28,7 @@ object RasaActor {
         val responseFuture: Future[HttpResponse] = Http().singleRequest(
           HttpRequest(
             method = HttpMethods.GET,
-            uri = s"http://${whisperHost}/rasa/intent", // FIXME: hacky
+            uri = s"http://$host/rasa/intent",
             entity = HttpEntity(ContentTypes.`application/json`, payload.toJson.toString)
           )
         )

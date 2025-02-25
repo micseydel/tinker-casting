@@ -29,10 +29,7 @@ object TinkerContainer {
       config,
       tinker => TinkerOrchestrator(TinkerOrchestrator.Config(
         config.vaultRoot,
-        config.audioNoteWatchPath,
         config.aranetConfig,
-        config.eventReceiverHost,
-        config.eventReceiverPort,
         config.ntfyKeys,
         config.fitbitAuthorizationBasic,
         config.chimeHost,

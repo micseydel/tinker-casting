@@ -207,7 +207,7 @@ object ChroniclerForTest {
   def apply(): Behavior[Chronicler.Message] = Behaviors.setup { context =>
     Behaviors.receiveMessage {
       case Chronicler.StartTinkering(tinker) => ???
-      case message: Chronicler.PostInitMessage =>
+      case message: Chronicler.PostTinkeringInitMessage =>
         message match {
           case Chronicler.TranscriptionStartedEvent(capture) => ???
           case Chronicler.TranscriptionCompletedEvent(event) => ???
