@@ -157,7 +157,8 @@ case class Note private[vault] (
   def yamlFrontMatter: Try[Map[String, Any]] = maybeFrontmatter match {
     case Some(frontmatter) =>
       Try {
-        val javaMap: java.util.Map[String, Any] = Note.Yaml.load(frontmatter)
+        val Yaml = new Yaml()
+        val javaMap: java.util.Map[String, Any] = Yaml.load(frontmatter)
         val scalaMap: Map[String, Any] = CollectionConverters.asScala(javaMap).toMap
         scalaMap
       }
@@ -167,9 +168,9 @@ case class Note private[vault] (
 }
 
 object Note {
-  val Yaml = new Yaml()
 
   def apply(markdown: String, frontmatter: Map[String, Object]): Note  = {
+    val Yaml = new Yaml()
     // workaround for Yaml library
     val asJava: util.Map[String, Object] = new java.util.HashMap[String, Object]()
     for ((key, value) <- frontmatter) {
