@@ -29,8 +29,6 @@ soundfile
 #SpeechRecognition
 #pvporcupine
 
-chime
-
 # compatibility issues?
 #requests
 #bitstruct
