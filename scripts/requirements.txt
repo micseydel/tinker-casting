@@ -35,4 +35,3 @@ chime
 #bitstruct
 #bleak
 
-wyze_sdk
