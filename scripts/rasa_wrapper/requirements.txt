@@ -2,6 +2,11 @@ flask
 flask[async]
 pyyaml>=5.4
 
+psycopg2-binary==2.9.9
+sqlalchemy<2.0
+confluent-kafka==2.5.3
+rasa==3.6.21
+
 numpy
 ffmpeg-python==0.2.0
 openai-whisper

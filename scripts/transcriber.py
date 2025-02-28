@@ -20,8 +20,6 @@ app = Flask(__name__)
 
 from pprint import pprint
 
-from rasa_wrapper import ModelWrapper
-
 
 def http_call(callback_url, data):
     # Convert the Python dictionary to a JSON string
@@ -169,25 +167,6 @@ def enqueue_with_upload():
     return jsonify({'message': f"Enqueued uploaded {data['vault_path']}"}), 202
 
 
-@app.route('/rasa/intent', methods=['GET'])
-def rasa_hacking():
-    data = request.get_json()
-
-    if "string" not in data:
-        message = f"Expected key `string` in data but only found keys {data.keys()}"
-        return jsonify({'message': message}), 400
-
-    start = time.perf_counter()
-    result = rasa_model.parse_string(data["string"])
-    elapsed = time.perf_counter() - start
-    print(f"Rasa parsing took {elapsed:.1f}s")
-
-    # return jsonify({'rasa_result': result}), 200
-    print("Returning result:")
-    pprint(result)
-    return jsonify(result), 200
-
-
 if __name__ == '__main__':
     try:
         _, model, port, vault_root = sys.argv
@@ -213,9 +192,6 @@ if __name__ == '__main__':
         q = manager.Queue()
         worker = Process(target=long_running, args=(q, model, vault_root))
         worker.start()
-
-        print("EXPERIMENT: loading Rasa...")
-        rasa_model = ModelWrapper()
 
         app.config.from_mapping({"VAULT_ROOT": vault_root})
         app.run(
