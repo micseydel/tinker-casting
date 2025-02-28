@@ -10,8 +10,3 @@ torch
 
 sounddevice
 soundfile
-
-#pyaudio
-#pydub
-#SpeechRecognition
-#pvporcupine
