@@ -2,13 +2,13 @@ package me.micseydel.actor.notifications
 
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse}
-import me.micseydel.NoOp
+import akka.http.scaladsl.model._
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.notifications.ChimeActor.{BirSur, Chime, Command, Error, Info, Mario, Material, Pokemon, Sonic, Success, Theme, Warning, Zelda}
-import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, TinkerContextImpl}
+import me.micseydel.actor.notifications.ChimeActor.{Command, Error, Info, Success, Theme, Warning}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
+import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
@@ -53,15 +53,13 @@ object ChimeActor {
   // behavior
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Chime config", TinkerColor.random(), "🔔", ReceivePing) { (context, noteRef) =>
-    implicit val tc: TinkerContext[_] = context
-
-    noteRef.setMarkdown("- [ ] Test")
-
-    context.self !! ReceivePing(NoOp)
     initializing(noteRef)
   }
 
   private def initializing(noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+
+    noteRef.resetMarkdown()
+
     Tinker.receiveMessage {
       case ReceivePing(_) =>
         noteRef.readNote().flatMap(_.yamlFrontMatter) match {
@@ -73,8 +71,8 @@ object ChimeActor {
                 behavior(host, noteRef)
 
               case other =>
-                context.actorContext.log.warn(s"Expected a string host, found $other")
-                initializing(noteRef)
+                context.actorContext.log.warn(s"Expected a string host, found $other (ignoring)")
+                Tinker.steadily
             }
         }
 
@@ -111,17 +109,66 @@ object ChimeActor {
         Tinker.steadily
 
       case ReceivePing(_) =>
-        noteRef.readNote().map(_.markdown).map(_(3)) match {
-          case Failure(exception) => context.actorContext.log.warn(s"Something went wrong checking the chime note", exception)
-          case util.Success('x') =>
-            noteRef.setMarkdown("- [ ] Test")
-            context.self !! Success(Material)
+        context.actorContext.log.warn("Got a note ping...")
+        noteRef.readNote().flatMap { note =>
+          val maybeUpdatedTheme = getFirstSelectedListItemForHeader(note.markdown, "Select a Theme")
+          val maybeSelectedCommand = getFirstSelectedListItemForHeader(note.markdown, "Issue Command")
 
+          val themeFromDisk: Try[Theme] = maybeUpdatedTheme.flatMap(Theme.unapply) match {
+            case Some(selectedTheme) =>
+              // if the theme was updated via Markdown, we cache it in the yaml
+              noteRef.setTo(Note(DefaultMarkdown, Map("host" -> host, "theme" -> selectedTheme.str)))
+                .map(_ => selectedTheme)
+
+            case None =>
+              // if it wasn't updated, we try to fetch it from the cache and use a default
+              note.yamlFrontMatter.map(_.get("theme")).map(_.collect {
+                case Theme(theme) => theme
+              }.getOrElse(Material))
+          }
+
+          themeFromDisk.map { theme =>
+            val maybeCommand = maybeSelectedCommand match {
+              case Some("Success") => Some(Success(theme))
+              case Some("Warning") => Some(Warning(theme))
+              case Some("Info") => Some(Info(theme))
+              case Some("Error") => Some(Error(theme))
+
+              case Some(other) =>
+                context.actorContext.log.warn(s"Ignoring unrecognized command: $other")
+                None
+
+              case None => None
+            }
+
+            for (command <- maybeCommand) {
+              context.self !! command
+              // if we issue a command but the theme wasn't updated, that means we need to
+              // reset the markdown because it didn't happen above
+              if (maybeUpdatedTheme.isEmpty) {
+                noteRef.resetMarkdown()
+              }
+            }
+          }
+        } match {
+          case Failure(exception) => throw exception
           case util.Success(_) =>
-            context.actorContext.log.warn("Ignored note ping")
         }
+
         Tinker.steadily
     }
+  }
+
+  private def getFirstSelectedListItemForHeader(markdown: String, header: String): Option[String] = {
+    markdown.split("\n")
+      .dropWhile(_ != s"# $header")
+      .drop(1)
+      .dropWhile(!_.startsWith("- ["))
+      .takeWhile(_.startsWith("- ["))
+      .collectFirst {
+        case s if s.length > 3 && s.charAt(3) == 'x' =>
+          s.drop(6)
+      }
   }
 
   //
@@ -162,8 +209,33 @@ object ChimeActor {
     )
 
     val Themes: Set[String] = Mapping.keySet
+    val ThemesList: List[String] = Theme.Themes.toList.sorted
 
     def unapply(string: String): Option[Theme] = Mapping.get(string)
+  }
+
+  private val DefaultMarkdown = {
+    val themesMarkdownList = Theme.ThemesList.mkString("- [ ] ", "\n- [ ] ", "\n")
+
+    s"""# Issue Command
+       |
+       |- [ ] Success
+       |- [ ] Warning
+       |- [ ] Info
+       |- [ ] Error
+       |
+       |# Select a Theme
+       |
+       |$themesMarkdownList"""
+  }
+
+  private implicit class RichChimeNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def resetMarkdown(): Unit = {
+      noteRef.setMarkdown(DefaultMarkdown) match {
+        case Failure(exception) => throw exception
+        case util.Success(_) =>
+      }
+    }
   }
 }
 
