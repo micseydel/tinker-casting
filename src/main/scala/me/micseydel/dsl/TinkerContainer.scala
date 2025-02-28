@@ -32,7 +32,6 @@ object TinkerContainer {
         config.aranetConfig,
         config.ntfyKeys,
         config.fitbitAuthorizationBasic,
-        config.chimeHost,
         config.wyzeUri
       ))(tinker), NtfyerActor()(_)
     )
@@ -82,7 +81,7 @@ object RootTinkerBehavior {
     val hueControl: typed.ActorRef[HueControl.Message] = context.spawn(HueControl(config.hueConfig.getOrElse(HueConfig("", ""))), "HueControl")
 
     val notificationCenterManager: typed.ActorRef[NotificationCenterManager.Message] =
-      context.spawn(NotificationCenterManager(ntfyAbility, config.chimeHost), "NotificationCenterManager")
+      context.spawn(NotificationCenterManager(ntfyAbility), "NotificationCenterManager")
 
     val actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message] = context.spawn(
       ActorNotesFolderWatcherActor(config.vaultRoot),
@@ -91,6 +90,7 @@ object RootTinkerBehavior {
     
     val operator: typed.ActorRef[Operator.Message] = context.spawn(Operator(), "Operator")
 
+    // FIXME
     val eventReceiver: typed.ActorRef[EventReceiver.Message] = context.spawn(
       EventReceiver(
         EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),

@@ -3,10 +3,8 @@ package me.micseydel.app
 import cats.data.{Validated, ValidatedNel}
 import com.typesafe.config.{Config, ConfigException, ConfigFactory}
 import me.micseydel.actor.perimeter.HueControl.HueConfig
-import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.VaultPath
 
-import java.nio.file.{Files, Path, Paths}
 import scala.util.{Failure, Success, Try}
 
 object AppConfiguration {
@@ -19,7 +17,6 @@ object AppConfiguration {
     hueConfig: Option[HueConfig],
     mqttConfig: Option[MqttConfig],
     fitbitAuthorizationBasic: Option[String],
-    chimeHost: Option[String],
     purpleAirUri: Option[String],
     wyzeUri: Option[String]
   )
@@ -71,7 +68,6 @@ object AppConfiguration {
           hueConfig,
           maybeMqttConfig,
           getOptionalString(config, "fitbit.authorizationBasic"),
-          getOptionalString(config, "chime.host"),
           getOptionalString(config, "purpleair.uri"),
           getOptionalString(config, "wyze.uri")
         ))

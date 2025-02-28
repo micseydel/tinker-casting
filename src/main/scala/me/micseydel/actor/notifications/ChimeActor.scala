@@ -3,39 +3,89 @@ package me.micseydel.actor.notifications
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse}
-import me.micseydel.actor.notifications.ChimeActor.{BirSur, Chime, Error, Info, Mario, Material, Message, Pokemon, Sonic, Success, Theme, Warning, Zelda}
-import me.micseydel.dsl.{Tinker, TinkerContext, TinkerContextImpl}
+import me.micseydel.NoOp
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.notifications.ChimeActor.{BirSur, Chime, Command, Error, Info, Mario, Material, Pokemon, Sonic, Success, Theme, Warning, Zelda}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, TinkerContextImpl}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
-import scala.util.Failure
+import scala.util.{Failure, Try}
 
 object ChimeActor {
-  sealed trait Message {
+  sealed trait Message
+
+  private case class ReceivePing(ping: Ping) extends Message
+
+  sealed trait Command extends Message {
     val theme: Theme
   }
 
-  final case class Success(theme: Theme) extends Message
-  final case class Warning(theme: Theme) extends Message
-  final case class Info(theme: Theme) extends Message
-  final case class Error(theme: Theme) extends Message
+  final case class Success(theme: Theme) extends Command
+
+  final case class Warning(theme: Theme) extends Command
+
+  final case class Info(theme: Theme) extends Command
+
+  final case class Error(theme: Theme) extends Command
 
   // model
 
   sealed abstract class Theme(val str: String)
 
   case object BirSur extends Theme("big-sur")
+
   case object Chime extends Theme("chime")
+
   case object Mario extends Theme("mario")
+
   case object Material extends Theme("material")
+
   case object Pokemon extends Theme("pokemon")
+
   case object Sonic extends Theme("sonic")
+
   case object Zelda extends Theme("zelda")
 
   // behavior
 
-  def apply(host: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Chime config", TinkerColor.random(), "🔔", ReceivePing) { (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
+
+    noteRef.setMarkdown("- [ ] Test")
+
+    context.self !! ReceivePing(NoOp)
+    initializing(noteRef)
+  }
+
+  private def initializing(noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    Tinker.receiveMessage {
+      case ReceivePing(_) =>
+        noteRef.readNote().flatMap(_.yamlFrontMatter) match {
+          case Failure(exception) => throw exception
+
+          case util.Success(yaml: Map[String, Any]) =>
+            yaml.get("host") match {
+              case Some(host: String) =>
+                behavior(host, noteRef)
+
+              case other =>
+                context.actorContext.log.warn(s"Expected a string host, found $other")
+                initializing(noteRef)
+            }
+        }
+
+      case command: Command =>
+        context.actorContext.log.warn(s"Ignoring command $command, not yet configured")
+        Tinker.steadily
+    }
+  }
+
+  private def behavior(host: String, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[_] = context
     implicit val actorSystem: ActorSystem[_] = context.system.actorSystem
     implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
 
@@ -59,6 +109,18 @@ object ChimeActor {
         context.actorContext.log.info(s"Calling chime.error with theme $theme")
         doAsyncHttp(host, "error", theme)
         Tinker.steadily
+
+      case ReceivePing(_) =>
+        noteRef.readNote().map(_.markdown).map(_(3)) match {
+          case Failure(exception) => context.actorContext.log.warn(s"Something went wrong checking the chime note", exception)
+          case util.Success('x') =>
+            noteRef.setMarkdown("- [ ] Test")
+            context.self !! Success(Material)
+
+          case util.Success(_) =>
+            context.actorContext.log.warn("Ignored note ping")
+        }
+        Tinker.steadily
     }
   }
 
@@ -74,7 +136,7 @@ object ChimeActor {
     val responseFuture: Future[HttpResponse] = Http().singleRequest(
       HttpRequest(
         method = HttpMethods.POST,
-        uri = s"http://${host}/chime",
+        uri = s"http://$host/chime",
         entity = HttpEntity(ContentTypes.`application/json`, payload.toJson.toString)
       )
     )
@@ -87,6 +149,22 @@ object ChimeActor {
         system.log.warn(s"HTTP call failed for $host", t)
     }
   }
+
+  object Theme {
+    private val Mapping = Map(
+      "big-sur" -> BirSur,
+      "chime" -> Chime,
+      "mario" -> Mario,
+      "material" -> Material,
+      "pokemon" -> Pokemon,
+      "sonic" -> Sonic,
+      "zelda" -> Zelda
+    )
+
+    val Themes: Set[String] = Mapping.keySet
+
+    def unapply(string: String): Option[Theme] = Mapping.get(string)
+  }
 }
 
 object ChimeJsonFormat extends DefaultJsonProtocol {
@@ -97,14 +175,8 @@ object ChimeJsonFormat extends DefaultJsonProtocol {
 
     def read(value: JsValue): Theme = {
       value.asJsObject.getFields("type") match {
-        case Seq(JsString("big-sur")) => BirSur
-        case Seq(JsString("chime")) => Chime
-        case Seq(JsString("mario")) => Mario
-        case Seq(JsString("material")) => Material
-        case Seq(JsString("pokemon")) => Pokemon
-        case Seq(JsString("sonic")) => Sonic
-        case Seq(JsString("zelda")) => Zelda
-        case other => throw DeserializationException(s"Unknown type, expected Seq(JsString(_)) for one of {big-sur, chime, mario, material, pokemon, sonic, zelda} but got $other")
+        case Seq(JsString(Theme(theme))) => theme
+        case other => throw DeserializationException(s"Unknown type, expected Seq(JsString(THEME)) with THEME in ${Theme.Themes} but got $other")
       }
     }
   }
@@ -114,8 +186,8 @@ object ChimeJsonFormat extends DefaultJsonProtocol {
   implicit val infoJsonFormat: JsonFormat[Info] = jsonFormat1(Info)
   implicit val errorJsonFormat: JsonFormat[Error] = jsonFormat1(Error)
 
-  implicit object ChimeMessageJsonFormat extends RootJsonFormat[Message] {
-    def write(m: Message): JsValue = {
+  implicit object ChimeMessageJsonFormat extends RootJsonFormat[Command] {
+    def write(m: Command): JsValue = {
       val (jsObj, typ) = m match {
         case l: Success => (l.toJson.asJsObject, "Success")
         case l: Warning => (l.toJson.asJsObject, "Warning")
@@ -125,7 +197,7 @@ object ChimeJsonFormat extends DefaultJsonProtocol {
       JsObject(jsObj.fields + ("type" -> JsString(typ)))
     }
 
-    def read(value: JsValue): Message = {
+    def read(value: JsValue): Command = {
       value.asJsObject.getFields("type") match {
         case Seq(JsString("Success")) => value.convertTo[Success]
         case Seq(JsString("Warning")) => value.convertTo[Warning]

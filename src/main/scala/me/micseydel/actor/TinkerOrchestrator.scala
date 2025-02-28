@@ -17,7 +17,6 @@ object TinkerOrchestrator {
                     aranetConfig: Option[AranetConfig],
                     ntfyKeys: NtfyKeys,
                     fitbitAuthorizationBasic: Option[String],
-                    chimeHost: Option[String],
                     wyzeUri: Option[String]
                    )
 

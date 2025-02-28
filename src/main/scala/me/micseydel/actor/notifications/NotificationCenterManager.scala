@@ -44,7 +44,7 @@ object NotificationCenterManager {
 
   case class HueCommand(command: HueControl.Command) extends SideEffect
 
-  case class Chime(message: ChimeActor.Message) extends SideEffect
+  case class Chime(message: ChimeActor.Command) extends SideEffect
 
   //
 
@@ -72,7 +72,7 @@ object NotificationCenterManager {
     }
   }
 
-  def apply(ntfyAbility: Tinker => Ability[NtfyerActor.Message], chimeHost: Option[String]): Behavior[Message] =
+  def apply(ntfyAbility: Tinker => Ability[NtfyerActor.Message]): Behavior[Message] =
     Behaviors.withStash(10) { stash =>
       Behaviors.receiveMessage {
         case message@(_: NotificationMessage) =>
@@ -80,11 +80,11 @@ object NotificationCenterManager {
           Behaviors.same
 
         case StartTinkering(tinker) =>
-          stash.unstashAll(finishInitializing(ntfyAbility(tinker), chimeHost)(tinker))
+          stash.unstashAll(finishInitializing(ntfyAbility(tinker))(tinker))
       }
     }
 
-  private def finishInitializing(ntfyAbility: Ability[NtfyerActor.Message], maybeChimeHost: Option[String])(implicit Tinker: Tinker): Ability[Message] =
+  private def finishInitializing(ntfyAbility: Ability[NtfyerActor.Message])(implicit Tinker: Tinker): Ability[Message] =
     Tinkerer(rgb(205, 205, 0), "❗️").initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) {
       case (context, jsonRef) =>
         val notificationCenterActor: SpiritRef[NotificationCenterActor.Message] = context.cast(NotificationCenterActor(context.self), "NotificationCenterActor")
@@ -92,18 +92,12 @@ object NotificationCenterManager {
 
         val ntfyer = context.cast(ntfyAbility, "Ntfyer")
 
-        val chime: SpiritRef[ChimeActor.Message] = maybeChimeHost match {
-          case Some(chimeHost) =>
-            context.cast(ChimeActor(chimeHost), "Chime")
-
-          case None =>
-            context.cast(Tinker.ignore, "InertChime")
-        }
+        val chime: SpiritRef[ChimeActor.Command] = context.cast(ChimeActor(), "Chime")
 
         ability(Map.empty)(Tinker, upcomingNotificationsManager, notificationCenterActor, jsonRef, ntfyer, chime)
     }
 
-  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Message]): Ability[Message] =
+  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Command]): Ability[Message] =
     Tinker.receive { (context, message) =>
       implicit val c: TinkerContext[_] = context
       message match {
