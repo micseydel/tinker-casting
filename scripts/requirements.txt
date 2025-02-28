@@ -13,24 +13,10 @@ openai-whisper
 --extra-index-url https://download.pytorch.org/whl/cu113
 torch
 
-#claranet4
-
 sounddevice
 soundfile
-
-#pandas
-#plotly
-#pygraphviz
-#matplotlib
-#imageio
 
 #pyaudio
 #pydub
 #SpeechRecognition
 #pvporcupine
-
-# compatibility issues?
-#requests
-#bitstruct
-#bleak
-

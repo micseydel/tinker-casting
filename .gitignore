@@ -10,6 +10,7 @@ sbt-dist/bin/sbt-launch.jar
 .DS_Store
 queued_temp_files
 py3.10_venv/
+py310_venv
 scripts/.rasa/
 scripts/models/
 **.pyc

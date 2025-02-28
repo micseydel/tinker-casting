@@ -1,0 +1,9 @@
+flask
+flask[async]
+pyyaml>=5.4
+
+requests
+bitstruct
+bleak
+
+claranet4
