@@ -9,7 +9,8 @@ from rasa.core.agent import Agent
 
 
 class ModelWrapper:
-    def __init__(self):
+    def __init__(self, folder_path: str):
+        self.folder_path = folder_path
         self._load_model()
 
     def parse_string(self, content: str) -> dict:
@@ -22,7 +23,7 @@ class ModelWrapper:
         return asyncio.run(parse_input_text(self.agent, content))
 
     def _reload_model_if_needed(self) -> None:
-        latest_model_path = newest_file_in_dir("models/")
+        latest_model_path = newest_file_in_dir(self.folder_path)
         if self.model_path != latest_model_path:
             now = datetime.now()
             old_name = name_for_model_path(self.model_path)
@@ -31,7 +32,7 @@ class ModelWrapper:
             self._load_model()
 
     def _load_model(self) -> None:
-        model_path = newest_file_in_dir("models/")
+        model_path = newest_file_in_dir(self.folder_path)
         model_name = name_for_model_path(model_path)
 
         print('\n'*4)
@@ -62,5 +63,7 @@ def name_for_model_path(model_path) -> str:
 
 def newest_file_in_dir(directory) -> str:
     files = (f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f)) and f != ".DS_Store")
-    paths = (os.path.join(directory, file) for file in files)
+    paths = [os.path.join(directory, file) for file in files]
+    if not paths:
+        raise Exception("No trained model found; did you train a model?")
     return max(paths, key=os.path.getctime)

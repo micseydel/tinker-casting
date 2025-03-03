@@ -10,8 +10,15 @@ from pprint import pprint
 from rasa_wrapper import ModelWrapper
 
 
-@app.route('/rasa/intent', methods=['GET'])
-def rasa_hacking():
+@app.route('/entity_extraction/<model>', methods=['GET'])
+def entity_extraction(model: str):
+    if model == "cats":
+        rasa_model = cats_rasa_model
+    elif model == "lights":
+        rasa_model = lights_rasa_model
+    else:
+        return jsonify({'message': f"unknown model {model}"}), 404
+
     data = request.get_json()
 
     if "string" not in data:
@@ -37,7 +44,9 @@ if __name__ == '__main__':
         raise e
     else:
         print("Using port", port, "; loading Rasa now...")
-        rasa_model = ModelWrapper()
+
+        cats_rasa_model = ModelWrapper("models/cats")
+        lights_rasa_model = ModelWrapper("models/lights")
 
         print("Starting Flask...")
         app.run(

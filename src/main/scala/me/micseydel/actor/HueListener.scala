@@ -30,7 +30,7 @@ object HueListener {
     implicit val c: TinkerContext[_] = context
 
     @unused // subscribes to Gossiper on our behalf
-    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener(Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent)), "RasaListener")
+    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent)), "RasaListener")
 
     context.actorContext.log.info("HueListener initialized")
 

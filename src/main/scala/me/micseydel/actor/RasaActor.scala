@@ -16,19 +16,19 @@ import scala.util.{Failure, Success, Try}
 
 object RasaActor {
   sealed trait Message
-  final case class GetRasaResult(string: String, replyTo: ActorRef[RasaResult]) extends Message
+  final case class GetRasaResult(string: String, model: String, replyTo: ActorRef[RasaResult]) extends Message
   private final case class ReceiveRasaResult(result: RasaResult, replyTo: ActorRef[RasaResult]) extends Message
   private final case class RasaRequestFailed(message: String, throwable: Throwable) extends Message
 
   def apply(host: String)(implicit httpExecutionContext: ExecutionContext): Behavior[Message] = Behaviors.setup { context =>
     import context.system
     Behaviors.receiveMessage {
-      case GetRasaResult(string, replyTo) =>
+      case GetRasaResult(string, model, replyTo) =>
         val payload = Map("string" -> string)
         val responseFuture: Future[HttpResponse] = Http().singleRequest(
           HttpRequest(
             method = HttpMethods.GET,
-            uri = s"http://$host/rasa/intent",
+            uri = s"http://$host/entity_extraction/$model",
             entity = HttpEntity(ContentTypes.`application/json`, payload.toJson.toString)
           )
         )

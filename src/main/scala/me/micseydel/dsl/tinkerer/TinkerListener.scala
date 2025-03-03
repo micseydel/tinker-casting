@@ -49,7 +49,7 @@ object RasaAnnotatingListener {
   sealed trait Message
   private case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
-  def apply(subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     context.system.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
@@ -62,7 +62,7 @@ object RasaAnnotatingListener {
         val rawText = notedTranscription.capture.whisperResult.whisperResultContent.text
 
         val maybeRasaResult: Option[RasaResult] = if (rawText.wordCount < 30) {
-          Await.ready[RasaResult](context.system.rasaActor.ask(RasaActor.GetRasaResult(rawText, _)), duration).value match {
+          Await.ready[RasaResult](context.system.rasaActor.ask(RasaActor.GetRasaResult(rawText, model, _)), duration).value match {
             case None =>
               context.actorContext.log.warn(s"It looks like the future for ${notedTranscription.noteId} was empty")
               None
