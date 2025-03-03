@@ -1,16 +1,17 @@
 package me.micseydel.actor
 
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.ValidatedNel
-import me.micseydel.actor.notifications.ChimeActor.{Chime, Material}
+import me.micseydel.actor.notifications.ChimeActor.Material
+import me.micseydel.actor.notifications.NotificationCenterManager.JustSideEffect
 import me.micseydel.actor.notifications.{ChimeActor, NotificationCenterManager}
-import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffect, Notification}
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
 import me.micseydel.model.KnownIntent.no_intent
 import me.micseydel.model.Light.AllList
@@ -18,14 +19,18 @@ import me.micseydel.model.LightStates.RelaxedLight
 import me.micseydel.model._
 import me.micseydel.vault.NoteId
 
+import scala.annotation.unused
+
 object HueListener {
   sealed trait Message
 
-  case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
+  final case class TranscriptionEvent(rasaAnnotatedNotedTranscription: RasaAnnotatedNotedTranscription) extends Message
 
   def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(230, 230, 230), "👂").setup { context =>
     implicit val c: TinkerContext[_] = context
-    context.system.gossiper !! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
+
+    @unused // subscribes to Gossiper on our behalf
+    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener(Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent)), "RasaListener")
 
     context.actorContext.log.info("HueListener initialized")
 
@@ -38,11 +43,11 @@ object HueListener {
     context.actorContext.log.info(s"alreadySeen size ${alreadySeen.size}")
 
     message match {
-      case TranscriptionEvent(NotedTranscription(capture, noteId, _)) if alreadySeen.contains((noteId, capture.whisperResult.whisperResultMetadata.model)) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(capture, noteId), _)) if alreadySeen.contains((noteId, capture.whisperResult.whisperResultMetadata.model)) =>
         context.actorContext.log.debug(s"Already processed $noteId, ignoring")
         Tinker.steadily
 
-      case TranscriptionEvent(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), captureTime), noteId, Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), captureTime), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
         validated match {
           case Valid(SetTheLights(_, maybeColor, maybeBrightness, maybeSetOnOff)) =>
             context.actorContext.log.debug(s"Ignoring maybeSetOnOff $maybeSetOnOff")
@@ -94,13 +99,13 @@ object HueListener {
             Tinker.steadily
         }
 
-      case TranscriptionEvent(NotedTranscription(_, _, Some(RasaResult(entities, Intent(_, unrecognizedIntent), _, _, _)))) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(_, _), Some(RasaResult(entities, Intent(_, unrecognizedIntent), _, _, _)))) =>
         if (unrecognizedIntent != no_intent.IntentName) {
           context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent with entities $entities")
         }
         Tinker.steadily
 
-      case TranscriptionEvent(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), _, None)) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), _), None)) =>
         val flashCommands = List("please flash the lights", "please do a light show")
         if (flashCommands.contains(text.trim.toLowerCase)) {
           hueControl !! HueControl.FlashTheLights()

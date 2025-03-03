@@ -16,7 +16,7 @@ object KibbleManagerListenerActor {
     TinkerListener.simpleStateless { (context, notedTranscription) =>
       implicit val tc: TinkerContext[_] = context
       notedTranscription match {
-        case NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), captureTime), noteId, _) =>
+        case NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), captureTime), noteId) =>
           context.actorContext.log.debug(s"received ${text.wordCount} words: $text")
 
           val lowerText = text.toLowerCase

@@ -61,7 +61,7 @@ object Chronicler {
           implicit val Tinker: Tinker = tinker
           context.log.info("finishingInitialization")
           context.self ! ReceiveNotePing(NoOp)
-          stash.unstashAll(initializing(config.vaultRoot, vaultKeeper, tinker.tinkerSystem.wrap(gossiper), tinkerBrain))
+          stash.unstashAll(initializing(config.vaultRoot, vaultKeeper, tinker.tinkerSystem.wrap(gossiper), tinkerBrain, config.eventReceiverHost, config.eventReceiverPort))
 
         case message: PostTinkeringInitMessage =>
           context.log.info("Buffering a message")
@@ -76,14 +76,17 @@ object Chronicler {
                         vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
                         tinkerBrain: ActorRef[TinkerBrain.Message],
+                        whisperEventReceiverHost: String,
+                        whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing) { case (context, noteRef) =>
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
         noteRef.properties match {
-          case Success(Some((audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, rasaHost))) =>
+          case Success(Some((audioWatchPath, whisperLarge, whisperBase))) =>
             finishInitializing(
               vaultRoot, vaultKeeper, gossiper, tinkerBrain,
-              audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, rasaHost
+              audioWatchPath, whisperLarge, whisperBase,
+              whisperEventReceiverHost, whisperEventReceiverPort
             )
 
           case Failure(exception) =>
@@ -105,30 +108,25 @@ object Chronicler {
                         vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
                         tinkerBrain: ActorRef[TinkerBrain.Message],
-                        audioWatchPath: Path, whisperLarge: String, whisperBase: String, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, rasaHost: String
+                        audioWatchPath: Path, whisperLarge: String, whisperBase: String,
+                        whisperEventReceiverHost: String, whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
       vaultRoot, context.self.underlying, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort
     ), "AudioNoteCapturer")
 
-    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
-    val rasaActor: ActorRef[RasaActor.Message] = context.spawn(
-      RasaActor(rasaHost),
-      "RasaActor"
-    )
-
     val moc: ActorRef[ChroniclerMOC.Message] = context.spawn(ChroniclerMOC(), "ChroniclerMOC")
 
-    behavior(Map.empty)(Tinker, vaultKeeper, gossiper, tinkerBrain, moc, rasaActor)
+    behavior(Map.empty)(Tinker, vaultKeeper, gossiper, tinkerBrain, moc)
   }
 
   private def behavior(wavNameToTranscriptionNoteOwner: Map[String, SpiritRef[TranscriptionNoteWrapper.Message]])
                       (implicit Tinker: Tinker, vaultKeeper: ActorRef[VaultKeeper.Message],
                        gossiper: SpiritRef[Gossiper.Message],
                        tinkerBrain: ActorRef[TinkerBrain.Message],
-                       moc: ActorRef[ChroniclerMOC.Message],
-                       rasaActor: ActorRef[RasaActor.Message]): Ability[Message] =  Tinker.setup { context =>
+                       moc: ActorRef[ChroniclerMOC.Message]
+                      ): Ability[Message] =  Tinker.setup { context =>
     context.actorContext.log.info(s"Behavior initialized with ${wavNameToTranscriptionNoteOwner.size} elements")
     Tinker.receiveMessage { message =>
       implicit val c: TinkerContext[_] = context
@@ -146,7 +144,7 @@ object Chronicler {
             case None =>
               val wrapper = {
                 val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
-                val behavior = TranscriptionNoteWrapper(capture, rasaActor, context.self)
+                val behavior = TranscriptionNoteWrapper(capture, context.self)
                 context.actorContext.log.debug(s"Creating note wrapper actor with name $name (wavPath $wavPath)")
                 context.cast(behavior, name)
               }
@@ -187,13 +185,6 @@ object Chronicler {
           gossiper !! Gossiper.Receive(notedTranscription)
           // tinkerbrain is just for tracking purposes
           //        tinkerBrain ! TinkerBrain.Transcription(notedTranscription)
-
-          // quick bit of logging...
-          notedTranscription.rasaResult match {
-            case Some(KnownIntent.no_intent(maybeCat)) =>
-              context.actorContext.log.debug(s"Intent no_intent had entit(ies): $maybeCat")
-            case _ =>
-          }
 
           // and done
           Tinker.steadily
@@ -255,16 +246,13 @@ object Chronicler {
   }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def properties: Try[Option[(Path, String, String, String, Int, String)]] = {
+    def properties: Try[Option[(Path, String, String)]] = {
       noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
-        (for {
+        for {
           audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
           whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
           whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
-          whisperEventReceiverHost <- properties.get("whisperEventReceiverHost").map(_.asInstanceOf[String])
-          whisperEventReceiverPort <- properties.get("whisperEventReceiverPort").map(_.asInstanceOf[Int])
-          rasaHost <- properties.get("rasaHost").map(_.asInstanceOf[String])
-        } yield (audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, rasaHost))
+        } yield (audioWatchPath, whisperLarge, whisperBase)
       }
     }
   }

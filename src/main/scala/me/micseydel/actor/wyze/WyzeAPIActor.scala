@@ -32,7 +32,7 @@ private[wyze] object WyzeAPIActor {
 
         @unused // fetches and then dies
         val devicesFetcher = {
-          val behavior = HttpFetchAndUnmarshall[WyzePlugAPIResponse, WyzePlugAPIResponseFailed, WyzePlugAPIResult](
+          val behavior = HttpFetchAndUnmarshallEXPeriment[WyzePlugAPIResponse, WyzePlugAPIResponseFailed, WyzePlugAPIResult](
             request, replyTo, WyzePlugAPIResponseFailed
           )
           context.castAnonymous(behavior)
@@ -80,7 +80,7 @@ object WyzePlugModel {
 }
 
 
-private object HttpFetchAndUnmarshall {
+object HttpFetchAndUnmarshallEXPeriment {
   sealed trait Message[T]
 
   private case class ReceiveHttpResponse[T](httpResponse: HttpResponse) extends Message[T]

@@ -30,7 +30,7 @@ object HypothesisListener {
 
     TinkerListener.simpleStateless { (_, transcription) =>
       transcription match {
-        case NotedTranscription(capture, noteId, _) =>
+        case NotedTranscription(capture, noteId) =>
           val text = capture.whisperResult.whisperResultContent.text
           val lowerText = text.toLowerCase
 
@@ -62,34 +62,34 @@ object HypothesisListener {
 private object HypothesesMarkdown {
   def apply(messages: List[NotedTranscription], clock: TinkerClock): String = {
     messages.map {
-      case NotedTranscription(capture, noteId, None) =>
+      case NotedTranscription(capture, noteId) =>
         MarkdownUtil.listLineWithTimestampAndRef(capture.captureTime, StringUtil.truncateText(capture.whisperResult.whisperResultContent.text), noteId)
 
-      case NotedTranscription(capture, noteId, Some(RasaResult(entities, intent, intent_ranking, _, _))) =>
-        val base = MarkdownUtil.listLineWithTimestampAndRef(capture.captureTime, StringUtil.truncateText(capture.whisperResult.whisperResultContent.text), noteId)
-
-        val extraLines: List[String] =
-          if (intent.name == "no_intent" && intent.confidence > 0.99) {
-            List("no_intent")
-          } else {
-            List(
-              Some(s"    - intent: $intent"),
-              Some(entities).filter(_.nonEmpty).map("    - entities\n" + _.map {
-                case Entity(confidence_entity, confidence_group, end, entity, extractor, group, start, value) =>
-                  s"        - $entity=$value ($confidence_entity)"
-              }.mkString("\n")),
-              Some(intent_ranking).filter(_.nonEmpty && intent.confidence < 0.9).map(_.map {
-                case IntentRanking(confidence, name) =>
-                  s"    - $name = $confidence"
-              }).map(lines => (intent.name :: lines).mkString("    - ", "\n    - ", "\n"))
-            ).flatten
-          }
-
-        if (intent.name == "no_intent" && intent.confidence > 0.99) {
-          base
-        } else {
-          (base :: extraLines).mkString("\n")
-        }
+//      case NotedTranscription(capture, noteId, Some(RasaResult(entities, intent, intent_ranking, _, _))) =>
+//        val base = MarkdownUtil.listLineWithTimestampAndRef(capture.captureTime, StringUtil.truncateText(capture.whisperResult.whisperResultContent.text), noteId)
+//
+//        val extraLines: List[String] =
+//          if (intent.name == "no_intent" && intent.confidence > 0.99) {
+//            List("no_intent")
+//          } else {
+//            List(
+//              Some(s"    - intent: $intent"),
+//              Some(entities).filter(_.nonEmpty).map("    - entities\n" + _.map {
+//                case Entity(confidence_entity, confidence_group, end, entity, extractor, group, start, value) =>
+//                  s"        - $entity=$value ($confidence_entity)"
+//              }.mkString("\n")),
+//              Some(intent_ranking).filter(_.nonEmpty && intent.confidence < 0.9).map(_.map {
+//                case IntentRanking(confidence, name) =>
+//                  s"    - $name = $confidence"
+//              }).map(lines => (intent.name :: lines).mkString("    - ", "\n    - ", "\n"))
+//            ).flatten
+//          }
+//
+//        if (intent.name == "no_intent" && intent.confidence > 0.99) {
+//          base
+//        } else {
+//          (base :: extraLines).mkString("\n")
+//        }
     }.mkString("", "\n", "\n")
   }
 }

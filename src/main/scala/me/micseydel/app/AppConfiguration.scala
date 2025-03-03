@@ -18,7 +18,8 @@ object AppConfiguration {
     mqttConfig: Option[MqttConfig],
     fitbitAuthorizationBasic: Option[String],
     purpleAirUri: Option[String],
-    wyzeUri: Option[String]
+    wyzeUri: Option[String],
+    rasaHost: String
   )
 
   /**
@@ -69,7 +70,8 @@ object AppConfiguration {
           maybeMqttConfig,
           getOptionalString(config, "fitbit.authorizationBasic"),
           getOptionalString(config, "purpleair.uri"),
-          getOptionalString(config, "wyze.uri")
+          getOptionalString(config, "wyze.uri"),
+          config.getString("rasa.host")
         ))
     }
   }

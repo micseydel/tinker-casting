@@ -4,7 +4,7 @@ import akka.actor.typed
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, ActorSystem}
 import cats.data.NonEmptyList
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, RasaActor}
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.cast.chronicler.Chronicler
@@ -15,6 +15,8 @@ import java.util.concurrent.Executors
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 
 abstract class TinkerSystem {
+  def rasaActor: typed.ActorRef[RasaActor.Message] // FIXME: remove
+
   def newContext[T](actorContext: ActorContext[T]): TinkerContext[T]
 
   def actorSystem: ActorSystem[_]
@@ -90,15 +92,16 @@ abstract class TinkerSystem {
 }
 
 object TinkerSystem {
-  def apply(actorSystem: ActorSystem[_], tinkerBrain: ActorRef[TinkerBrain.Message], vaultKeeper: ActorRef[VaultKeeper.Message], chronicler: ActorRef[Chronicler.Message], gossiper: ActorRef[Gossiper.Message], hueControlActor: ActorRef[HueControl.Message], notifier: ActorRef[NotificationCenterManager.NotificationMessage],
+  def apply(rasaActor: typed.ActorRef[RasaActor.Message], actorSystem: ActorSystem[_], tinkerBrain: ActorRef[TinkerBrain.Message], vaultKeeper: ActorRef[VaultKeeper.Message], chronicler: ActorRef[Chronicler.Message], gossiper: ActorRef[Gossiper.Message], hueControlActor: ActorRef[HueControl.Message], notifier: ActorRef[NotificationCenterManager.NotificationMessage],
             networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
             actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message], eventReceiver: ActorRef[EventReceiver.ClaimEventType]): TinkerSystem = {
-    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, chronicler, gossiper, hueControlActor, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
+    new TinkerSystemImplementation(rasaActor, actorSystem, tinkerBrain, vaultKeeper, chronicler, gossiper, hueControlActor, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
   }
 }
 
 class TinkerSystemImplementation(
+                                  val rasaActor: typed.ActorRef[RasaActor.Message],
                                   val actorSystem: ActorSystem[_],
                                   val tinkerBrain: ActorRef[TinkerBrain.Message],
                                   vaultKeeperActor: ActorRef[VaultKeeper.Message],

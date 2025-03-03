@@ -3,7 +3,6 @@ package me.micseydel.actor
 import akka.actor.typed.{ActorRef, Behavior}
 import com.softwaremill.quicklens._
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.EventReceiver.TranscriptionCompleted
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
 import me.micseydel.dsl.Tinker.Ability
@@ -16,15 +15,16 @@ import me.micseydel.model.WhisperResultJsonProtocol._
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.{Common, NoOp}
 import spray.json._
 
 import java.io.File
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Path
 import java.time.ZonedDateTime
 import java.util.UUID
 import javax.sound.sampled.UnsupportedAudioFileException
 import scala.annotation.unused
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
+import scala.concurrent.ExecutionContextExecutorService
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 

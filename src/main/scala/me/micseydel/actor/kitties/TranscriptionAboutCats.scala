@@ -3,6 +3,7 @@ package me.micseydel.actor.kitties
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
 import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.model._
 import me.micseydel.util.StringUtil
 import me.micseydel.vault.NoteId
@@ -33,7 +34,7 @@ object TranscriptionAboutCats {
 
   def unapply(transcriptionEvent: TranscriptionEvent): Option[TranscriptionAboutCats] = {
     transcriptionEvent match {
-      case TranscriptionEvent(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(rawText, _), _), captureTime), noteId, Some(rasaResult))) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(rawText, _), _), captureTime), noteId), Some(rasaResult))) =>
         val rawTextStart = StringUtil.truncateText(rawText)
         val validatedCatsHelperMessage = rasaResultToCatsHelperObservation(rasaResult, captureTime, noteId)
         validatedCatsHelperMessage match {
@@ -51,7 +52,7 @@ object TranscriptionAboutCats {
         }
 
       // no cat intent
-      case TranscriptionEvent(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(rawText, _), _), captureTime), noteId, None)) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(rawText, _), _), captureTime), noteId), None)) =>
         Some(nonIntentResult(rawText, noteId, captureTime))
     }
   }

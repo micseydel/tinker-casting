@@ -62,7 +62,7 @@ object FrustrationListener {
     implicit val tinkerContext: TinkerContext[_] = context
 
     message match {
-      case event@TranscriptionEvent(transcription@NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(_, segments), WhisperResultMetadata(model, _, vaultPath, _)), captureTime), noteId, _)) =>
+      case event@TranscriptionEvent(transcription@NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(_, segments), WhisperResultMetadata(model, _, vaultPath, _)), captureTime), noteId)) =>
         val key = (model, captureTime)
 
         if (alreadySeenTranscriptions.contains(key)) {
@@ -160,7 +160,7 @@ object FrustrationListenerMarkdownModel {
       case Nil =>
         result
 
-      case TranscriptionEvent(NotedTranscription(capture, noteId, _)) :: theRest =>
+      case TranscriptionEvent(NotedTranscription(capture, noteId)) :: theRest =>
         toMarkdown(
           theRest,
           MarkdownUtil.listLineWithTimestampAndRef(

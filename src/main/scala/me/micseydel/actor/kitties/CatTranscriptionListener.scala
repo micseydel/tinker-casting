@@ -1,35 +1,36 @@
 package me.micseydel.actor.kitties
 
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
-import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.actor.kitties.TranscriptionAboutCats.{NoIntentJustWordMatch, NotAboutCats, WithIntent, WithIntentFailedExtraction}
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
+import me.micseydel.dsl._
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, StringUtil}
 import me.micseydel.vault.NoteId
-import org.slf4j.Logger
-import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import java.text.DecimalFormat
 import java.time.ZonedDateTime
+import scala.annotation.unused
 
 object CatTranscriptionListener {
-  // actor pattern
   sealed trait Message {
     def when: ZonedDateTime
   }
 
-  case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message {
-    override def when: ZonedDateTime = notedTranscription.capture.captureTime
+  case class TranscriptionEvent(rasaAnnotatedNotedTranscription: RasaAnnotatedNotedTranscription) extends Message {
+    override def when: ZonedDateTime = rasaAnnotatedNotedTranscription.notedTranscription.capture.captureTime
   }
 
   def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
-    implicit val c: TinkerContext[_] = context
+
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[TranscriptionEvent]]] = context.cast(DailyNotesRouter(
       "CatsTranscriptions notes",
       "catstranscriptions_notes",
@@ -37,8 +38,8 @@ object CatTranscriptionListener {
       toMarkdown
     ), "DailyNotesRouter")
 
-    context.actorContext.log.info(s"Subscribing to accurate Gossiper messages")
-    context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+    @unused // subscribes to Gossiper on our behalf
+    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener(Gossiper.SubscribeAccurate(_), context.messageAdapter(TranscriptionEvent)), "RasaListener")
 
     behavior(catsHelper, dailyNotesAssistant, Set.empty)
   }
@@ -75,7 +76,7 @@ object CatTranscriptionListener {
           behavior(catsHelper, dailyNotesAssistant, alreadyAcked + noteId)
         } else {
           event match {
-            case TranscriptionEvent(NotedTranscription(TranscriptionCapture(WhisperResult(_, WhisperResultMetadata(model, performedOn, _, perfCounterElapsed)), _), _, _)) =>
+            case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(_, WhisperResultMetadata(model, performedOn, _, perfCounterElapsed)), _), _), _)) =>
               context.actorContext.log.debug(s"Already ack'd $noteId, ignoring for model $model, performed on $performedOn taking $perfCounterElapsed")
           }
           Tinker.steadily
@@ -103,9 +104,10 @@ object CatTranscriptionListener {
     }
   }
 
-  case object MessageListJsonProtocol extends DefaultJsonProtocol {
-    import me.micseydel.model.NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat
+  //
 
+  case object MessageListJsonProtocol extends DefaultJsonProtocol {
+    import RasaAnnotatingListener.MessageListJsonProtocol.RasaAnnotatedNotedTranscriptionJsonFormat
     implicit val transcriptionEventFormat: RootJsonFormat[TranscriptionEvent] = jsonFormat1(TranscriptionEvent)
   }
 
@@ -131,8 +133,8 @@ object CatTranscriptionListener {
       }
     }
 
-    val allNoteFormatted: String = messages.distinctBy(_.notedTranscription.noteId).flatMap {
-      case message@TranscriptionEvent(NotedTranscription(TranscriptionCapture(_, captureTime), ref@NoteId(_), _)) =>
+    val allNoteFormatted: String = messages.distinctBy(_.rasaAnnotatedNotedTranscription.notedTranscription.noteId).flatMap {
+      case message@TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(_, captureTime), ref@NoteId(_)), _)) =>
         messageToUnfilteredListLine(message) match {
           case Right(line) =>
             Some(MarkdownUtil.listLineWithTimestampAndRef(captureTime, line, ref))
@@ -147,7 +149,7 @@ object CatTranscriptionListener {
         None
       case other =>
         other match {
-          case TranscriptionEvent(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId, rasaResult)) =>
+          case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId), rasaResult)) =>
             val rawTextStart = StringUtil.truncateText(whisperResult.whisperResultContent.text)
             rasaResult match {
               case Some(RasaResult(_, Intent(intentConfidence, "no_intent"), _, _, _)) if intentConfidence > .85 =>

@@ -78,7 +78,7 @@ object BaseWhisperListener {
   private object WhisperAggregationResult {
     def apply(notedTranscription: NotedTranscription): WhisperAggregationResult = {
       notedTranscription match {
-        case NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, performedOn, _, perfCounterElapsed)), captureTime), _, _) =>
+        case NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, performedOn, _, perfCounterElapsed)), captureTime), _) =>
           Partial(whisperResultContent.text, model, performedOn, perfCounterElapsed, captureTime)
       }
     }

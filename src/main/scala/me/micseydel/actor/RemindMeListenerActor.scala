@@ -48,7 +48,7 @@ object RemindMeListenerActor {
     implicit val c: TinkerContext[_] = context
     val replyTo = Some(SpiritId)
     message match {
-      case TranscriptionEvent(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId, _)) =>
+      case TranscriptionEvent(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId)) =>
         context.actorContext.log.info(s"Received $noteId")
         whisperResult match {
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>

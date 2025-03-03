@@ -7,7 +7,7 @@ import me.micseydel.actor.inactive.owntracks
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.perimeter.HueControl.HueConfig
 import me.micseydel.actor.perimeter.{HomeMonitorActor, HueControl, NtfyerActor}
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, TinkerOrchestrator}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, RasaActor, TinkerOrchestrator}
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.Tinker.Ability
@@ -99,8 +99,14 @@ object RootTinkerBehavior {
       "EventReceiver"
     )
 
+    val rasaActor: typed.ActorRef[RasaActor.Message] = context.spawn(
+      RasaActor(config.rasaHost), // FIXME: replace
+      "RasaActor"
+    )
+
     // magic
     val tinkerSystem = TinkerSystem(
+      rasaActor,
       context.system,
       tinkerBrain,
       vaultKeeper,

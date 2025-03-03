@@ -3,7 +3,7 @@ package me.micseydel.actor.transcription
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor.ollama.OllamaModel
 import me.micseydel.actor.ollama.OllamaModel.ChatResponseResult
-import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, ReceiveRasaResult, ReceiveResponseOllama, TranscriptionCompletedEvent}
+import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, ReceiveResponseOllama, TranscriptionCompletedEvent}
 import me.micseydel.model._
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.util.{StringUtil, TimeUtil}
@@ -21,8 +21,8 @@ private[transcription] object TranscriptionModel {
       message match {
         case TranscriptionCompletedEvent(wr) =>
           accumulatingResult.addTranscriptionCompletedEvent(TimedWhisperResult(wr, capture.transcriptionStartedTime))
-        case ReceiveRasaResult(RasaResult(_, Intent(_, intent), _, _, _), _) =>
-          accumulatingResult.copy(maybeRasaIntent = Some(intent))
+//        case ReceiveRasaResult(RasaResult(_, Intent(_, intent), _, _, _), _) =>
+//          accumulatingResult.copy(maybeRasaIntent = Some(intent))
         case ReceiveResponseOllama(chatResponse) =>
           chatResponse match {
             case result@OllamaModel.ChatResponseResult(_, _) => accumulatingResult.copy(maybeChatResponseResult = Some(result))

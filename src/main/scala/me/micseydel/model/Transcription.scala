@@ -17,8 +17,7 @@ object Transcription {
 
 case class NotedTranscription(
     capture: TranscriptionCapture,
-    noteId: NoteId,
-    rasaResult: Option[RasaResult]
+    noteId: NoteId
 )
 
 object NotedTranscription {
@@ -26,7 +25,7 @@ object NotedTranscription {
     import LinkIdJsonProtocol.noteIdFormat
     import RasaResultProtocol.rasaResultFormat
     import me.micseydel.model.TranscriptionCapture.TranscriptionCaptureJsonProtocol.transcriptionCaptureFormat
-    implicit val notedTranscriptionFormat: JsonFormat[NotedTranscription] = jsonFormat3(NotedTranscription.apply)
+    implicit val notedTranscriptionFormat: JsonFormat[NotedTranscription] = jsonFormat2(NotedTranscription.apply)
   }
 }
 
