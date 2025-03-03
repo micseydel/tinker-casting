@@ -47,6 +47,7 @@ object SleepReportActor {
 
       // uncomment this to fetch today's Fitbit sleep report on startup (instead of just at scheduled times)
       //                fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today())
+//      fitbitActor !! FitbitActor.RequestSleep(context.messageAdapter(ReceiveSleepReport), context.system.clock.today().minusDays(1))
 
       // uncomment to refresh Markdown on startup (e.g. if you're tinkering)
       //        jsonRef.read() match {
