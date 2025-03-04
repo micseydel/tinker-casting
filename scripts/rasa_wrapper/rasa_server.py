@@ -16,6 +16,10 @@ def entity_extraction(model: str):
         rasa_model = cats_rasa_model
     elif model == "lights":
         rasa_model = lights_rasa_model
+    elif model == "cats_test":
+        rasa_model = cats_rasa_model_to_test
+    elif model == "lights_test":
+        rasa_model = lights_rasa_model_to_test
     else:
         return jsonify({'message': f"unknown model {model}"}), 404
 
@@ -46,7 +50,9 @@ if __name__ == '__main__':
         print("Using port", port, "; loading Rasa now...")
 
         cats_rasa_model = ModelWrapper("models/cats")
+        cats_rasa_model_to_test = ModelWrapper("models/testing/cats")
         lights_rasa_model = ModelWrapper("models/lights")
+        lights_rasa_model_to_test = ModelWrapper("models/testing/lights")
 
         print("Starting Flask...")
         app.run(

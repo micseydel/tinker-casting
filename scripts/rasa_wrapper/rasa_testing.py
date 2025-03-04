@@ -1,3 +1,4 @@
+import sys
 from pprint import pprint
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,10 +22,10 @@ class RasaResult:
     entities: list[RasaEntity]
 
 
-rasa_model = rasa_wrapper.ModelWrapper()
+rasa_model = rasa_wrapper.ModelWrapper(sys.argv[1])
 print(f"[{datetime.now()}] Model loaded")
 
-nlu_yml = yaml.safe_load(open("data/nlu.yml").read())
+nlu_yml = yaml.safe_load(open(sys.argv[2]).read())
 
 intents = [block for block in nlu_yml['nlu'] if "intent" in block]
 
@@ -98,7 +99,7 @@ def f():
             combined_parsed_simple = {k: v for d in parsed_from_simple_entities for k, v in d.items()}
 
             if not entities:
-                if result_intent_name == intent_name:
+                if result_intent_name == intent_name or (intent_name == "no_intent" and result_intent_name == "nlu_fallback"):
                     succeeded += 1
                 else:
                     failed += 1
@@ -144,7 +145,15 @@ for intent_name, failed, succeeded, failures in t:
         # pprint(combined_parsed_simple)
         # pprint(entity)
         pprint({k: v for k, v in entity.items() if (k not in ("extractor", "processors", "start", "end"))})
-        expected = combined_parsed_simple[entity["entity"]][1]
+        key = None
+        try:
+            key = entity["entity"]
+            expected = combined_parsed_simple[key][1]
+        except KeyError as e:
+            if key is not None:
+                raise Exception(f"Key {key} was not in {combined_parsed_simple}") from e
+
+            raise Exception(f"Did not find key `entity` in: {entity}") from e
         got = entity["value"]
         print("  - Expected:", expected)
         print("  - But got: ", got)

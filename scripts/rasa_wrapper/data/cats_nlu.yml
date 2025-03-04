@@ -53,6 +53,8 @@ nlu:
       - I can hear [Butter](cat:Butter) using [the front litter](litterbox:front).
       - I saw [Butter](cat:Butter) using [the back litter](litterbox:back).
       - [Butter](cat:Butter) is using [the back litter](litterbox:back).
+      - I believe [Butter](cat:Butter) is using [the back glitter box](litterbox:back).
+      - I just heard [peanut](cat:Peanut) pee in [the back litter box](litterbox:back).
 # need to add capturing senses!
 
   - intent: posthoc_litter_observation
@@ -104,6 +106,7 @@ nlu:
       - [The front litter](litterbox:front) had [a pee clump](urine:two).
       - [The front letter](litterbox:front) had [two B clumps](urine:two).
       - [The front litter](litterbox:front) had [one poop](poop:one) and [two pee clumps](urine:two).
+      - [The back litter](litterbox:back) had [two pee clumps](urine:two) and [one poop](poop:one).
       - I sifted [one poop](poop:one) and [two pee clumps](urine:two) from [the front litter box](litterbox:front).
       - I sifted [two poops](poop:two) and [two pee clumps](urine:two) from [the back litter box](litterbox:back).
       - [The back litter](litterbox:back) had [two poops](poop:two) and [two pee clumps](urine:two).
@@ -133,54 +136,31 @@ nlu:
       - [The back litter](litterbox:back) had [both pee](urine:one) and [poop](poop:one) when I sifted it.
       - I sifted [the pea](urine:one) from [the back litter box](litterbox:back).
 
-  - lookup: color
-    examples: |
-      - red
-      - orange
-      - yellow
-      - green
-      - cyan
-      - blue
-      - purple
-      - white
-      - relaxed
-
-  - regex: brightness
-    examples: |
-      - \b([0-9]{1,2}|100)\b
-
-  - lookup: light_state
-    examples: |
-      - on
-      - off
-
-  - intent: set_the_lights
-    examples: |
-      - Set the lights to [red](color:red).
-      - Set the lights to [orange](color:orange).
-      - Set the lights to [yellow](color:yellow).
-      - Set the lights to [green](color:green).
-      - Set the lights to [cyan](color:cyan).
-      - Set the lights to [blue](color:blue).
-      - Turn the lights to [purple](color:purple).
-      - Turn the lights to [white](color:white).
-      - Turn [off](light_state:off) the lights.
-      - Set the lights to [off](light_state:off).
-      - Set the lights to [on](light_state:on).
-      - Turn [on](light_state:on) the lights.
-      - Set the lights to [40](brightness:40).
-      - Set the lights to [50](brightness:50).
-      - Set the lights to [100](brightness:100).
-      - Set the lights to [0](brightness:0).
-      - Set brightness to [100](brightness:100).
-      - Set all the lights to [white](color:white).
-      - Set all lights to [on](light_state:on).
-
-# ask when Peanut last peed / how long since he last peed
+#  - lookup: color
+#    examples: |
+#      - red
+#      - orange
+#      - yellow
+#      - green
+#      - cyan
+#      - blue
+#      - purple
+#      - white
+#      - relaxed
+#
+#  - regex: brightness
+#    examples: |
+#      - \b([0-9]{1,2}|100)\b
+#
+#  - lookup: light_state
+#    examples: |
+#      - on
+#      - off
 
   - intent: no_intent
     examples: |
       - Peanut is sleeping near me on the heating pad, although it is not currently heated.
+      - Peanut is sleeping near me on the warm heating pad.
       - Butter was sleeping on my bed
       - Peanut currently has zoomies
       - Butter was being chirpy and cuddly and cute just now
@@ -200,3 +180,23 @@ nlu:
       - Both the cats are on my bed.
       - Peanut is on the heating pad which is currently heated.
       - Peanut is sleeping near me on the heating pad, although it is not currently turned on.
+      - Set the lights to read.
+      - Set the lights to orange.
+      - Set the lights to yellow.
+      - Set the lights to green.
+      - Set the lights to cyan.
+      - Set the lights to blue.
+      - Turn the lights to purple.
+      - Turn the lights to white.
+      - Turn off the lights.
+      - Set the lights to off.
+      - Set the lights to on.
+      - Turn on the lights.
+      - Set the lights to 40.
+      - Set the lights to 50.
+      - Set the lights to 100.
+      - Set the lights to 0.
+      - Set brightness to 100.
+      - Set all the lights to white.
+      - Set all lights to on.
+      - Set the lights to 100% weight

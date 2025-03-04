@@ -1,9 +1,9 @@
 version: "3.1"
 
 intents:
-  - observed_litter_being_used
-  - posthoc_litter_observation
-  - observe_sifted_contents
+#  - observed_litter_being_used
+#  - posthoc_litter_observation
+#  - observe_sifted_contents
   - set_the_lights
   - no_intent
 

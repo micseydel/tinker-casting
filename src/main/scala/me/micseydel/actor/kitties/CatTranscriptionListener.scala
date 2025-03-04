@@ -39,7 +39,7 @@ object CatTranscriptionListener {
     ), "DailyNotesRouter")
 
     @unused // subscribes to Gossiper on our behalf
-    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("cats", Gossiper.SubscribeAccurate(_), context.messageAdapter(TranscriptionEvent)), "RasaListener")
+    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("cats", Gossiper.SubscribeAccurate(_), context.messageAdapter(TranscriptionEvent), Some("cats_test")), "RasaListener")
 
     behavior(catsHelper, dailyNotesAssistant, Set.empty)
   }

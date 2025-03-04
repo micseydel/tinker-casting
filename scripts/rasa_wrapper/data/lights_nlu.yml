@@ -1,0 +1,172 @@
+version: "3.1"
+
+nlu:
+
+  # ENTITY DEFINITIONS
+
+  - lookup: color
+    examples: |
+      - red
+      - orange
+      - yellow
+      - green
+      - cyan
+      - blue
+      - purple
+      - white
+      - relaxed
+
+  - regex: brightness
+    examples: |
+      - \b([0-9]{1,2}|100)\b
+
+  - lookup: light_state
+    examples: |
+      - on
+      - off
+
+  - intent: set_the_lights
+    examples: |
+      - Set the lights to [red](color:red).
+      - Set the lights to [orange](color:orange).
+      - Set the lights to [yellow](color:yellow).
+      - Set the lights to [green](color:green).
+      - Set the lights to [cyan](color:cyan).
+      - Set the lights to [blue](color:blue).
+      - Turn the lights to [purple](color:purple).
+      - Turn the lights to [white](color:white).
+      - Turn [off](light_state:off) the lights.
+      - Set the lights to [off](light_state:off).
+      - Set the lights to [on](light_state:on).
+      - Turn [on](light_state:on) the lights.
+      - Set the lights to [40](brightness:40).
+      - Set the lights to [50](brightness:50).
+      - Set the lights to [100](brightness:100).
+      - Set the lights to [0](brightness:0).
+      - Set brightness to [100](brightness:100).
+      - Set all the lights to [white](color:white).
+      - Set all lights to [on](light_state:on).
+      - Set the lights to [100](brightness:100)% [weight](color:white)
+
+# ask when Peanut last peed / how long since he last peed
+
+  - intent: no_intent
+    examples: |
+      - Peanut is sleeping near me on the heating pad, although it is not currently heated.
+      - Peanut is sleeping near me on the warm heating pad.
+      - Butter was sleeping on my bed
+      - Peanut currently has zoomies
+      - Butter was being chirpy and cuddly and cute just now
+      - This is a quick test beginning at about 9.17pm and ending at about 9.17pm.
+      - Peanut is chilling in my lap and Butter is in the front cat tree cubby and I think the recycling is being picked up right now.
+      - Guessing by smell, the front litter use was a poop.
+      - I just ate.
+      - I thought Butter was going to be sleeping in the front cat tree cubby, but she was actually fine next to Peanut.
+      - Peanut woke me up because he was up at my gesture. He stood there weird.
+      - I think the recycling truck just went by.
+      - The dump truck just did their pickup.
+      - Butter is sleeping in the cubby.
+      - Peanut is sleeping in the scoop thing.
+      - Butter is sleeping on my bed.
+      - Peanut is sleeping on the heating pad.
+      - Peanut and Butter are sleeping on my bed with me.
+      - Both the cats are on my bed.
+      - Peanut is on the heating pad which is currently heated.
+      - Peanut is sleeping near me on the heating pad, although it is not currently turned on.
+      - I saw Peanut use the front litter box
+      - I heard Butter use the back litter box
+      - I think Butter used the back letter box
+      - I heard Peanut pee in the front layer
+      - I think I heard Peanut use the back layer
+      - I think I saw Butter use the front theater
+      - Peanut just used the back mirror
+      - I can hear Peanut peeing in the back glitter
+      - I heard Peanut use the back letter a little bit ago.
+      - I believe Peanut used the back litter.
+      - Peanut used the front layer.
+      - Butter is using the front litter.
+      - PNET is currently using the front letter.
+      - I think Butter used the front litter.
+      - I saw Butter use the back litter.
+      - I heard Butter use the back letter.
+      - Butter used the back litterbox.
+      - I believe Butter used the back litter.
+      - I believe Butter used the front litter.
+      - I can hear Butter using the front litter.
+      - I saw Butter using the back litter.
+      - Butter is using the back litter.
+      - I believe Butter is using the back glitter box.
+      - I just heard peanut pee in the back litter box.
+      - the back litter is clean.
+      - the front mirror is clean.
+      - the front letter has been used.
+      - both litter boxes have been used.
+      - both litter boxes are clean.
+      - the back litter has been used.
+      - The front litter box is clean.
+      - The back litter box is currently cleaned.
+      - The back glitter is also dirty.
+      - When I got home, the front letter was used.
+      - It looks like the front letter was used while I was on a walk.
+      - Both letterboxes are currently clean.
+      - The back litter is soiled.
+      - The back litter is soil.
+      - The back letterbox is soiled.
+      - It looks like the back letter was used while I was in the shower.
+      - I sifted two poops and one pee clump from the back litter box
+      - I sifted one pee clump from the front litter box
+      - There were two poops in the back litter box
+      - I found one pee clump and one poop in the front litter
+      - I sifted a pea clump from the front litter.
+      - I sifted one big pea clump from the back litter.
+      - The back litter had two pea clumps.
+      - I sifted one pea clump from the front litter.
+      - The back litter had a big pea clump.
+      - I sifted a peak lump from the back litter.
+      - The front litter had poop in it.
+      - The back litter had both pee and poop when I sifted it.
+      - I sifted pee from the front litter.
+      - I sifted pea from the back litter.
+      - I sifted PE from the front letterbox a little bit earlier.
+      - The back letter had a P clump.
+      - I sifted the front letter and found a P-clump.
+      - The front letter had both P and poop in it.
+      - The front litter had a little peak lump.
+      - I sifted two poops and one pee clump from the back litter box
+      - I sifted pee from the front litter box
+      - I sifted two pea clubs from the front litter.
+      - I sifted two pea clumps from the front litter.
+      - The front letter had two P clumps.
+      - The front litter had poop and two peas.
+      - The front litter had a pee clump.
+      - The front letter had two B clumps.
+      - The front litter had one poop and two pee clumps.
+      - The back litter had two pee clumps and one poop.
+      - I sifted one poop and two pee clumps from the front litter box.
+      - I sifted two poops and two pee clumps from the back litter box.
+      - The back litter had two poops and two pee clumps.
+      - I sifted both poop and pee from the back litter
+      - I sifted a small pea clump from the back letter.
+      - I sifted two poops from the front litter box.
+      - The back litter had one poop.
+      - I sifted the pea clump from the front litter box.
+      - I sifted the pee from the back litter box.
+      - The back letterbox had the poop in it.
+      - I found the pee clump in the back letter box.
+      - I sifted the poop from the back litter box.
+      - I sifted the pee from the front litter box.
+      - The front letterbox had the poop in it.
+      - I sifted the poop from the front litter box.
+      - I sifted the pee and two poops from the front litter box.
+      - I sifted a litter clump from the front litter box.
+      - I sifted two poops from the front litter box.
+      - I sifted a pee and two poops from the back litter box.
+      - I sifted a pee and a poop from the back litter box.
+      - I sifted a pee and a poops from the front litter box.
+      - The front litter had both pee and poop.
+      - I sift both pee and poop from the front litter.
+      - The front litter had three pea clumps.
+      - I sifted three pea clumps from the front litter.
+      - There were three pee clumps in the back litter.
+      - The back litter had both pee and poop when I sifted it.
+      - I sifted the pea from the back litter box.

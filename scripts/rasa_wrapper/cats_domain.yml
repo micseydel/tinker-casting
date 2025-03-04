@@ -1,0 +1,17 @@
+version: "3.1"
+
+intents:
+  - observed_litter_being_used
+  - posthoc_litter_observation
+  - observe_sifted_contents
+#  - set_the_lights
+  - no_intent
+
+#entities:
+#  - number
+
+responses: {}
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true

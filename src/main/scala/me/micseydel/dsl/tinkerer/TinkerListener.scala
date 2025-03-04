@@ -7,12 +7,14 @@ import me.micseydel.actor.RasaActor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
-import me.micseydel.model.{NotedTranscription, RasaResult}
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.model.{Entity, NotedTranscription, RasaResult}
 import me.micseydel.util.StringImplicits.RichString
+import me.micseydel.util.{MarkdownUtil, StringUtil}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.util.{Failure, Success}
 
@@ -49,7 +51,7 @@ object RasaAnnotatingListener {
   sealed trait Message
   private case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
-  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription], replacementCandidate: Option[String] = None)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     context.system.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
@@ -57,12 +59,22 @@ object RasaAnnotatingListener {
     implicit val duration: FiniteDuration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
     implicit val timeout: Timeout = Timeout(duration)
 
+    val maybeExperiment = replacementCandidate.map { replacement =>
+      context.cast(RasaExperiment(model, replacement), "RasaExperiment")
+    }
+
+    def getRasaResultFut(rawText: String, modelChoice: String): Future[RasaResult] = {
+      Await.ready[RasaResult](context.system.rasaActor.ask(RasaActor.GetRasaResult(rawText, modelChoice, _)), duration)
+    }
+
     Tinker.receiveMessage {
       case TranscriptionEvent(notedTranscription) =>
         val rawText = notedTranscription.capture.whisperResult.whisperResultContent.text
 
+        val maybeComparisonFut: Option[Future[RasaResult]] = replacementCandidate.map(getRasaResultFut(rawText, _))
+
         val maybeRasaResult: Option[RasaResult] = if (rawText.wordCount < 30) {
-          Await.ready[RasaResult](context.system.rasaActor.ask(RasaActor.GetRasaResult(rawText, model, _)), duration).value match {
+          getRasaResultFut(rawText, model).value match {
             case None =>
               context.actorContext.log.warn(s"It looks like the future for ${notedTranscription.noteId} was empty")
               None
@@ -71,13 +83,32 @@ object RasaAnnotatingListener {
                 case Failure(exception) =>
                   context.actorContext.log.warn(s"Fetching Rasa result for ${notedTranscription.noteId} failed", exception)
                   None
-                case Success(rasaResult) => Some(rasaResult)
+                case Success(rasaResult) =>
+                  context.actorContext.log.warn(s"Entering FOR comprehension for $maybeExperiment, $maybeComparisonFut")
+                  for {
+                    experiment <- maybeExperiment
+                    comparisonFut <- maybeComparisonFut
+                  } {
+                    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
+                    context.actorContext.log.warn(s"Setting onComplete for ${notedTranscription.noteId}")
+                    // FIXME: lazy
+                    comparisonFut.onComplete {
+                      case Failure(exception) =>
+                        print("Failure!")
+                        exception.printStackTrace()
+                      case Success(toCompare) =>
+                        print("Success!")
+                        experiment !! RasaExperiment.Receive(notedTranscription, rasaResult, toCompare)
+                    }
+                  }
+                  Some(rasaResult)
               }
           }
         } else {
           None
         }
 
+        context.actorContext.log.warn(s"Messaging listener $maybeRasaResult")
         listener !! RasaAnnotatedNotedTranscription(notedTranscription, maybeRasaResult)
 
         Tinker.steadily
@@ -93,5 +124,58 @@ object RasaAnnotatingListener {
     import me.micseydel.model.RasaResultProtocol.rasaResultFormat
     implicit val RasaAnnotatedNotedTranscriptionJsonFormat: RootJsonFormat[RasaAnnotatedNotedTranscription] =
       jsonFormat2(RasaAnnotatedNotedTranscription)
+  }
+}
+
+object RasaExperiment {
+  sealed trait Message
+  final case class Receive(notedTranscription: NotedTranscription, rasaResult: RasaResult, rasaResultToCompare: RasaResult) extends Message
+
+  def apply(model: String, testModel: String)(implicit Tinker: Tinker): Ability[Message] = {
+    val noteName = s"Rasa Experiment comparing $model and $testModel"
+    NoteMakingTinkerer(noteName, TinkerColor(100, 50, 50), "👨‍🔬") { (context, noteRef) =>
+      context.actorContext.log.warn(s"Created [[$noteName]]")
+      Tinker.receiveMessage {
+        case Receive(notedTranscription, rasaResult, rasaResultToCompare) =>
+          context.actorContext.log.warn(s"Received ${notedTranscription.noteId}, processing...")
+          val elaboration = (rasaResult, rasaResultToCompare) match {
+            case (
+              RasaResult(reference_entities, reference_intent, reference_intent_ranking, _, _),
+              RasaResult(entities, intent, intent_ranking, _, _)
+              ) =>
+              if (reference_intent.name == intent.name) {
+                // FIXME: this is sloppy, an entity can appear multiple times
+                if (reference_entities.map(e => e.entity -> e.value).toMap == entities.map(e => e.entity -> e.value).toMap) {
+                  s"    - Intent (${reference_intent.name}) and entities match"
+                } else {
+                  val entitiesElaboration = formattedEntitiesMarkdown(model, reference_entities)
+                  s"    - Intent (${reference_intent.name}) matches but entities differ\n$entitiesElaboration"
+                }
+              } else {
+                s"""    - Intent ${intent.name} (${intent.confidence}) did not match reference intent ${reference_intent.name} (${reference_intent.confidence})
+                   |    - $model $reference_intent_ranking
+                   |    - $testModel $intent_ranking
+                   |""".stripMargin
+              }
+          }
+
+          val firstLine = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, StringUtil.truncateText(notedTranscription.capture.whisperResult.whisperResultContent.text), notedTranscription.noteId)
+          noteRef.appendOrThrow(
+            s"""$firstLine
+               |$elaboration
+               |""".stripMargin)
+          Tinker.steadily
+      }
+    }
+  }
+
+  private def formattedEntitiesMarkdown(model: String, entities: List[Entity]): String = {
+    val entitiesFormatted = entities.map {
+      case Entity(confidence_entity, confidence_group, _, entity, _, group, _, value) =>
+        s"        - $entity -> $value ($confidence_entity; $group, $confidence_group)"
+    }.mkString("\n")
+    s"""    - $model
+       |$entitiesFormatted
+       |""".stripMargin
   }
 }
