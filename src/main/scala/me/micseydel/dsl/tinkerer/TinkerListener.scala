@@ -84,7 +84,7 @@ object RasaAnnotatingListener {
                   context.actorContext.log.warn(s"Fetching Rasa result for ${notedTranscription.noteId} failed", exception)
                   None
                 case Success(rasaResult) =>
-                  context.actorContext.log.warn(s"Entering FOR comprehension for $maybeExperiment, $maybeComparisonFut")
+                  context.actorContext.log.debug(s"Entering FOR comprehension for $maybeExperiment, $maybeComparisonFut")
                   for {
                     experiment <- maybeExperiment
                     comparisonFut <- maybeComparisonFut
@@ -132,10 +132,10 @@ object RasaExperiment {
   def apply(model: String, testModel: String)(implicit Tinker: Tinker): Ability[Message] = {
     val noteName = s"Rasa Experiment comparing $model and $testModel"
     NoteMakingTinkerer(noteName, TinkerColor(100, 50, 50), "👨‍🔬") { (context, noteRef) =>
-      context.actorContext.log.warn(s"Created [[$noteName]]")
+      context.actorContext.log.debug(s"Created [[$noteName]]")
       Tinker.receiveMessage {
         case Receive(notedTranscription, rasaResult, rasaResultToCompare) =>
-          context.actorContext.log.warn(s"Received ${notedTranscription.noteId}, processing...")
+          context.actorContext.log.debug(s"Received ${notedTranscription.noteId}, processing...")
           val elaboration = (rasaResult, rasaResultToCompare) match {
             case (
               RasaResult(reference_entities, reference_intent, reference_intent_ranking, _, _),
