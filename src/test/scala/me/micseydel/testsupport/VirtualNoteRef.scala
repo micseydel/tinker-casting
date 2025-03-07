@@ -13,7 +13,7 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class VirtualNoteRef(noteId: String, private var contents: String = "", val helper: Option[ActorRef[NoteRefWatcherHelper.Message]] = None) extends NoteRef(NoteId(noteId)) {
+class VirtualNoteRef(noteId: String, private var contents: String = "", val helper: Option[ActorRef[NoteRefWatcherHelper.Message]] = None) extends NoteRef(NoteId(noteId), None) {
 
   override def toString: String = s"VirtualNoteRef($noteId)"
 

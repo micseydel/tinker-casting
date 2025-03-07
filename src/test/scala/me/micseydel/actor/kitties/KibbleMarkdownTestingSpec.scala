@@ -1,10 +1,10 @@
 package me.micseydel.actor.kitties
 
 import akka.event.slf4j.Logger
-import me.micseydel.TestTinkerContainer
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
 import me.micseydel.actor.kitties.kibble.KibbleModel.{KibbleContainer, RectangularL, RectangularS}
 import me.micseydel.actor.kitties.kibble.{KibbleManagerActor, KibbleMarkdownGenerator}
+import me.micseydel.testsupport.TestTinkerContainer
 import me.micseydel.vault.NoteId
 
 import java.time.ZonedDateTime
@@ -29,9 +29,9 @@ class KibbleMarkdownTestingSpec extends TestTinkerContainer {
 
       println(markdown)
 
-      section shouldEqual("""- \[2024-11-04\] 117
+      section shouldEqual """- \[2024-11-04\] 117
                             |- \[2024-11-03\] 115
-                            |""".stripMargin)
+                            |""".stripMargin
     }
 
     "TESTING" in {

@@ -25,6 +25,6 @@ object TestHelpers {
   def simpleNotedTranscription(text: String, time: ZonedDateTime, noteId: NoteId): NotedTranscription = {
     val whisperResult = WhisperResult(WhisperResultContent(text, List(WhisperSegment(0, text))), WhisperResultMetadata(LargeModel, "performedOn", "vaultPath", -1))
 
-    NotedTranscription(TranscriptionCapture(whisperResult, time), noteId, None)
+    NotedTranscription(TranscriptionCapture(whisperResult, time), noteId)
   }
 }

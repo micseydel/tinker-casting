@@ -2,11 +2,10 @@ package me.micseydel.testsupport
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
-import me.micseydel.TinkerProbeActor
-import me.micseydel.TinkerProbeActor.RecordSideEffect
-import me.micseydel.actor.notifications.NotificationCenterManager
-import me.micseydel.actor.notifications.NotificationCenterManager.{HueCommand, Notification}
-import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
+import me.micseydel.actor.notifications.NotificationCenterManager.HueCommand
+import me.micseydel.actor.perimeter.HueControl
+import me.micseydel.actor.perimeter.HueControl.NoteUpdated
+import me.micseydel.testsupport.TinkerProbeActor.RecordSideEffect
 
 object HueControlForTesting {
   def apply(probe: ActorRef[TinkerProbeActor.Message]): Behavior[HueControl.Message] = Behaviors.setup { context =>
@@ -19,6 +18,9 @@ object HueControlForTesting {
         ???
 
       case update: HueControl.StateUpdate =>
+        ???
+
+      case NoteUpdated(noOp) =>
         ???
     }
   }

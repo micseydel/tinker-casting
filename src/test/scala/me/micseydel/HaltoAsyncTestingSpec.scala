@@ -5,6 +5,7 @@ import akka.actor.typed.{ActorRef, Scheduler}
 import me.micseydel.actor.FrustrationListener.DistressDetected
 import me.micseydel.actor.Halto
 import me.micseydel.actor.notifications.NotificationCenterManager
+import me.micseydel.actor.notifications.NotificationCenterManager.Chime
 import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetResults}
 import me.micseydel.actor.perimeter.fitbit.FitbitActor
 import me.micseydel.actor.perimeter.fitbit.FitbitModel.{LevelsData, SleepEntry, SleepReport, SleepSummary}
@@ -13,7 +14,8 @@ import me.micseydel.app.AppConfiguration.NtfyKeys
 import me.micseydel.dsl.TinkerSystem
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.model._
-import me.micseydel.testsupport.{JsonRefForTesting, NoteRefWatcherHelper, TestHelpers, VirtualNoteRef}
+import me.micseydel.testsupport.TinkerProbeActor.RichTinkerProbeActor
+import me.micseydel.testsupport.{JsonRefForTesting, NoteRefWatcherHelper, SpiritTestKit, TestHelpers, TestTinkerContainer, TinkerProbeActor, TinkerTest, VirtualNoteRef}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.{JsonRef, NoteRef}
@@ -71,7 +73,7 @@ class HaltoAsyncTestingSpec extends TestTinkerContainer {
 
         //      halto ! Halto.ReceiveSleepReport(SleepReport())
         val aranet = Aranet(address = "", co2 = 0, humidity = 0, name = "1A300", pressure = 0, rssi = 0, temperature = 0)
-        halto ! Halto.ReceiveAranetResult(AranetResults(Map("1A300" -> aranet), AranetActor.Meta(0, ZonedDateTime.now())))
+        halto ! Halto.ReceiveAranetResult(AranetResults(List(aranet), AranetActor.Meta(0, ZonedDateTime.now())))
         //      halto ! Halto.ReceiveFrustrationDetected(DistressDetected())
 
         // make sure the message had time to propagate FIXME may be better way to do this
@@ -123,7 +125,7 @@ class HaltoAsyncTestingSpec extends TestTinkerContainer {
         // ignore first write, before hunger message
         //        todaysHaltoNoteRef.interceptWrite(tinkerSystem.actorSystem.scheduler)
 
-        val notedTranscription = NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent("", Nil), WhisperResultMetadata(LargeModel, "", "", -1)), ZonedDateTime.now()), NoteId(""), None)
+        val notedTranscription = NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent("", Nil), WhisperResultMetadata(LargeModel, "", "", -1)), ZonedDateTime.now()), NoteId(""))
         halto ! Halto.ReceiveFrustrationDetected(DistressDetected(notedTranscription, Nil))
 
         // make sure the message had time to propagate FIXME may be better way to do this
@@ -146,6 +148,8 @@ class HaltoAsyncTestingSpec extends TestTinkerContainer {
             // FIXME: something with message
           case NotificationCenterManager.HueCommand(command) =>
             command should equal(HueControl.DoALightShow())
+
+          case Chime(_) => ???
         }
       }
     }

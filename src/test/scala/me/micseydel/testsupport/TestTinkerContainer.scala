@@ -6,16 +6,16 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Scheduler}
 import akka.util.Timeout
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, RasaActor}
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.SideEffect
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.Chronicler.ReceiveNotePing
 import me.micseydel.dsl.cast.{Gossiper, NetworkPerimeterActor, TimeKeeper, TinkerBrain}
 import me.micseydel.testsupport.TimeOrchestratorForTesting.Fetch
-import me.micseydel.testsupport._
 import me.micseydel.vault.VaultKeeper
 import me.micseydel.vault.persistence.{JsonRef, NoteRef}
 import org.scalamock.scalatest.MockFactory
@@ -127,6 +127,8 @@ class TinkerSystemForTesting(
   override def clock: TinkerClock = tinkerClock
 
   override def eventReceiver: ActorRef[EventReceiver.ClaimEventType] = ???
+
+  override def rasaActor: ActorRef[RasaActor.Message] = ???
 }
 
 abstract class TinkerTest(val noteRefs: Map[String, NoteRef],
@@ -213,6 +215,7 @@ object ChroniclerForTest {
           case Chronicler.TranscriptionCompletedEvent(event) => ???
           case Chronicler.ActOnNoteRef(noteId, event) => ???
           case ack@Chronicler.ListenerAcknowledgement(noteRef, timeOfAck, details, setNoteState) => context.log.info(s"Ignoring $ack")
+          case ReceiveNotePing(ping) => ???
         }
         Behaviors.same
     }

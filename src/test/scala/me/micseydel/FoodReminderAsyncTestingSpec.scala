@@ -10,7 +10,7 @@ import me.micseydel.actor.HungerTracker.HungerState
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.SideEffect
 import me.micseydel.dsl.SpiritRef
-import me.micseydel.testsupport.{NoteRefWatcherHelper, VirtualNoteRef}
+import me.micseydel.testsupport.{NoteRefWatcherHelper, SpiritTestKit, TestTinkerContainer, TinkerProbeActor, TinkerTest, VirtualNoteRef}
 
 import java.time.{LocalDate, LocalTime, ZoneId, ZonedDateTime}
 import java.util.concurrent.TimeUnit

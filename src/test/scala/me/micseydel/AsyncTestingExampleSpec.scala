@@ -6,7 +6,7 @@ import me.micseydel.actor.kitties.CatNotificationsManager
 import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
 import me.micseydel.actor.notifications.{NotificationCenterManager, UpcomingNotificationsManager}
 import me.micseydel.model.BackLitter
-import me.micseydel.testsupport.{JsonRefForTesting, TestHelpers, TimeOrchestratorForTesting, VirtualNoteRef}
+import me.micseydel.testsupport.{JsonRefForTesting, SpiritTestKit, TestHelpers, TestTinkerContainer, TimeOrchestratorForTesting, TinkerTest, VirtualNoteRef}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.{JsonRef, NoteRef}
 

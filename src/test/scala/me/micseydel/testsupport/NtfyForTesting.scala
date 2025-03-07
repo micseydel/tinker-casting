@@ -2,7 +2,6 @@ package me.micseydel.testsupport
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
-import me.micseydel.TinkerProbeActor
 import me.micseydel.actor.notifications.NotificationCenterManager.PushNotification
 import me.micseydel.actor.perimeter.NtfyerActor
 

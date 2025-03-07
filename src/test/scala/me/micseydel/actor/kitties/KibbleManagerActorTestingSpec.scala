@@ -3,10 +3,9 @@ package me.micseydel.actor.kitties
 import akka.actor.typed.ActorRef
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor
 import me.micseydel.dsl.cast.Gossiper
-import me.micseydel.testsupport.{JsonRefForTesting, NoteRefWatcherHelper, TestHelpers, VirtualNoteRef}
+import me.micseydel.testsupport.{JsonRefForTesting, NoteRefWatcherHelper, SpiritTestKit, TestHelpers, TestTinkerContainer, TinkerTest, VirtualNoteRef}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.JsonRef
-import me.micseydel.{SpiritTestKit, TestTinkerContainer, TinkerTest}
 
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
