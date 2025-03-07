@@ -90,14 +90,12 @@ object RasaAnnotatingListener {
                     comparisonFut <- maybeComparisonFut
                   } {
                     implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
-                    context.actorContext.log.warn(s"Setting onComplete for ${notedTranscription.noteId}")
+                    context.actorContext.log.debug(s"Setting onComplete for ${notedTranscription.noteId}")
                     // FIXME: lazy
                     comparisonFut.onComplete {
                       case Failure(exception) =>
-                        print("Failure!")
                         exception.printStackTrace()
                       case Success(toCompare) =>
-                        print("Success!")
                         experiment !! RasaExperiment.Receive(notedTranscription, rasaResult, toCompare)
                     }
                   }
@@ -108,7 +106,7 @@ object RasaAnnotatingListener {
           None
         }
 
-        context.actorContext.log.warn(s"Messaging listener $maybeRasaResult")
+        context.actorContext.log.debug(s"Messaging listener $maybeRasaResult")
         listener !! RasaAnnotatedNotedTranscription(notedTranscription, maybeRasaResult)
 
         Tinker.steadily

@@ -145,8 +145,7 @@ object Chronicler {
               val wrapper = {
                 val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
                 val behavior = TranscriptionNoteWrapper(capture, context.self)
-                context.actorContext.log.warn(
-                  // FIXME: how is the actor getting created without being added to this map? akka.actor.InvalidActorNameException
+                context.actorContext.log.debug(
                   s"Creating note wrapper actor with name $name (wavPath $wavPath); " +
                     s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(wavName)}")
                 context.cast(behavior, name)

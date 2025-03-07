@@ -36,7 +36,7 @@ def http_call(callback_url, data):
     try:
         resp = urllib.request.urlopen(req, timeout=10)
     except URLError as e:
-        print("Callback !!! FAILED !!!!", e)
+        print(f"Callback !!! FAILED !!!! for url {callback_url}", e)
         traceback.print_exc()
     else:
         response_text = resp.read().decode('utf-8')
