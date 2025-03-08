@@ -1,118 +1,107 @@
 package me.micseydel.actor.kitties.kibble
 
-import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{Event, KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
-import me.micseydel.actor.kitties.kibble.KibbleModel._
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.NoOp
+import me.micseydel.dsl.Tinker
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
-import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
+import me.micseydel.model.NotedTranscription
+import me.micseydel.util.MarkdownUtil
+import org.slf4j.Logger
 
-import java.time.ZonedDateTime
-import scala.annotation.unused
+import scala.annotation.{tailrec, unused}
 import scala.util.{Failure, Success}
 
-// FIXME: emit Rasa training data? (or almost-Rasa?)
 object KibbleManagerActor {
-  sealed trait Event {
-    def time: ZonedDateTime
+  sealed trait Message
 
-    def noteId: NoteId
-  }
+  private[kitties] final case class MaybeHeardKibbleMention(notedTranscription: NotedTranscription) extends Message
 
-  private[kitties] sealed trait KibbleContainerMeasurement extends Event {
-    def container: KibbleContainer
+  //  sealed trait Event extends Message
 
-    def massGrams: Int
-  }
+  //  private[kitties] sealed trait KibbleContainerMeasurement extends Event {
+  //    def container: KibbleContainer
+  //
+  //    def massGrams: Int
+  //  }
 
-  private[kitties] case class KibbleRefill(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends KibbleContainerMeasurement
+  //  private[kitties] case class KibbleRefill(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends KibbleContainerMeasurement
+  //
+  //  private[kitties] case class RemainingKibbleMeasure(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends KibbleContainerMeasurement
+  //
+  //  private[kitties] case class KibbleDiscarded(massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends Event
 
-  private[kitties] case class RemainingKibbleMeasure(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends KibbleContainerMeasurement
+  private val NoteName = "Kibble Tinkering 2.0"
 
-  private[kitties] case class KibbleDiscarded(massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends Event
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, CatBrown, "🍚") { (context, noteRef) =>
+    @unused
+    val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
 
-  private val NoteName = "Kibble Tinkering"
-
-  def apply()(implicit Tinker: Tinker): Ability[Event] = NoteMakingTinkerer[Event](NoteName, CatBrown, "🍚") { (context, noteRef) =>
-    Tinker.withPersistedMessages("kibble_tinkering", KibbleEventListJsonProtocol.EventJsonFormat) { jsonlRef =>
-
-      @unused
-      val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
-
-      context.actorContext.log.info("Refreshing Markdown")
-      jsonlRef.get() match {
-        case Failure(exception) => throw exception
-        case Success(events) =>
-          noteRef.setMarkdown(KibbleMarkdownGenerator(events)(context.actorContext.log)) match {
-            case Failure(exception) => throw exception
-            case Success(_) =>
-          }
-      }
-
-      Tinker.receiveMessage { m =>
-        val allEvents: List[Event] = jsonlRef.appendAndGet(m) match {
+    Tinker.receiveMessage {
+      case MaybeHeardKibbleMention(notedTranscription) =>
+        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId)
+        context.actorContext.log.info(s"Adding to ${noteRef.noteId}: $lineToAdd")
+        noteRef
+          .readMarkdown()
+          .map(addToMarkdown(_, lineToAdd)(context.actorContext.log))
+          .flatMap(noteRef.setMarkdown) match {
           case Failure(exception) => throw exception
-          case Success(events) => events
+          case Success(NoOp) =>
         }
 
-        context.actorContext.log.debug(s"Now have ${allEvents.size}, added $m")
-
-        noteRef.setMarkdown(KibbleMarkdownGenerator(allEvents)(context.actorContext.log))
-
         Tinker.steadily
-      }
-    }
-  }
-}
-
-case object KibbleEventListJsonProtocol extends DefaultJsonProtocol {
-  implicit object KibbleContainerJsonFormat extends RootJsonFormat[KibbleContainer] {
-    def write(m: KibbleContainer): JsValue = {
-      JsString(m match {
-        case Circular1 => "Circular1"
-        case Circular2 => "Circular2"
-        case RectangularL => "RectangularL"
-        case RectangularS => "RectangularS"
-      })
-    }
-
-    def read(value: JsValue): KibbleContainer = {
-      value match {
-        case JsString("Circular1") => Circular1
-        case JsString("Circular2") => Circular2
-        case JsString("RectangularL") => RectangularL
-        case JsString("RectangularS") => RectangularS
-        case other => throw DeserializationException(s"Unknown type, expected something in {Circular1, Circular2, RectangularS, RectangularL} but got $other")
-      }
     }
   }
 
-  import LinkIdJsonProtocol.noteIdFormat
-  import me.micseydel.Common.ZonedDateTimeJsonFormat
+  private[kitties] def addToMarkdown(original: String, formattedLineToAdd: String)(implicit log: Logger): String = {
+    if (original.isEmpty) {
+      s"""# Summary
+         |
+         |- for the human to play with, uninterrupted
+         |
+         |# Inbox
+         |
+         |$formattedLineToAdd
+         |
+         |# History
+         |
+         |$formattedLineToAdd
+         |""".stripMargin
+    } else {
+      val allLines = original.split("\n").toList
 
-  implicit val kibbleRefilledJsonFormat: RootJsonFormat[KibbleRefill] = jsonFormat4(KibbleRefill)
-  implicit val kibbleMeasuredJsonFormat: RootJsonFormat[RemainingKibbleMeasure] = jsonFormat4(RemainingKibbleMeasure)
-  implicit val kibbleDiscardedJsonFormat: RootJsonFormat[KibbleDiscarded] = jsonFormat3(KibbleDiscarded)
-
-  implicit object EventJsonFormat extends RootJsonFormat[Event] {
-    def write(m: Event): JsValue = {
-      val (jsObj, typ) = m match {
-        case p: KibbleRefill => (p.toJson.asJsObject, "KibbleRefill")
-        case p: RemainingKibbleMeasure => (p.toJson.asJsObject, "RemainingKibbleMeasure")
-        case o: KibbleDiscarded => (o.toJson.asJsObject, "KibbleDiscarded")
+      @tailrec
+      def findInbox(lines: List[String], accumulator: List[String]): (List[String], List[String]) = {
+        lines match {
+          case "# Inbox" :: tail => (accumulator, tail)
+          case notYetInbox :: tail => findInbox(tail, notYetInbox :: accumulator)
+          case Nil => (accumulator, Nil)
+        }
       }
-      JsObject(jsObj.fields + ("type" -> JsString(typ)))
-    }
 
-    def read(value: JsValue): Event = {
-      value.asJsObject.getFields("type") match {
-        case Seq(JsString("KibbleRefill")) => value.convertTo[KibbleRefill]
-        case Seq(JsString("RemainingKibbleMeasure")) => value.convertTo[RemainingKibbleMeasure]
-        case Seq(JsString("KibbleDiscarded")) => value.convertTo[KibbleDiscarded]
-        case other => throw DeserializationException(s"Unknown type, expected something in {KibbleRefill, KibbleDiscarded, RemainingKibbleMeasure} but got $other")
+      val (notTouchingReversed, whenTailStarts) = findInbox(allLines, Nil)
+
+      @tailrec
+      def findMarkdownListEndedByEmptyLine(lines: List[String], accumulator: List[String], seenListStart: Boolean = false): (List[String], List[String]) = {
+        lines match {
+          case head :: tail if head.startsWith("- ") => findMarkdownListEndedByEmptyLine(tail, head :: accumulator, seenListStart = true)
+          case "" :: tail if seenListStart => (accumulator, tail) // assumes an emtpy line
+          case head :: tail => findMarkdownListEndedByEmptyLine(tail, head :: accumulator, seenListStart) // tolerates nested lists
+          case Nil => (accumulator, Nil)
+        }
       }
+
+      val (completedSofar, theRest) = findMarkdownListEndedByEmptyLine(whenTailStarts, "# Inbox" :: notTouchingReversed)
+
+      val (shouldBeFinishedReverse, shouldBeEmpty) = findMarkdownListEndedByEmptyLine(theRest, "" :: formattedLineToAdd :: completedSofar)
+
+      val result = ("" :: formattedLineToAdd :: shouldBeFinishedReverse).reverse.mkString("\n")
+
+      if (shouldBeEmpty.nonEmpty) {
+        log.warn(s"Should have been empty: $shouldBeEmpty; result = $result")
+      }
+
+      result
     }
   }
 }
