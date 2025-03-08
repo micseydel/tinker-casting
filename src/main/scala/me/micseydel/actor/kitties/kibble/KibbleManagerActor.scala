@@ -82,18 +82,19 @@ object KibbleManagerActor {
       val (notTouchingReversed, whenTailStarts) = findInbox(allLines, Nil)
 
       @tailrec
-      def findMarkdownListEndedByEmptyLine(lines: List[String], accumulator: List[String], seenListStart: Boolean = false): (List[String], List[String]) = {
+      def findMarkdownListEnded(lines: List[String], accumulator: List[String], seenListStart: Boolean = false): (List[String], List[String]) = {
         lines match {
-          case head :: tail if head.startsWith("- ") => findMarkdownListEndedByEmptyLine(tail, head :: accumulator, seenListStart = true)
-          case "" :: tail if seenListStart => (accumulator, tail) // assumes an emtpy line
-          case head :: tail => findMarkdownListEndedByEmptyLine(tail, head :: accumulator, seenListStart) // tolerates nested lists
+          case head :: tail if head.startsWith("- ") => findMarkdownListEnded(tail, head :: accumulator, seenListStart = true)
+          case "" :: tail if seenListStart => (accumulator, tail) // an empty line indicates the list has ended
+          case head :: tail if head.startsWith("#") => (accumulator, head :: tail) // if there was no list, we just end
+          case head :: tail => findMarkdownListEnded(tail, head :: accumulator, seenListStart) // tolerates nested lists
           case Nil => (accumulator, Nil)
         }
       }
 
-      val (completedSofar, theRest) = findMarkdownListEndedByEmptyLine(whenTailStarts, "# Inbox" :: notTouchingReversed)
+      val (completedSofar, theRest) = findMarkdownListEnded(whenTailStarts, "# Inbox" :: notTouchingReversed)
 
-      val (shouldBeFinishedReverse, shouldBeEmpty) = findMarkdownListEndedByEmptyLine(theRest, "" :: formattedLineToAdd :: completedSofar)
+      val (shouldBeFinishedReverse, shouldBeEmpty) = findMarkdownListEnded(theRest, "" :: formattedLineToAdd :: completedSofar)
 
       val result = ("" :: formattedLineToAdd :: shouldBeFinishedReverse).reverse.mkString("\n")
 
