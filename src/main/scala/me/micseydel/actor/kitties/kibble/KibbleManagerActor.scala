@@ -86,7 +86,6 @@ object KibbleManagerActor {
         lines match {
           case head :: tail if head.startsWith("- ") => findMarkdownListEnded(tail, head :: accumulator, seenListStart = true)
           case "" :: tail if seenListStart => (accumulator, tail) // an empty line indicates the list has ended
-          case head :: tail if head.startsWith("#") => (accumulator, head :: tail) // if there was no list, we just end
           case head :: tail => findMarkdownListEnded(tail, head :: accumulator, seenListStart) // tolerates nested lists
           case Nil => (accumulator, Nil)
         }
