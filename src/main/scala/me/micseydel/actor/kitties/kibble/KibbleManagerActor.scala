@@ -9,6 +9,7 @@ import me.micseydel.model.NotedTranscription
 import me.micseydel.util.MarkdownUtil
 import org.slf4j.Logger
 
+import java.io.FileNotFoundException
 import scala.annotation.{tailrec, unused}
 import scala.util.{Failure, Success}
 
@@ -39,10 +40,14 @@ object KibbleManagerActor {
 
     Tinker.receiveMessage {
       case MaybeHeardKibbleMention(notedTranscription) =>
+        context.actorContext.log.debug(s"Received ${notedTranscription.noteId}")
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId)
         context.actorContext.log.info(s"Adding to ${noteRef.noteId}: $lineToAdd")
         noteRef
           .readMarkdown()
+          .recoverWith {
+            case _: FileNotFoundException => Success("")
+          }
           .map(addToMarkdown(_, lineToAdd)(context.actorContext.log))
           .flatMap(noteRef.setMarkdown) match {
           case Failure(exception) => throw exception
