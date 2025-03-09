@@ -3,10 +3,6 @@ package me.micseydel.actor.perimeter
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.pattern.after
 import akka.util.Timeout
 import me.micseydel.NoOp
 import me.micseydel.actor.HueListener
@@ -22,8 +18,8 @@ import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsOb
 
 import java.time.Duration
 import scala.annotation.unused
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import scala.concurrent.{ExecutionContextExecutorService, Future, TimeoutException}
+import scala.concurrent.ExecutionContextExecutorService
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success}
 
 object HueControl {
@@ -224,106 +220,6 @@ object HueControl {
       case StartTinkering(_) =>
         context.actorContext.log.warn("Received a redundant StartTinkering")
         Tinker.steadily
-    }
-  }
-}
-
-
-object HTTPHelpers {
-
-  import spray.json._
-
-  implicit object AnyValFormat extends JsonFormat[AnyVal] {
-    def write(x: AnyVal): JsValue = x match {
-      case n: Int => JsNumber(n)
-      case b: Boolean => JsBoolean(b)
-      case _ => serializationError("Do not know how to serialize")
-    }
-
-    def read(value: JsValue): AnyVal = value match {
-      case JsNumber(n) => n.intValue
-      case JsBoolean(b) => b
-      case _ => deserializationError("Do not know how to deserialize")
-    }
-  }
-
-  private object LightStateJsonProtocol extends DefaultJsonProtocol {
-    implicit val lightStateFormat: RootJsonFormat[LightState] = jsonFormat4(LightState)
-  }
-
-
-  object HueApi {
-
-    import LightStateJsonProtocol._
-
-    def getLightState(light: Light, timeoutDuration: FiniteDuration = 10.seconds)
-                     (implicit system: ActorSystem[Nothing], httpExecutionContext: ExecutionContextExecutorService, hueConfig: HueConfig): Future[LightState] = {
-      val lightStateResponseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = s"http://${hueConfig.ip}/api/${hueConfig.username}/lights/${light.lightId}"))
-
-      val timeoutFuture: Future[Nothing] = after(duration = timeoutDuration, using = system.classicSystem.scheduler) {
-        Future.failed(new TimeoutException("Request timed out"))
-      }
-
-      val responseFuture: Future[HttpResponse] = Future.firstCompletedOf(Seq(lightStateResponseFuture, timeoutFuture))
-
-      responseFuture.transform {
-        case success@Success(_) =>
-          success // In case of success, just forward the response
-        case Failure(exception) =>
-          // needs testing, this can be safely removed if later I haven't seen the following in the logs
-          //    Make sure to read the response `entity` body or call `entity.discardBytes()` on it -- in case you deal with `HttpResponse`, use the shortcut `response.discardEntityBytes()`.
-          lightStateResponseFuture.foreach(response => response.entity.discardBytes()) // Discard the bytes in case of failure
-          Failure(exception) // Forward the failure
-      }.flatMap { response =>
-        Unmarshal(response.entity).to[String]
-      }.map { body =>
-        val jsonAst = body.parseJson
-        val lightState = jsonAst.asJsObject.getFields("state") match {
-          case Seq(state) => state.convertTo[LightState]
-          case _ => throw DeserializationException("LightState expected")
-        }
-        lightState
-      }
-    }
-
-    def putLightState(light: Light, lightState: LightState)
-                     (implicit system: ActorSystem[Nothing], httpExecutionContext: ExecutionContextExecutorService, hueConfig: HueConfig): Future[Boolean] = {
-      // scale from a percentage to out of 255
-      val serialized = lightState.copy(bri = (lightState.bri * 255 / 100.0).toInt, on = lightState.bri > 0).toJson
-      val request = HttpRequest(
-        method = HttpMethods.PUT,
-        uri = s"http://${hueConfig.ip}/api/${hueConfig.username}/lights/${light.lightId}/state",
-        entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, serialized.toString.getBytes),
-      )
-
-      val responseFuture: Future[HttpResponse] = Http().singleRequest(request)
-
-      responseFuture.map { httpResponse =>
-        httpResponse.entity.discardBytes()
-        httpResponse.status == StatusCodes.OK
-      }
-    }
-
-    def putLightState2(light: Light, lightState: LightState)
-                      (implicit system: ActorSystem[Nothing], httpExecutionContext: ExecutionContextExecutorService, hueConfig: HueConfig): Future[Either[(StatusCode, String), NoOp.type]] = {
-      // scale from a percentage to out of 255
-      val serialized = lightState.copy(bri = (lightState.bri * 255 / 100.0).toInt, on = lightState.bri > 0).toJson
-      val request = HttpRequest(
-        method = HttpMethods.PUT,
-        uri = s"http://${hueConfig.ip}/api/${hueConfig.username}/lights/${light.lightId}/state",
-        entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, serialized.toString.getBytes),
-      )
-
-      val responseFuture: Future[HttpResponse] = Http().singleRequest(request)
-
-      responseFuture.flatMap { httpResponse =>
-        if (httpResponse.status == StatusCodes.OK) {
-          httpResponse.entity.discardBytes()
-          Future.successful(Right(NoOp))
-        } else {
-          Unmarshal(httpResponse.entity).to[String].map(s => Left((httpResponse.status, s)))
-        }
-      }
     }
   }
 }

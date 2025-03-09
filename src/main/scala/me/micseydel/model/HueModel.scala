@@ -45,7 +45,6 @@ final class Light(val lightId: Int) extends AnyVal
  */
 case class LightState(on: Boolean, bri: Int, hue: Int, sat: Int) {
   def withLightPct(pct: Int): LightState = this.copy(bri = pct)//this.copy(bri = pct * 255 / 100)
-  def briPct: Int = bri //* 100 / 255
 }
 
 object LightStates {
