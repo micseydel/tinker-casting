@@ -1,6 +1,5 @@
 package me.micseydel.actor.perimeter
 
-import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
 import akka.util.Timeout
@@ -20,7 +19,6 @@ import java.time.Duration
 import scala.annotation.unused
 import scala.concurrent.ExecutionContextExecutorService
 import scala.concurrent.duration.DurationInt
-import scala.util.{Failure, Success}
 
 object HueControl {
   // mailbox
@@ -41,10 +39,6 @@ object HueControl {
   case class FlashTheLight(light: Light) extends Command
 
   case class FlashTheLights() extends Command
-
-  case class TurnOffLight(light: Light) extends Command
-
-  case class TurnOffAllLights() extends Command
 
   case class DoALightShow() extends Command
 
@@ -172,34 +166,6 @@ object HueControl {
 
         Tinker.steadily
 
-      case TurnOffLight(light: Light) =>
-
-        lightKeepersByLight.get(light) match {
-          case Some(actorRef) =>
-            val fut = actorRef.underlying.ask(HueLightKeeper.GetLightState)
-              .map { capturedLightState =>
-                actorRef !! HueLightKeeper.SetLight(capturedLightState.copy(on = false))
-                LogLightKeeperResponseInfo(s"Captured $capturedLightState for $light, turning off")
-              }
-            context.pipeToSelf(fut) {
-              case Success(value) => value
-              case Failure(exception) =>
-                LogLightKeeperFailure(s"Failed to get light state, unable to turn off (without deleting state)", Some(exception))
-            }
-          case None =>
-            context.actorContext.log.error(s"Light $light not in lightKeepersByLight; keys = ${lightKeepersByLight.keySet}")
-        }
-
-        Tinker.steadily
-
-      case TurnOffAllLights() =>
-        val theLights: Seq[Light] = AllList // List(ByTheDehumidifier, FrontTable, FrontLitter, ByTheLitterRobot, Bedroom, BackToiletLow, BackToiletHigh)
-        for (light <- theLights) {
-          context.self !! TurnOffLight(light)
-        }
-
-        Tinker.steadily
-
       case SetLight(light, lightState) =>
         lightKeepersByLight.get(light) match {
           case Some(ref) =>
@@ -242,8 +208,6 @@ object HueControlJsonFormat extends DefaultJsonProtocol {
 
   implicit val flashTheLightJsonFormat: RootJsonFormat[FlashTheLight] = jsonFormat1(FlashTheLight)
   implicit val flashTheLightsJsonFormat: RootJsonFormat[FlashTheLights] = jsonFormat0(FlashTheLights)
-  implicit val turnOffLightJsonFormat: RootJsonFormat[TurnOffLight] = jsonFormat1(TurnOffLight)
-  implicit val turnOffAllLightsJsonFormat: RootJsonFormat[TurnOffAllLights] = jsonFormat0(TurnOffAllLights)
   implicit val doALightShowJsonFormat: RootJsonFormat[DoALightShow] = jsonFormat0(DoALightShow)
   implicit val setLightJsonFormat: RootJsonFormat[SetLight] = jsonFormat2(SetLight)
   implicit val setBrightnessJsonFormat: RootJsonFormat[SetBrightness] = jsonFormat2(SetBrightness)
@@ -255,8 +219,6 @@ object HueControlJsonFormat extends DefaultJsonProtocol {
       val (jsObj, typ) = m match {
         case l: FlashTheLight => (l.toJson.asJsObject, "FlashTheLight")
         case l: FlashTheLights => (l.toJson.asJsObject, "FlashTheLights")
-        case l: TurnOffLight => (l.toJson.asJsObject, "TurnOffLight")
-        case l: TurnOffAllLights => (l.toJson.asJsObject, "TurnOffAllLights")
         case l: DoALightShow => (l.toJson.asJsObject, "DoALightShow")
         case l: SetLight => (l.toJson.asJsObject, "SetLight")
         case l: SetAllLights => (l.toJson.asJsObject, "SetAllLights")
@@ -270,8 +232,6 @@ object HueControlJsonFormat extends DefaultJsonProtocol {
       value.asJsObject.getFields("type") match {
         case Seq(JsString("FlashTheLight")) => value.convertTo[FlashTheLight]
         case Seq(JsString("FlashTheLights")) => value.convertTo[FlashTheLights]
-        case Seq(JsString("TurnOffLight")) => value.convertTo[TurnOffLight]
-        case Seq(JsString("TurnOffAllLights")) => value.convertTo[TurnOffAllLights]
         case Seq(JsString("DoALightShow")) => value.convertTo[DoALightShow]
         case Seq(JsString("SetLight")) => value.convertTo[SetLight]
         case Seq(JsString("SetBrightness")) => value.convertTo[SetBrightness]

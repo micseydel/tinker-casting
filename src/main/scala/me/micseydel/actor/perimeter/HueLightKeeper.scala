@@ -61,12 +61,12 @@ object HueLightKeeper {
 
   // states / behaviors
 
-  private def behavior(cachedLightState: Option[LightState])(implicit httpExecutionContext: ExecutionContextExecutorService, actorSystem: ActorSystem[Nothing], Tinker: Tinker, api: SpiritRef[HueLightKeeperAPIActor.Message], light: Light, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(cachedLightState: Option[LightState])(implicit httpExecutionContext: ExecutionContextExecutorService, actorSystem: ActorSystem[Nothing], Tinker: Tinker, apiForThisLight: SpiritRef[HueLightKeeperAPIActor.Message], light: Light, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
       case GetLightState(replyTo) =>
         // anytime we grab the light state, we update our self too
-        api !! HueLightKeeperAPIActor.GetLightState(replyTo, context.messageAdapter(ReceiveLightState).underlying)
+        apiForThisLight !! HueLightKeeperAPIActor.GetLightState(replyTo, context.messageAdapter(ReceiveLightState).underlying)
         Tinker.steadily
 
       case SetBrightness(brightnessPct) =>
@@ -78,7 +78,7 @@ object HueLightKeeper {
           case Some(state) =>
             val newState = state.withLightPct(brightnessPct)
             context.actorContext.log.debug(s"Updating brightnessPct->$brightnessPct, state $state -> $newState")
-            api !! HueLightKeeperAPIActor.SetLightState(newState)
+            apiForThisLight !! HueLightKeeperAPIActor.SetLightState(newState)
             behavior(Some(newState))
         }
 
@@ -88,7 +88,7 @@ object HueLightKeeper {
             context.system.notifier !! JustSideEffect(Chime(ChimeActor.Warning(ChimeActor.Material)))
             context.actorContext.log.warn("Not flashing the lights because no state is cached; this means it wasn't set explicitly and fetching failed")
           case Some(state) =>
-            api !! HueLightKeeperAPIActor.SetLightState(RelaxedLight)
+            apiForThisLight !! HueLightKeeperAPIActor.SetLightState(RelaxedLight)
             timeKeeper !! TimeKeeper.RemindMeIn(3.seconds, context.self, HueLightKeeper.SetLight(state), None)
         }
 
@@ -96,7 +96,7 @@ object HueLightKeeper {
 
       case SetLight(lightState) =>
         context.actorContext.log.info(s"Setting light $light to $lightState")
-        api !! HueLightKeeperAPIActor.SetLightState(lightState)
+        apiForThisLight !! HueLightKeeperAPIActor.SetLightState(lightState)
         behavior(Some(lightState))
 
       case DoALightShow() =>
@@ -105,10 +105,10 @@ object HueLightKeeper {
             context.system.notifier !! JustSideEffect(Chime(ChimeActor.Warning(ChimeActor.Material)))
             context.actorContext.log.warn(s"Not doing a light show because no state is cached; this means it wasn't set explicitly and fetching failed")
           case Some(state) =>
-            timeKeeper !! TimeKeeper.RemindMeIn(1.2.seconds, api, HueLightKeeperAPIActor.SetLightState(RedLight), None)
-            timeKeeper !! TimeKeeper.RemindMeIn(2.4.seconds, api, HueLightKeeperAPIActor.SetLightState(BlueLight), None)
-            timeKeeper !! TimeKeeper.RemindMeIn(3.6.seconds, api, HueLightKeeperAPIActor.SetLightState(AnotherGreenLight), None)
-            timeKeeper !! TimeKeeper.RemindMeIn(5.seconds, api, HueLightKeeperAPIActor.SetLightState(state), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(1.2.seconds, apiForThisLight, HueLightKeeperAPIActor.SetLightState(RedLight), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(2.4.seconds, apiForThisLight, HueLightKeeperAPIActor.SetLightState(BlueLight), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(3.6.seconds, apiForThisLight, HueLightKeeperAPIActor.SetLightState(AnotherGreenLight), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(5.seconds, apiForThisLight, HueLightKeeperAPIActor.SetLightState(state), None)
         }
 
         Tinker.steadily
