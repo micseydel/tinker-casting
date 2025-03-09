@@ -65,13 +65,13 @@ object TranscriptionNoteWrapper {
         // FIXME
         regenerateMarkdown(priorMessages, capture, noteRef)
 
-        if (model == LargeModel && rawText.wordCount > 100) {
-          context.castAnonymous(FetchChatResponseActor(
-            s"Please politely summarize the following transcribed voice note for a speaker with they/them pronouns, using 3-5 top level Markdown bullet points with sub bullets for elaboration:\n\n$rawText",
-            "llama3",
-            context.messageAdapter(ReceiveResponseOllama))
-          )
-        }
+//        if (model == LargeModel && rawText.wordCount > 100) {
+//          context.castAnonymous(FetchChatResponseActor(
+//            s"Please politely summarize the following transcribed voice note for a speaker with they/them pronouns, using 3-5 top level Markdown bullet points with sub bullets for elaboration:\n\n$rawText",
+//            "llama3",
+//            context.messageAdapter(ReceiveResponseOllama))
+//          )
+//        }
 
         Tinker.steadily
 
