@@ -55,49 +55,35 @@ private[kitties] object DailyAbility {
   def apply(forDay: LocalDate, color: TinkerColor, emoji: String)(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
-//    val jsonName = s"litter_boxes_sifting_$isoDate"
 
     noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
-        Tinker.receiveMessage {
-          case observation@LitterSiftedObservation(capture: LitterSifted) =>
-            noteRef.read() match {
-              case Success(Note(markdown, frontmatter)) =>
-                MarkdownWithoutJsonExperiment(markdown, capture.when.toLocalDate) match {
-                  case Validated.Valid(reportFromMarkdownParsing: Report) =>
-                    val newNote = Note(reportFromMarkdownParsing.append {
-                      capture match {
-                        case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
-                          DataPoint(when, contents, ref)
-                      }
-                    }.toMarkdown, frontmatter)
-                    noteRef.setTo(newNote)
-                  case Validated.Invalid(e) =>
-                    context.actorContext.log.warn(s"Failed to generate the markdown report because: $e")
-                }
+      Tinker.receiveMessage {
+        case observation@LitterSiftedObservation(capture: LitterSifted) =>
+          noteRef.read() match {
+            case Success(Note(markdown, frontmatter)) =>
+              MarkdownWithoutJsonExperiment(markdown, capture.when.toLocalDate) match {
+                case Validated.Valid(reportFromMarkdownParsing: Report) =>
+                  val newNote = Note(reportFromMarkdownParsing.append {
+                    capture match {
+                      case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
+                        DataPoint(when, contents, ref)
+                    }
+                  }.toMarkdown, frontmatter)
+                  noteRef.setTo(newNote)
+                case Validated.Invalid(e) =>
+                  context.actorContext.log.warn(s"Failed to generate the markdown report because: $e")
+              }
 
-              case Failure(_: FileNotFoundException) =>
-//                context.actorContext.log.info(s"File $noteRef did not exist, creating for the first time")
-//
-//                val todaysCaptures = typedJsonRef.appendAndGet(observation) match {
-//                  case Failure(exception) => throw exception
-//                  case Success(latest) => latest
-//                }
-//
-//                val reportFromExistingJson = Report(todaysCaptures.collect {
-//                  case LitterSiftedObservation(LitterSifted(LitterSiftedEvent(when, _, contents), ref)) =>
-//                    DataPoint(when, contents, ref)
-//                })
-//
-
+            case Failure(_: FileNotFoundException) =>
               noteRef.setRaw(Report(List(DataPoint(observation.event.when, observation.capture.event.contents, observation.capture.ref))).toMarkdown)
               context.actorContext.log.info(s"File not found, started new report with $observation")
 
-              case Failure(exception) =>
-                context.actorContext.log.warn(s"Unexpected failure fetching the note", exception)
-            }
+            case Failure(exception) =>
+              context.actorContext.log.warn(s"Unexpected failure fetching the note", exception)
+          }
 
-            Tinker.steadily
-        }
+          Tinker.steadily
+      }
     }
   }
 }

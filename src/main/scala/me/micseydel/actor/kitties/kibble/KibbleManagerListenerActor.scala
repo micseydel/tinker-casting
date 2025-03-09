@@ -30,7 +30,7 @@ object KibbleManagerListenerActor {
 
               import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
 
-              getGrams(text) match {
+              val acknowledgement = getGrams(text) match {
                 case None =>
                   context.actorContext.log.warn(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
                   Ignored
@@ -62,8 +62,8 @@ object KibbleManagerListenerActor {
               }
 
               manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
-              Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble maybe have been integrated"))
 
+              acknowledgement
             } else {
               context.actorContext.log.debug(s"Ignoring because mentionsKibble=$mentionsKibble, mentionsDryFood=$mentionsDryFood")
               Ignored
