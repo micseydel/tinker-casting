@@ -4,7 +4,13 @@ import akka.actor.{Scheduler, typed}
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.http.scaladsl.model.StatusCode
 import akka.util.Timeout
+import cats.data.NonEmptyList
+import me.micseydel.NoOp
+import me.micseydel.actor.inactive.TemplateBasicEmptyModelActorOrSpirit.Message
+import me.micseydel.actor.notifications.ChimeActor
+import me.micseydel.actor.notifications.NotificationCenterManager.{Chime, JustSideEffect}
 import me.micseydel.actor.perimeter.HueControl.{Command, HueConfig, LogLightKeeperFailure, LogLightKeeperResponseInfo}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
@@ -37,154 +43,135 @@ object HueLightKeeper {
 
   case class DoALightShow() extends Command
 
-  // non-public messages
-
-  // for handling the Hue Bridge response
-  private sealed trait StateUpdate extends Message
-
-  private case class LogHueResponseInfo(message: String) extends StateUpdate
-
-  private case class LogHueFailure(message: String, throwable: Option[Throwable] = None) extends StateUpdate
-
-  private case class HueApiTimeout(msg: String) extends StateUpdate
-
-
-
-  //  case class FlashTheLight(light: Light) extends Message
-  //  case class TurnOffLight(light: Light) extends Message
+  private case class ReceiveLightState(lightState: LightState) extends Message
 
   def apply(light: Light, hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService, Tinker: Tinker): Ability[Message] =
     setup(light, hueConfig)
 
   private def setup(light: Light, hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService, Tinker: Tinker): Ability[Message] = Tinkerer(rgb(230, 230, 230), "💡").setup { context =>
+    implicit val c: TinkerContext[_] = context
+
     val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-    // it's always waiting for a command, or waiting to hear back from Hue
-    waitingForCommand(light, timeKeeper, None)(httpExecutionContext, context.system.actorSystem, Tinker, hueConfig)
+    implicit val hc: HueConfig = hueConfig
+    val api: SpiritRef[HueLightKeeperAPIActor.Message] = context.cast(HueLightKeeperAPIActor(light), "HueLightKeeperAPIActor")
+
+    // initialize empty, but should get a value shortly
+    api !! HueLightKeeperAPIActor.GetLightState(context.messageAdapter(ReceiveLightState).underlying)
+    behavior(None)(httpExecutionContext, context.system.actorSystem, Tinker, api, light, timeKeeper)
   }
 
   // states / behaviors
 
-  private def waitingForCommand(light: Light, timeKeeper: SpiritRef[TimeKeeper.Message], lastSetState: Option[LightState])(implicit httpExecutionContext: ExecutionContextExecutorService, actorSystem: ActorSystem[Nothing], Tinker: Tinker, hueConfig: HueConfig): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(lastSetState: Option[LightState])(implicit httpExecutionContext: ExecutionContextExecutorService, actorSystem: ActorSystem[Nothing], Tinker: Tinker, api: SpiritRef[HueLightKeeperAPIActor.Message], light: Light, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
-      case stateUpdate: StateUpdate =>
-        context.actorContext.log.debug(s"Was waiting for command, did not expect Hue status update $stateUpdate")
-        Tinker.steadily
-
       case GetLightState(replyTo) =>
-        val fut = HTTPHelpers.HueApi.getLightState(light)
-        context.pipeToSelf(fut) {
-          case Success(capturedLightState) =>
-            replyTo ! capturedLightState
-            LogHueResponseInfo(s"Captured $capturedLightState for light $light, replying to $replyTo")
-          case Failure(throwable) =>
-            LogHueFailure("Failed to get light state", Some(throwable))
-        }
-
+        // anytime we grab the light state, we update our self too
+        api !! HueLightKeeperAPIActor.GetLightState(replyTo, context.messageAdapter(ReceiveLightState).underlying)
         Tinker.steadily
 
       case SetBrightness(brightnessPct) =>
-        val fut = HTTPHelpers.HueApi.getLightState(light)
-        context.pipeToSelf(fut) {
-          case Success(capturedLightState) =>
-            SetLight(capturedLightState.copy(bri = brightnessPct, on = brightnessPct > 0))
-          case Failure(throwable) =>
-            LogHueFailure("Failed to get light state", Some(throwable))
+        lastSetState match {
+          case None =>
+            context.system.notifier !! JustSideEffect(Chime(ChimeActor.Warning(ChimeActor.Material)))
+            context.actorContext.log.warn("Not setting brightness because no state is cached; this means it wasn't set explicitly and fetching failed")
+            Tinker.steadily
+          case Some(state) =>
+            val newState = state.withLightPct(brightnessPct)
+            context.actorContext.log.warn(s"Updating brightnessPct->$brightnessPct, state $state -> $newState")
+            api !! HueLightKeeperAPIActor.SetLightState(newState)
+            behavior(Some(newState))
         }
 
-        Tinker.steadily
-
       case FlashTheLight =>
-        implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(30.seconds.toMillis))
-        implicit val s: typed.Scheduler = context.system.actorSystem.scheduler
-        val log = context.actorContext.log
-        context.pipeToSelf(context.self.underlying.ask(HueLightKeeper.GetLightState).map { capturedLightState =>
-          // FIXME super hacky!
-          context.self !! HueLightKeeper.SetLight(RelaxedLight)
-          timeKeeper !! TimeKeeper.RemindMeIn(3.seconds, context.self, HueLightKeeper.SetLight(capturedLightState), None)
-          LogHueResponseInfo(s"Captured $capturedLightState, setting light then resetting in 3 seconds")
-        }) {
-          case Success(captures) =>
-            val msg = s"(a) Captured to restore after light show: $captures; lastSetState=$lastSetState"
-            log.info(msg)
-            LogHueResponseInfo(msg)
-          case Failure(exception) =>
-            LogHueFailure("Something went wrong collecting all the current light values", Some(exception))
+        lastSetState match {
+          case None =>
+            context.system.notifier !! JustSideEffect(Chime(ChimeActor.Warning(ChimeActor.Material)))
+            context.actorContext.log.warn("Not flashing the lights because no state is cached; this means it wasn't set explicitly and fetching failed")
+          case Some(state) =>
+            api !! HueLightKeeperAPIActor.SetLightState(RelaxedLight)
+            timeKeeper !! TimeKeeper.RemindMeIn(3.seconds, context.self, HueLightKeeper.SetLight(state), None)
         }
 
         Tinker.steadily
 
       case SetLight(lightState) =>
         context.actorContext.log.info(s"Setting light $light to $lightState")
-        val fut = HTTPHelpers.HueApi.putLightState(light, lightState)
-        context.pipeToSelf(fut) {
-          case Success(success) =>
-            if (success) {
-              LogHueResponseInfo(s"Put $lightState succeeded")
-            } else {
-              LogHueFailure("Failed to set light state")
-            }
-          case Failure(throwable) =>
-            LogHueFailure("Failed to set light state", Some(throwable))
-        }
-
-        val timeoutMessage = HueApiTimeout(s"Failed to set $light to $lightState")
-        timeKeeper !! TimeKeeper.RemindMeIn(15.seconds, context.self, timeoutMessage, Some(HueControl))
-
-        waitingForHueResponse(light, timeKeeper, Some(lightState))
+        api !! HueLightKeeperAPIActor.SetLightState(lightState)
+        behavior(Some(lightState))
 
       case DoALightShow() =>
-        implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
-        implicit val s: typed.Scheduler = context.system.actorSystem.scheduler
-        val log = context.actorContext.log
-        context.pipeToSelf(context.self.underlying.ask(HueLightKeeper.GetLightState).map { capturedLightState =>
-          log.info(s"Captured $capturedLightState, doing a light show before restoring")
-          // FIXME super hacky!
-          timeKeeper !! TimeKeeper.RemindMeIn(1.2.seconds, context.self, HueLightKeeper.SetLight(RedLight), None)
-          timeKeeper !! TimeKeeper.RemindMeIn(2.4.seconds, context.self, HueLightKeeper.SetLight(BlueLight), None)
-          timeKeeper !! TimeKeeper.RemindMeIn(3.6.seconds, context.self, HueLightKeeper.SetLight(AnotherGreenLight), None)
-          timeKeeper !! TimeKeeper.RemindMeIn(5.seconds, context.self, HueLightKeeper.SetLight(capturedLightState), None)
-          capturedLightState
-        }) {
-          case Success(capturedLightState) =>
-            val msg = s"(b) Captured to restore after light show: $capturedLightState; lastSetState=$lastSetState"
-            log.info(msg)
-            LogHueResponseInfo(msg)
-          case Failure(exception) =>
-            val msg = "Something went wrong collecting all the current light values"
-            log.warn(msg, exception)
-            LogHueFailure(msg, Some(exception))
+        lastSetState match {
+          case None =>
+            context.system.notifier !! JustSideEffect(Chime(ChimeActor.Warning(ChimeActor.Material)))
+            context.actorContext.log.warn(s"Not doing a light show because no state is cached; this means it wasn't set explicitly and fetching failed")
+          case Some(state) =>
+            timeKeeper !! TimeKeeper.RemindMeIn(1.2.seconds, api, HueLightKeeperAPIActor.SetLightState(RedLight), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(2.4.seconds, api, HueLightKeeperAPIActor.SetLightState(BlueLight), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(3.6.seconds, api, HueLightKeeperAPIActor.SetLightState(AnotherGreenLight), None)
+            timeKeeper !! TimeKeeper.RemindMeIn(5.seconds, api, HueLightKeeperAPIActor.SetLightState(state), None)
         }
 
         Tinker.steadily
+
+      case ReceiveLightState(lightState) =>
+        context.actorContext.log.warn(s"Setting light ${light.lightId} to state $lightState")
+        behavior(Some(lightState))
     }
   }
+}
 
-  private def waitingForHueResponse(light: Light, timeKeeper: SpiritRef[TimeKeeper.Message],  lastSetState: Option[LightState])(implicit httpExecutionContext: ExecutionContextExecutorService, actorSystem: ActorSystem[Nothing], Tinker: Tinker, hueConfig: HueConfig): Ability[Message] = Tinker.setup { tinkerContext =>
-    Behaviors.withStash(20) { stash =>
-      Behaviors.receive { case (context, message) =>
-        implicit val c: TinkerContext[_] = tinkerContext
-        message match {
-          case stateUpdate: StateUpdate =>
-            stateUpdate match {
-              case LogHueResponseInfo(message) =>
-                context.log.info(message)
-              case LogHueFailure(message, None) =>
-                context.log.error(message)
-              case LogHueFailure(message, Some(throwable)) =>
-                context.log.error(message, throwable)
-              case HueApiTimeout(msg) =>
-                context.log.warn(s"Timeout: $msg")
-            }
-            timeKeeper !! TimeKeeper.Cancel(HueControl)
-            stash.unstashAll(waitingForCommand(light, timeKeeper, lastSetState).behavior)
 
-          case command: Command =>
-            stash.stash(command)
-            Behaviors.same
+private object HueLightKeeperAPIActor {
+  sealed trait Message
+
+  final case class GetLightState(replyTo: NonEmptyList[ActorRef[LightState]]) extends Message
+  final case class SetLightState(lightState: LightState) extends Message
+
+  object GetLightState {
+    def apply(replyTo: ActorRef[LightState]): GetLightState = GetLightState(NonEmptyList(replyTo, Nil))
+    def apply(replyTo1: ActorRef[LightState], replyTo2: ActorRef[LightState]): GetLightState = GetLightState(NonEmptyList(replyTo1, List(replyTo2)))
+  }
+
+  private case class ReceiveFromHttp(lightState: LightState, replyTo: List[ActorRef[LightState]]) extends Message
+  private case class ReceiveExceptionFromHttp(throwable: Throwable) extends Message
+  private case class ReceiveLightPutFromHttp(result: Either[(StatusCode, String), NoOp.type]) extends Message
+  // FIXME: add a timeout message and have a timekeeper spawn off a message
+
+  def apply(light: Light)(implicit Tinker: Tinker, hueConfig: HueConfig): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[_] = context
+    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
+    implicit val s: ActorSystem[_] = context.system.actorSystem
+    Tinker.receiveMessage {
+      case GetLightState(replyTo) =>
+        context.pipeToSelf(HTTPHelpers.HueApi.getLightState(light)) {
+          case Failure(exception) => ReceiveExceptionFromHttp(exception)
+          case Success(lightState) => ReceiveFromHttp(lightState, replyTo.toList)
         }
-      }
+        Tinker.steadily
+
+      case SetLightState(lightState) =>
+        context.pipeToSelf(HTTPHelpers.HueApi.putLightState2(light, lightState))  {
+          case Failure(exception) => ReceiveExceptionFromHttp(exception)
+          case Success(lightPutResult) => ReceiveLightPutFromHttp(lightPutResult)
+        }
+        Tinker.steadily
+
+
+      case ReceiveFromHttp(lightState, replyTo) =>
+        replyTo.foreach(_ ! lightState)
+        Tinker.steadily
+      case ReceiveExceptionFromHttp(throwable) =>
+        context.actorContext.log.warn(s"HTTP problem with $light", throwable)
+        Tinker.steadily
+      case ReceiveLightPutFromHttp(result) =>
+        result match {
+          case Left(err) =>
+            context.actorContext.log.warn(s"Something went wrong setting light state:\n$err")
+          case Right(NoOp) =>
+        }
+        Tinker.steadily
     }
   }
 }

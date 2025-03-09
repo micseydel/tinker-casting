@@ -32,33 +32,41 @@ object HueControl {
   sealed trait Message
 
   case class StartTinkering(tinker: Tinker) extends Message
+
   case class NoteUpdated(noOp: NoOp.type) extends Message
 
   // to change the lights
   sealed trait Command extends Message
+
   // for handling the Hue Bridge response
-//  private
+  //  private
   sealed trait StateUpdate extends Message
 
   case class FlashTheLight(light: Light) extends Command
+
   case class FlashTheLights() extends Command
+
   case class TurnOffLight(light: Light) extends Command
+
   case class TurnOffAllLights() extends Command
 
   case class DoALightShow() extends Command
 
 
   case class SetLight(light: Light, lightState: LightState) extends Command
+
   case class SetAllLights(lightState: LightState) extends Command
 
   /**
    * @param brightnessPct [0, 100]
    */
   case class SetBrightness(light: Light, brightnessPct: Int) extends Command
+
   case class SetAllBrightness(brightnessPct: Int) extends Command
 
 
   private case class LogLightKeeperResponseInfo(message: String) extends StateUpdate
+
   private case class LogLightKeeperFailure(message: String, throwable: Option[Throwable] = None) extends StateUpdate
 
   // behavior
@@ -245,6 +253,7 @@ object HTTPHelpers {
 
 
   object HueApi {
+
     import LightStateJsonProtocol._
 
     def getLightState(light: Light, timeoutDuration: FiniteDuration = 10.seconds)
@@ -280,7 +289,7 @@ object HTTPHelpers {
     def putLightState(light: Light, lightState: LightState)
                      (implicit system: ActorSystem[Nothing], httpExecutionContext: ExecutionContextExecutorService, hueConfig: HueConfig): Future[Boolean] = {
       // scale from a percentage to out of 255
-      val serialized = lightState.copy(bri = (lightState.bri *255 /100.0).toInt, on = lightState.bri > 0).toJson
+      val serialized = lightState.copy(bri = (lightState.bri * 255 / 100.0).toInt, on = lightState.bri > 0).toJson
       val request = HttpRequest(
         method = HttpMethods.PUT,
         uri = s"http://${hueConfig.ip}/api/${hueConfig.username}/lights/${light.lightId}/state",
@@ -292,6 +301,28 @@ object HTTPHelpers {
       responseFuture.map { httpResponse =>
         httpResponse.entity.discardBytes()
         httpResponse.status == StatusCodes.OK
+      }
+    }
+
+    def putLightState2(light: Light, lightState: LightState)
+                      (implicit system: ActorSystem[Nothing], httpExecutionContext: ExecutionContextExecutorService, hueConfig: HueConfig): Future[Either[(StatusCode, String), NoOp.type]] = {
+      // scale from a percentage to out of 255
+      val serialized = lightState.copy(bri = (lightState.bri * 255 / 100.0).toInt, on = lightState.bri > 0).toJson
+      val request = HttpRequest(
+        method = HttpMethods.PUT,
+        uri = s"http://${hueConfig.ip}/api/${hueConfig.username}/lights/${light.lightId}/state",
+        entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, serialized.toString.getBytes),
+      )
+
+      val responseFuture: Future[HttpResponse] = Http().singleRequest(request)
+
+      responseFuture.flatMap { httpResponse =>
+        if (httpResponse.status == StatusCodes.OK) {
+          httpResponse.entity.discardBytes()
+          Future.successful(Right(NoOp))
+        } else {
+          Unmarshal(httpResponse.entity).to[String].map(s => Left((httpResponse.status, s)))
+        }
       }
     }
   }
