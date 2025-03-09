@@ -50,7 +50,7 @@ object FetchModelsActor {
 
       case ReceiveFailedHttpResponse(exception) =>
         context.actorContext.log.debug(s"Failed to connect to Ollama", exception)
-        context.actorContext.log.warn(s"Failed to connect to Ollama; if Ollama isn't install and setup, this is normal and expected")
+        context.actorContext.log.warn(s"Failed to connect to Ollama; if Ollama isn't installed and setup, this is normal and expected")
         Tinker.steadily
 
       case ReceiveUnmarshalling(models) =>

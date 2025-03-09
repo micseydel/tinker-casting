@@ -12,7 +12,7 @@ import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResu
 import me.micseydel.util.StringImplicits.RichString
 
 object KibbleManagerListenerActor {
-  def apply(manager: SpiritRef[KibbleManagerActor.MaybeHeardKibbleMention])(implicit Tinker: Tinker): Ability[TinkerListener.Message] =
+  def apply(manager: SpiritRef[KibbleManagerActor.Message])(implicit Tinker: Tinker): Ability[TinkerListener.Message] =
     TinkerListener.simpleStateless { (context, notedTranscription) =>
       implicit val tc: TinkerContext[_] = context
       notedTranscription match {
@@ -27,41 +27,43 @@ object KibbleManagerListenerActor {
             Ignored
           } else {
             if (mentionsKibble || mentionsDryFood) {
+
+              import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
+
+              getGrams(text) match {
+                case None =>
+                  context.actorContext.log.warn(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
+                  Ignored
+                case Some(mass) =>
+                  if (lowerText.contains("discard")) {
+                    context.actorContext.log.info(s"Detected ${mass}g discarded kibble")
+                    manager !! KibbleDiscarded(mass, captureTime, noteId)
+                    Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble discarded"))
+                  } else {
+                    getContainer(text) match {
+                      case None =>
+                        context.actorContext.log.warn(s"Kibble/dry food mentioned and identified mass ${mass}g but could not identify container: $text")
+                        Ignored
+                      case Some(container) =>
+                        if (lowerText.contains("refill")) {
+                          context.actorContext.log.info(s"Detected refill for $container of ${mass}g")
+                          manager !! KibbleRefill(container, mass, captureTime, noteId)
+                          Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
+                        } else if (lowerText.contains("measure")) {
+                          context.actorContext.log.info(s"Detected measure for $container of ${mass}g")
+                          manager !! RemainingKibbleMeasure(container, mass, captureTime, noteId)
+                          Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
+                        } else {
+                          context.actorContext.log.warn(s"Identified kibble/dry food reference for container $container and mass ${mass}g but could not identify choice {refill, measure}: $text")
+                          Ignored
+                        }
+                    }
+                  }
+              }
+
               manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
               Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble maybe have been integrated"))
-//              import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
 
-//              // hacky, hard-coded heuristics
-//              getGrams(text) match {
-//                case None =>
-//                  context.actorContext.log.warn(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
-//                  Ignored
-//                case Some(mass) =>
-//                  if (lowerText.contains("discard")) {
-//                    context.actorContext.log.info(s"Detected ${mass}g discarded kibble")
-//                    manager !! KibbleDiscarded(mass, captureTime, noteId)
-//                    Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble discarded"))
-//                  } else {
-//                    getContainer(text) match {
-//                      case None =>
-//                        context.actorContext.log.warn(s"Kibble/dry food mentioned and identified mass ${mass}g but could not identify container: $text")
-//                        Ignored
-//                      case Some(container) =>
-//                        if (lowerText.contains("refill")) {
-//                          context.actorContext.log.info(s"Detected refill for $container of ${mass}g")
-//                          manager !! KibbleRefill(container, mass, captureTime, noteId)
-//                          Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
-//                        } else if (lowerText.contains("measure")) {
-//                          context.actorContext.log.info(s"Detected measure for $container of ${mass}g")
-//                          manager !! RemainingKibbleMeasure(container, mass, captureTime, noteId)
-//                          Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
-//                        } else {
-//                          context.actorContext.log.warn(s"Identified kibble/dry food reference for container $container and mass ${mass}g but could not identify choice {refill, measure}: $text")
-//                          Ignored
-//                        }
-//                    }
-//                  }
-//              }
             } else {
               context.actorContext.log.debug(s"Ignoring because mentionsKibble=$mentionsKibble, mentionsDryFood=$mentionsDryFood")
               Ignored

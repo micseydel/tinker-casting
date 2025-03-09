@@ -122,7 +122,7 @@ object CatsHelper {
       case observation@ObservedCatUsingLitter(event@LitterUsedEvent(when, litterBoxChoice, maybeCat), _, ref, _, _) =>
         maybeCat match {
           case None =>
-            context.actorContext.log.warn("No cat, need to write that code")
+            context.actorContext.log.info("No cat, need to write that code")
           case Some(_) =>
             dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(observation), when.toLocalDate)
             litterBoxesHelper !! LitterBoxesHelper.ObservedCatUsingLitter(event, ref)
