@@ -85,6 +85,7 @@ object CatTranscriptionListener {
       case event@TranscriptionAboutCats(WithIntentFailedExtraction(_, noteId, captureTime, intent, confidence, problems)) =>
         context.actorContext.log.debug(s"Received $noteId about cats at capture time $captureTime, failed to extract $intent with confidence $confidence, noting in MOC but NOT sending to CatsHelper because: $problems")
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(event), captureTime.toLocalDate)
+        catsHelper !! CatsHelper.PartialMatch(event)
         Tinker.steadily
       case event@TranscriptionAboutCats(NoIntentJustWordMatch(_, noteId, captureTime, matchedWords)) =>
         context.actorContext.log.info(s"Received $noteId about cats at capture time $captureTime, no intent detected but found match words with count $matchedWords")

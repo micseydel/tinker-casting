@@ -1,10 +1,12 @@
 package me.micseydel.actor.kitties
 
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
+import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
 import me.micseydel.model._
 import me.micseydel.vault._
@@ -19,6 +21,8 @@ object CatsHelper {
   // actor pattern
 
   sealed trait Message
+
+  final case class PartialMatch(transcriptionEvent: TranscriptionEvent) extends Message
 
   sealed trait Observation extends Message {
     def event: CatObservationEvent
@@ -82,6 +86,8 @@ object CatsHelper {
 
     val litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message] = context.cast(LitterBoxesHelper(), "LitterBoxesHelper")
 
+    val litterTrackingDashboardActor: SpiritRef[LitterTrackingDashboardActor.Message] = context.cast(LitterTrackingDashboardActor(litterBoxesHelper), "LitterTrackingDashboardActor")
+
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Observation]]] = context.cast(DailyNotesRouter(
       "Structured cats notes",
       "structured_cats_notes",
@@ -94,14 +100,16 @@ object CatsHelper {
     behavior(
       litterBoxesHelper,
       dailyNotesAssistant,
-      catNotificationsManager
+      catNotificationsManager,
+      litterTrackingDashboardActor
     )
   }
 
   private def behavior(
                         litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message],
                         dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Observation]]],
-                        catNotificationsManager: SpiritRef[CatNotificationsManager.Message]
+                        catNotificationsManager: SpiritRef[CatNotificationsManager.Message],
+                        litterTrackingDashboardActor: SpiritRef[LitterTrackingDashboardActor.Message]
       )(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
 
@@ -136,6 +144,16 @@ object CatsHelper {
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(observation), when.toLocalDate)
         litterBoxesHelper !! LitterBoxesHelper.LitterSifted(event, ref)
         catNotificationsManager !! CatNotificationsManager.LitterClean(litterBoxChoice, ref)
+        Tinker.steadily
+
+      case PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(notedTranscription, maybeRasaResult))) =>
+        maybeRasaResult match {
+          case Some(rasaResult) =>
+            context.actorContext.log.info(s"Forwarding ${notedTranscription.noteId} to the litter dashboard as a partial match")
+            litterTrackingDashboardActor !! LitterTrackingDashboardActor.PartialMatch(notedTranscription, rasaResult)
+          case None =>
+            context.actorContext.log.info(s"Ignoring ${notedTranscription.noteId} because there was no Rasa for partial matching")
+        }
         Tinker.steadily
     }
   }

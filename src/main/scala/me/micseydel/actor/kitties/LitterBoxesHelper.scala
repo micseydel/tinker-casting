@@ -1,6 +1,7 @@
 package me.micseydel.actor.kitties
 
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.{RegenerateMarkdown, StoreAndRegenerateMarkdown}
+import me.micseydel.actor.kitties.CatsHelper.Message
 import me.micseydel.actor.kitties.LitterBoxesHelper.{EventCapture, LitterSifted, ObservedCatUsingLitter, PostHocLitterObservation}
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability

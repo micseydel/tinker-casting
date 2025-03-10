@@ -21,16 +21,18 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
 
   def setRaw(contents: String): Try[NoOp.type]
 
-  def append(contents: String): Option[Throwable]
+  def append(contents: String): Try[NoOp.type]
+
+  def appendOrOption(contents: String): Option[Throwable] = append(contents).failed.toOption
 
   // helpers
 
-  def appendOrThrow(contents: String): Unit = append(contents) match {
+  def appendOrThrow(contents: String): Unit = appendOrOption(contents) match {
     case Some(exception) => throw exception
     case None =>
   }
 
-  def appendLine(line: String): Option[Throwable] = append(line + "\n")
+  def appendLine(line: String): Option[Throwable] = appendOrOption(line + "\n")
 
   def setTo(note: Note): Try[Note] = {
     setRaw(note.raw).map(_ => note)
@@ -113,10 +115,10 @@ class BasicNoteRef(override val noteId: NoteId, vaultRoot: VaultPath, subdirecto
     }
   }
 
-  override def append(contents: String): Option[Throwable] = {
+  override def append(contents: String): Try[NoOp.type] = {
     Try {
       FileSystemUtil.appendToPath(notePath, contents)
-    }.failed.toOption
+    }
   }
 
   /**
