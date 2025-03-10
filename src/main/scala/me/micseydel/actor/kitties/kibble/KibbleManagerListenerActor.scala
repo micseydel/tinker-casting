@@ -1,12 +1,11 @@
 package me.micseydel.actor.kitties.kibble
 
-import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularL, RectangularS}
-import me.micseydel.dsl.tinkerer.TinkerListener.{Acknowledged, Ignored}
+import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
+import me.micseydel.actor.kitties.kibble.KibbleModel._
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.TinkerListener
+import me.micseydel.dsl.tinkerer.TinkerListener.{Acknowledged, Ignored}
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent}
 import me.micseydel.util.StringImplicits.RichString
@@ -27,12 +26,10 @@ object KibbleManagerListenerActor {
             Ignored
           } else {
             if (mentionsKibble || mentionsDryFood) {
-
-              import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
-
               val acknowledgement = getGrams(text) match {
                 case None =>
                   context.actorContext.log.warn(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
+                  manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
                   Ignored
                 case Some(mass) =>
                   if (lowerText.contains("discard")) {
@@ -43,6 +40,7 @@ object KibbleManagerListenerActor {
                     getContainer(text) match {
                       case None =>
                         context.actorContext.log.warn(s"Kibble/dry food mentioned and identified mass ${mass}g but could not identify container: $text")
+                        manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
                         Ignored
                       case Some(container) =>
                         if (lowerText.contains("refill")) {
@@ -55,13 +53,12 @@ object KibbleManagerListenerActor {
                           Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
                         } else {
                           context.actorContext.log.warn(s"Identified kibble/dry food reference for container $container and mass ${mass}g but could not identify choice {refill, measure}: $text")
+                          manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
                           Ignored
                         }
                     }
                   }
               }
-
-              manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
 
               acknowledgement
             } else {

@@ -50,19 +50,19 @@ object KibbleManagerActor {
         Tinker.steadily
 
       case KibbleRefill(container, mass, time, noteId) =>
-        val text = s"Refilled $container to $mass"
+        val text = s"Refilled $container to ${mass}g"
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
 
       case RemainingKibbleMeasure(container, mass, time, noteId) =>
-        val text = s"Measured $container at $mass"
+        val text = s"Measured $container at ${mass}g"
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
 
       case KibbleDiscarded(mass, time, noteId) =>
-        val text = s"Discarded $mass kibble"
+        val text = s"Discarded ${mass}g kibble"
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
