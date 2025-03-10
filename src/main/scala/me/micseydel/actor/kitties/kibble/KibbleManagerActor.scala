@@ -147,57 +147,57 @@ object KibbleManagerActor {
           }
         }
     }
+  }
 
-    private[kitties] def addToMarkdown(original: String, formattedLineToAdd: String)(implicit log: Logger): String = {
-      if (original.isEmpty) {
-        s"""# Summary
-           |
-           |- for the human to play with, uninterrupted
-           |
-           |# Inbox
-           |
-           |$formattedLineToAdd
-           |
-           |# History
-           |
-           |$formattedLineToAdd
-           |""".stripMargin
-      } else {
-        val allLines = original.split("\n").toList
+  private[kitties] def addToMarkdown(original: String, formattedLineToAdd: String)(implicit log: Logger): String = {
+    if (original.isEmpty) {
+      s"""# Summary
+         |
+         |- for the human to play with, uninterrupted
+         |
+         |# Inbox
+         |
+         |$formattedLineToAdd
+         |
+         |# History
+         |
+         |$formattedLineToAdd
+         |""".stripMargin
+    } else {
+      val allLines = original.split("\n").toList
 
-        @tailrec
-        def findInbox(lines: List[String], accumulator: List[String]): (List[String], List[String]) = {
-          lines match {
-            case "# Inbox" :: tail => (accumulator, tail)
-            case notYetInbox :: tail => findInbox(tail, notYetInbox :: accumulator)
-            case Nil => (accumulator, Nil)
-          }
+      @tailrec
+      def findInbox(lines: List[String], accumulator: List[String]): (List[String], List[String]) = {
+        lines match {
+          case "# Inbox" :: tail => (accumulator, tail)
+          case notYetInbox :: tail => findInbox(tail, notYetInbox :: accumulator)
+          case Nil => (accumulator, Nil)
         }
-
-        val (notTouchingReversed, whenTailStarts) = findInbox(allLines, Nil)
-
-        @tailrec
-        def findMarkdownListEnded(lines: List[String], accumulator: List[String], seenListStart: Boolean = false): (List[String], List[String]) = {
-          lines match {
-            case head :: tail if head.startsWith("- ") => findMarkdownListEnded(tail, head :: accumulator, seenListStart = true)
-            case "" :: tail if seenListStart => (accumulator, tail) // an empty line indicates the list has ended
-            case head :: tail => findMarkdownListEnded(tail, head :: accumulator, seenListStart) // tolerates nested lists
-            case Nil => (accumulator, Nil)
-          }
-        }
-
-        val (completedSofar, theRest) = findMarkdownListEnded(whenTailStarts, "# Inbox" :: notTouchingReversed)
-
-        val (shouldBeFinishedReverse, shouldBeEmpty) = findMarkdownListEnded(theRest, "" :: formattedLineToAdd :: completedSofar)
-
-        val result = ("" :: formattedLineToAdd :: shouldBeFinishedReverse).reverse.mkString("\n")
-
-        if (shouldBeEmpty.nonEmpty) {
-          log.warn(s"Should have been empty: $shouldBeEmpty; result = $result")
-        }
-
-        result
       }
+
+      val (notTouchingReversed, whenTailStarts) = findInbox(allLines, Nil)
+
+      @tailrec
+      def findMarkdownListEnded(lines: List[String], accumulator: List[String], seenListStart: Boolean = false): (List[String], List[String]) = {
+        lines match {
+          case head :: tail if head.startsWith("- ") => findMarkdownListEnded(tail, head :: accumulator, seenListStart = true)
+          case "" :: tail if seenListStart => (accumulator, tail) // an empty line indicates the list has ended
+          case head :: tail => findMarkdownListEnded(tail, head :: accumulator, seenListStart) // tolerates nested lists
+          case Nil => (accumulator, Nil)
+        }
+      }
+
+      val (completedSofar, theRest) = findMarkdownListEnded(whenTailStarts, "# Inbox" :: notTouchingReversed)
+
+      val (shouldBeFinishedReverse, shouldBeEmpty) = findMarkdownListEnded(theRest, "" :: formattedLineToAdd :: completedSofar)
+
+      val result = ("" :: formattedLineToAdd :: shouldBeFinishedReverse).reverse.mkString("\n")
+
+      if (shouldBeEmpty.nonEmpty) {
+        log.warn(s"Should have been empty: $shouldBeEmpty; result = $result")
+      }
+
+      result
     }
   }
 }

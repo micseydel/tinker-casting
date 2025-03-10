@@ -31,10 +31,10 @@ class VirtualNoteRef(noteId: String, private var contents: String = "", val help
     Success(NoOp)
   }
 
-  override def append(contents: String): Option[Throwable] = {
+  override def append(contents: String): Try[NoOp.type] = {
     this.contents = this.contents + contents
     //    TestHelpers.log(s"""[[$noteId]].append("${TestHelpers.compressedNewlines(contents)}") returning None""")
-    None
+    Success(NoOp)
   }
 
   override def readRawAsync()(implicit executionContext: ExecutionContext): Future[String] = {

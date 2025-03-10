@@ -123,29 +123,29 @@ class KibbleManagerActorTestingSpec extends TestTinkerContainer {
                                    |
                                    |# Inbox
                                    |
-                                   |- \[7:10:12AM\] I just measured the larger rectangular container as having a mass of 545 grams of Gilmore and the container so not just the dry food. ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
-                                   |- \[7:01:46AM\] I just measured 430 grams of remaining kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
-                                   |- \[6:17:41AM\] I just measured the large rectangular kibble container as containing 289 grams with the dry food. ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
-                                   |- \[7:06:57AM\] I just discarded 24 grams of kibble. ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
-                                   |- \[11:47:58PM\] I just refilled the rectangular large kibble to 558 grams. ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
-                                   |- \[7:18:56AM\] I just discarded kibble, 32 grams of it. ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
-                                   |- \[7:19:45AM\] I just measured the large rectangular kibble container as containing 502 grams of dry food plus the container. ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
-                                   |- \[7:05:19AM\] I just measured the large rectangular kibble container as having 392 grams of dry food. ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
-                                   |- \[7:15:12AM\] I just measured 273 grams of kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
-                                   |- \[7:16:01AM\] I just discarded 23 grams worth of kibble. ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
+                                   |- \[2024-11-03 07:10\] I just measured the larger rectangular container as having a mass of 545 grams of Gilmore and the container so not just the dry food. ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
+                                   |- \[2024-11-04 07:01\] I just measured 430 grams of remaining kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
+                                   |- \[2024-11-05 06:17\] I just measured the large rectangular kibble container as containing 289 grams with the dry food. ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
+                                   |- \[2024-11-05 07:06\] Discarded 24g kibble ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
+                                   |- \[2024-11-05 23:47\] I just refilled the rectangular large kibble to 558 grams. ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
+                                   |- \[2024-11-06 07:18\] Discarded 32g kibble ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
+                                   |- \[2024-11-06 07:19\] I just measured the large rectangular kibble container as containing 502 grams of dry food plus the container. ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
+                                   |- \[2024-11-07 07:05\] I just measured the large rectangular kibble container as having 392 grams of dry food. ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
+                                   |- \[2024-11-08 07:15\] I just measured 273 grams of kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
+                                   |- \[2024-11-08 07:16\] Discarded 23g kibble ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
                                    |
                                    |# History
                                    |
-                                   |- \[7:10:12AM\] I just measured the larger rectangular container as having a mass of 545 grams of Gilmore and the container so not just the dry food. ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
-                                   |- \[7:01:46AM\] I just measured 430 grams of remaining kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
-                                   |- \[6:17:41AM\] I just measured the large rectangular kibble container as containing 289 grams with the dry food. ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
-                                   |- \[7:06:57AM\] I just discarded 24 grams of kibble. ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
-                                   |- \[11:47:58PM\] I just refilled the rectangular large kibble to 558 grams. ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
-                                   |- \[7:18:56AM\] I just discarded kibble, 32 grams of it. ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
-                                   |- \[7:19:45AM\] I just measured the large rectangular kibble container as containing 502 grams of dry food plus the container. ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
-                                   |- \[7:05:19AM\] I just measured the large rectangular kibble container as having 392 grams of dry food. ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
-                                   |- \[7:15:12AM\] I just measured 273 grams of kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
-                                   |- \[7:16:01AM\] I just discarded 23 grams worth of kibble. ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
+                                   |- \[2024-11-03 07:10\] I just measured the larger rectangular container as having a mass of 545 grams of Gilmore and the container so not just the dry food. ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
+                                   |- \[2024-11-04 07:01\] I just measured 430 grams of remaining kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
+                                   |- \[2024-11-05 06:17\] I just measured the large rectangular kibble container as containing 289 grams with the dry food. ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
+                                   |- \[2024-11-05 07:06\] Discarded 24g kibble ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
+                                   |- \[2024-11-05 23:47\] I just refilled the rectangular large kibble to 558 grams. ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
+                                   |- \[2024-11-06 07:18\] Discarded 32g kibble ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
+                                   |- \[2024-11-06 07:19\] I just measured the large rectangular kibble container as containing 502 grams of dry food plus the container. ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
+                                   |- \[2024-11-07 07:05\] I just measured the large rectangular kibble container as having 392 grams of dry food. ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
+                                   |- \[2024-11-08 07:15\] I just measured 273 grams of kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
+                                   |- \[2024-11-08 07:16\] Discarded 23g kibble ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
                                    |""".stripMargin
 
         shutdown() // FIXME: necessary
