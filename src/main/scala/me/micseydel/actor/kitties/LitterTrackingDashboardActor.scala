@@ -50,19 +50,25 @@ object LitterTrackingDashboardActor {
             case Entity(confidence_entity, confidence_group, _, entity, extractor, group, _, value) =>
               s"$entity $value $confidence_entity ($group, $confidence_group)"
           }.mkString("        - ", "\n        - ", "\n")
-          val formattedIntentRanking = intent_ranking.map {
-            case IntentRanking(confidence, name) =>
-              s"$name $confidence"
-          }.mkString("        - ", "\n        - ", "\n")
 
-          val contents = // ![[Litter boxes (${clock.today()})#Summary]]
+          val contents = if (intent.name == KnownIntent.observe_sifted_contents.IntentName && intent.confidence > 0.7) {
+            //   litterBoxesHelper !! LitterBoxesHelper.LitterSifted(LitterSiftedEvent(time, BackLitter, SiftedContents(List(FIXME))), noteId)
+            s"""${MarkdownUtil.listLineWithTimestampAndRef(time, s"(entity extraction failed) $text", noteId)}
+               |$formattedEntities""".stripMargin
+          } else {
+            val formattedIntentRanking = intent_ranking.map {
+              case IntentRanking(confidence, name) =>
+                s"$name $confidence"
+            }.mkString("        - ", "\n        - ", "\n")
+
             s"""${MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId)}
                |    - intent: $intent
                |    - intent ranking:
                |$formattedIntentRanking
                |    - entities:
-               |$formattedEntities
-               |""".stripMargin
+               |$formattedEntities""".stripMargin
+          }
+
           noteRef.append(contents)
       }
     }
