@@ -1,7 +1,7 @@
 package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.NoOp
-import me.micseydel.actor.kitties.kibble.KibbleModel.KibbleContainer
+import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularS}
 import me.micseydel.dsl.Tinker
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
@@ -39,8 +39,12 @@ object KibbleManagerActor {
   private val NoteName = "Kibble Tinkering 2.0"
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, CatBrown, "🍚") { (context, noteRef) =>
-    @unused
+    @unused // subscribes via Gossiper
     val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
+
+    val containers: List[(KibbleContainer, Int)] = noteRef.getContainersOrMaybeThrow()(context.actorContext.log)
+
+    context.actorContext.log.info(s"Starting with containers: $containers")
 
     Tinker.receiveMessage {
       case MaybeHeardKibbleMention(notedTranscription) =>
@@ -53,12 +57,14 @@ object KibbleManagerActor {
         val text = s"Refilled $container to ${mass}g"
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+        noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
         Tinker.steadily
 
       case RemainingKibbleMeasure(container, mass, time, noteId) =>
         val text = s"Measured $container at ${mass}g"
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+        noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
         Tinker.steadily
 
       case KibbleDiscarded(mass, time, noteId) =>
@@ -81,6 +87,65 @@ object KibbleManagerActor {
         case Failure(exception) => throw exception
         case Success(NoOp) =>
       }
+    }
+
+    def setContainerOrThrow(container: KibbleContainer, grams: Int)(log: Logger): Unit = {
+      noteRef.readMarkdown().map(_.split("\n")).flatMap { lines =>
+        val lookingForStart = s"- [[${container.noteName}"
+        val newLines = lines.map {
+          case line if line.startsWith(lookingForStart) =>
+            s"- [[${container.noteName}]] ${grams}g"
+          case line => line
+        }
+
+        noteRef.setMarkdown(newLines.mkString("\n"))
+      } match {
+        case Failure(exception) => throw exception
+        case Success(NoOp) =>
+      }
+    }
+
+    def getContainersOrMaybeThrow()(log: Logger): List[(KibbleContainer, Int)] = noteRef.readMarkdown().map(MarkdownUtil.getListFromHeader(_, "## Containers")) match {
+      case Failure(exception) => throw exception
+      case Success(list) =>
+        list.flatMap { listLine =>
+          if (listLine.startsWith("[[")) {
+            listLine.drop(2).split("]] ").toList match {
+              case List(containerWikiLink, rawMassGrams) =>
+                val massGrams: Option[Int] = if (rawMassGrams.endsWith("g")) {
+                  val massString = rawMassGrams.dropRight(1)
+                  massString.toIntOption match {
+                    case Some(mass) => Some(mass)
+                    case None =>
+                      log.warn(s"Failed to convert `$massString` to an integer")
+                      None
+                  }
+                } else {
+                  log.warn(s"""Expected mass in grams, e.g. "451g" but got: $rawMassGrams""")
+                  None
+                }
+
+                // FIXME: replace these case classes/objects with Markdown/object-note based stuff
+                val container = containerWikiLink match {
+                  case Circular1.noteName => Some(Circular1)
+                  case Circular2.noteName => Some(Circular2)
+                  case RectangularS.noteName => Some(RectangularS)
+                  case other =>
+                    log.warn(s"Unrecognized container $other, expected one of: {${Circular1.noteName}, ${Circular2.noteName}, ${RectangularS.noteName}}")
+                    None
+                }
+
+                container.flatMap(c => massGrams.map(c -> _))
+
+              case _ =>
+                log.warn(s"List line did not contain a wikilink as expected: $listLine")
+                None
+            }
+          } else {
+            log.warn(s"List line did not start with a wikilink as expected: $listLine")
+            None
+          }
+        }
     }
 
     private[kitties] def addToMarkdown(original: String, formattedLineToAdd: String)(implicit log: Logger): String = {

@@ -11,7 +11,7 @@ case object KibbleEventListJsonProtocol extends DefaultJsonProtocol {
       JsString(m match {
         case Circular1 => "Circular1"
         case Circular2 => "Circular2"
-        case RectangularL => "RectangularL"
+//        case RectangularL => "RectangularL"
         case RectangularS => "RectangularS"
       })
     }
@@ -20,7 +20,7 @@ case object KibbleEventListJsonProtocol extends DefaultJsonProtocol {
       value match {
         case JsString("Circular1") => Circular1
         case JsString("Circular2") => Circular2
-        case JsString("RectangularL") => RectangularL
+//        case JsString("RectangularL") => RectangularL
         case JsString("RectangularS") => RectangularS
         case other => throw DeserializationException(s"Unknown type, expected something in {Circular1, Circular2, RectangularS, RectangularL} but got $other")
       }

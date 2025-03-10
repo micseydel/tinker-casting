@@ -31,4 +31,13 @@ object MarkdownUtil {
       .filterNot(_.endsWith(s" ^$blockId"))
       .mkString("\n")
   }
+
+  def getListFromHeader(markdown: String, headerWithHashes: String): List[String] = {
+    val lines = markdown.split("\n").toList
+
+    lines.dropWhile(_ != headerWithHashes) // find the section
+      .dropWhile(!_.startsWith("- ")) // ignore whitespace
+      .takeWhile(_.startsWith("- ")) // ignore anything after
+      .map(line => line.slice(2, line.length))
+  }
 }
