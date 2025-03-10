@@ -63,11 +63,11 @@ object HueDemo {
     system ! HueControl.FlashTheLight(lightChoice)
   }
 
-  private def turnOffLight(lightChoice: Light)(implicit system: ActorSystem[HueControl.Message]): Unit = {
-    system ! HueControl.TurnOffLight(lightChoice)
-  }
-
-  private def turnOffAllLights()(implicit system: ActorSystem[HueControl.Message]): Unit = {
-    system ! HueControl.TurnOffAllLights()
-  }
+//  private def turnOffLight(lightChoice: Light)(implicit system: ActorSystem[HueControl.Message]): Unit = {
+//    system ! HueControl.TurnOffLight(lightChoice)
+//  }
+//
+//  private def turnOffAllLights()(implicit system: ActorSystem[HueControl.Message]): Unit = {
+//    system ! HueControl.TurnOffAllLights()
+//  }
 }
