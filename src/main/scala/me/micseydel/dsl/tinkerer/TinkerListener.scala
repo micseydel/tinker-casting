@@ -124,55 +124,55 @@ object RasaAnnotatingListener {
   }
 }
 
-object RasaExperiment {
-  sealed trait Message
-  final case class Receive(notedTranscription: NotedTranscription, rasaResult: RasaResult, rasaResultToCompare: RasaResult) extends Message
-
-  def apply(model: String, testModel: String)(implicit Tinker: Tinker): Ability[Message] = {
-    val noteName = s"Rasa Experiment comparing $model and $testModel"
-    NoteMakingTinkerer(noteName, TinkerColor(100, 50, 50), "👨‍🔬") { (context, noteRef) =>
-      context.actorContext.log.debug(s"Created [[$noteName]]")
-      Tinker.receiveMessage {
-        case Receive(notedTranscription, rasaResult, rasaResultToCompare) =>
-          context.actorContext.log.debug(s"Received ${notedTranscription.noteId}, processing...")
-          val elaboration = (rasaResult, rasaResultToCompare) match {
-            case (
-              RasaResult(reference_entities, reference_intent, reference_intent_ranking, _, _),
-              RasaResult(entities, intent, intent_ranking, _, _)
-              ) =>
-              if (reference_intent.name == intent.name) {
-                // FIXME: this is sloppy, an entity can appear multiple times
-                if (reference_entities.map(e => e.entity -> e.value).toMap == entities.map(e => e.entity -> e.value).toMap) {
-                  s"    - Intent (${reference_intent.name}) and entities match"
-                } else {
-                  val entitiesElaboration = formattedEntitiesMarkdown(model, reference_entities)
-                  s"    - Intent (${reference_intent.name}) matches but entities differ\n$entitiesElaboration"
-                }
-              } else {
-                s"""    - Intent ${intent.name} (${intent.confidence}) did not match reference intent ${reference_intent.name} (${reference_intent.confidence})
-                   |    - $model $reference_intent_ranking
-                   |    - $testModel $intent_ranking
-                   |""".stripMargin
-              }
-          }
-
-          val firstLine = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, StringUtil.truncateText(notedTranscription.capture.whisperResult.whisperResultContent.text), notedTranscription.noteId)
-          noteRef.appendOrThrow(
-            s"""$firstLine
-               |$elaboration
-               |""".stripMargin)
-          Tinker.steadily
-      }
-    }
-  }
-
-  private def formattedEntitiesMarkdown(model: String, entities: List[Entity]): String = {
-    val entitiesFormatted = entities.map {
-      case Entity(confidence_entity, confidence_group, _, entity, _, group, _, value) =>
-        s"        - $entity -> $value ($confidence_entity; $group, $confidence_group)"
-    }.mkString("\n")
-    s"""    - $model
-       |$entitiesFormatted
-       |""".stripMargin
-  }
-}
+//object RasaExperiment {
+//  sealed trait Message
+//  final case class Receive(notedTranscription: NotedTranscription, rasaResult: RasaResult, rasaResultToCompare: RasaResult) extends Message
+//
+//  def apply(model: String, testModel: String)(implicit Tinker: Tinker): Ability[Message] = {
+//    val noteName = s"Rasa Experiment comparing $model and $testModel"
+//    NoteMakingTinkerer(noteName, TinkerColor(100, 50, 50), "👨‍🔬") { (context, noteRef) =>
+//      context.actorContext.log.debug(s"Created [[$noteName]]")
+//      Tinker.receiveMessage {
+//        case Receive(notedTranscription, rasaResult, rasaResultToCompare) =>
+//          context.actorContext.log.debug(s"Received ${notedTranscription.noteId}, processing...")
+//          val elaboration = (rasaResult, rasaResultToCompare) match {
+//            case (
+//              RasaResult(reference_entities, reference_intent, reference_intent_ranking, _, _),
+//              RasaResult(entities, intent, intent_ranking, _, _)
+//              ) =>
+//              if (reference_intent.name == intent.name) {
+//                // FIXME: this is sloppy, an entity can appear multiple times
+//                if (reference_entities.map(e => e.entity -> e.value).toMap == entities.map(e => e.entity -> e.value).toMap) {
+//                  s"    - Intent (${reference_intent.name}) and entities match"
+//                } else {
+//                  val entitiesElaboration = formattedEntitiesMarkdown(model, reference_entities)
+//                  s"    - Intent (${reference_intent.name}) matches but entities differ\n$entitiesElaboration"
+//                }
+//              } else {
+//                s"""    - Intent ${intent.name} (${intent.confidence}) did not match reference intent ${reference_intent.name} (${reference_intent.confidence})
+//                   |    - $model $reference_intent_ranking
+//                   |    - $testModel $intent_ranking
+//                   |""".stripMargin
+//              }
+//          }
+//
+//          val firstLine = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, StringUtil.truncateText(notedTranscription.capture.whisperResult.whisperResultContent.text), notedTranscription.noteId)
+//          noteRef.appendOrThrow(
+//            s"""$firstLine
+//               |$elaboration
+//               |""".stripMargin)
+//          Tinker.steadily
+//      }
+//    }
+//  }
+//
+//  private def formattedEntitiesMarkdown(model: String, entities: List[Entity]): String = {
+//    val entitiesFormatted = entities.map {
+//      case Entity(confidence_entity, confidence_group, _, entity, _, group, _, value) =>
+//        s"        - $entity -> $value ($confidence_entity; $group, $confidence_group)"
+//    }.mkString("\n")
+//    s"""    - $model
+//       |$entitiesFormatted
+//       |""".stripMargin
+//  }
+//}
