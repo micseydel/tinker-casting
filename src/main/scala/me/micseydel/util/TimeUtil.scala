@@ -11,6 +11,7 @@ import scala.concurrent.duration.{DurationLong, FiniteDuration}
 object TimeUtil {
   val WithinDayDateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ssa")
   val WithinDay24HourDateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+  val MonthDayTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
   def zonedDateTimeToTimeWithinDay(zonedDateTime: ZonedDateTime): String = zonedDateTime.format(WithinDayDateTimeFormatter)
 

@@ -7,7 +7,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.model.NotedTranscription
-import me.micseydel.util.MarkdownUtil
+import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
@@ -45,25 +45,25 @@ object KibbleManagerActor {
     Tinker.receiveMessage {
       case MaybeHeardKibbleMention(notedTranscription) =>
         context.actorContext.log.debug(s"Received ${notedTranscription.noteId}")
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId)
+        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
 
       case KibbleRefill(container, mass, time, noteId) =>
         val text = s"Refilled $container to $mass"
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId)
+        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
 
       case RemainingKibbleMeasure(container, mass, time, noteId) =>
         val text = s"Measured $container at $mass"
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId)
+        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
 
       case KibbleDiscarded(mass, time, noteId) =>
         val text = s"Discarded $mass kibble"
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId)
+        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.steadily
     }
