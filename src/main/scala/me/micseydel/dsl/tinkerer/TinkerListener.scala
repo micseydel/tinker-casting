@@ -59,9 +59,9 @@ object RasaAnnotatingListener {
     implicit val duration: FiniteDuration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
     implicit val timeout: Timeout = Timeout(duration)
 
-    val maybeExperiment = replacementCandidate.map { replacement =>
-      context.cast(RasaExperiment(model, replacement), "RasaExperiment")
-    }
+//    val maybeExperiment = replacementCandidate.map { replacement =>
+//      context.cast(RasaExperiment(model, replacement), "RasaExperiment")
+//    }
 
     def getRasaResultFut(rawText: String, modelChoice: String): Future[RasaResult] = {
       Await.ready[RasaResult](context.system.rasaActor.ask(RasaActor.GetRasaResult(rawText, modelChoice, _)), duration)
@@ -71,7 +71,7 @@ object RasaAnnotatingListener {
       case TranscriptionEvent(notedTranscription) =>
         val rawText = notedTranscription.capture.whisperResult.whisperResultContent.text
 
-        val maybeComparisonFut: Option[Future[RasaResult]] = replacementCandidate.map(getRasaResultFut(rawText, _))
+//        val maybeComparisonFut: Option[Future[RasaResult]] = replacementCandidate.map(getRasaResultFut(rawText, _))
 
         val maybeRasaResult: Option[RasaResult] = if (rawText.wordCount < 30) {
           getRasaResultFut(rawText, model).value match {
@@ -84,21 +84,20 @@ object RasaAnnotatingListener {
                   context.actorContext.log.warn(s"Fetching Rasa result for ${notedTranscription.noteId} failed", exception)
                   None
                 case Success(rasaResult) =>
-                  context.actorContext.log.debug(s"Entering FOR comprehension for $maybeExperiment, $maybeComparisonFut")
-                  for {
-                    experiment <- maybeExperiment
-                    comparisonFut <- maybeComparisonFut
-                  } {
-                    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
-                    context.actorContext.log.debug(s"Setting onComplete for ${notedTranscription.noteId}")
-                    // FIXME: lazy
-                    comparisonFut.onComplete {
-                      case Failure(exception) =>
-                        exception.printStackTrace()
-                      case Success(toCompare) =>
-                        experiment !! RasaExperiment.Receive(notedTranscription, rasaResult, toCompare)
-                    }
-                  }
+//                  for {
+//                    experiment <- maybeExperiment
+//                    comparisonFut <- maybeComparisonFut
+//                  } {
+//                    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
+//                    context.actorContext.log.debug(s"Setting onComplete for ${notedTranscription.noteId}")
+//                    // FIXME: lazy
+//                    comparisonFut.onComplete {
+//                      case Failure(exception) =>
+//                        exception.printStackTrace()
+//                      case Success(toCompare) =>
+//                        experiment !! RasaExperiment.Receive(notedTranscription, rasaResult, toCompare)
+//                    }
+//                  }
                   Some(rasaResult)
               }
           }
