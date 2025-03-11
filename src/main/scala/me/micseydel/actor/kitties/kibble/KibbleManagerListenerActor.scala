@@ -81,7 +81,7 @@ object KibbleManagerListenerActor {
   }
 
   private def getContainer(text: String): Option[KibbleContainer] = {
-    if (text.contains("circ") && text.contains("prime")) {
+    if (text.contains("circ") && text.contains("prim")) {
       Some(Circular1)
     } else if (text.contains("circ") && text.contains("secondary")) {
       Some(Circular2)
