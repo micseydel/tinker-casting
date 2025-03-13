@@ -83,18 +83,31 @@ object Gossiper {
           Tinker.steadily
 
           // experiment; voting on notes may generalize well
-        case SubmitVote(vote) =>
-          val updatedVotes = votes.updated(vote.noteId, vote)
-          context.actorContext.log.warn(s"Received vote $vote, latest votes $updatedVotes")
-
-          for (voteToMaybePropagate <- updatedVotes.values if voteToMaybePropagate.voter != vote.voter) {
-            for (voter <- updatedVotes.values.map(_.voter)) {
-              context.actorContext.log.warn(s"[${vote.noteId}] Sending vote $voteToMaybePropagate from ${vote.voter}")
-              voter !!! voteToMaybePropagate
+        case SubmitVote(newVote) =>
+          val otherVotersToNotify = if (votes.contains(newVote.noteId)) {
+            votes.values.filterNot(sameVoters(_, newVote)).map(_.voter)
+          } else {
+            context.actorContext.log.warn(s"Sending ${newVote.voter} the ${newVote.noteId} backlog (${votes.size})")
+            for (oldVote <- votes.values) {
+              newVote.voter !!! oldVote
             }
+
+            votes.values.map(_.voter)
           }
+
+          for (voter <- otherVotersToNotify) {
+            voter !!! newVote
+          }
+
+          val updatedVotes = votes.updated(newVote.noteId, newVote)
+          context.actorContext.log.warn(s"Received vote $newVote, latest votes $updatedVotes")
 
           behavior(accurateListeners, fastListeners, updatedVotes)
       }
     }
+
+  private def sameVoters(firstVote: Vote, secondVote: Vote): Boolean =
+    normalizedUri(firstVote.voter.path.toSerializationFormat) == normalizedUri(secondVote.voter.path.toSerializationFormat)
+
+  private def normalizedUri(uri: String): String = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
 }
