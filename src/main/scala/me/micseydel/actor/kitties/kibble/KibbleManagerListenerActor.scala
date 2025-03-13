@@ -87,8 +87,8 @@ object KibbleManagerListenerActor {
       Some(Circular2)
     } else if (text.contains("rect") && text.contains("small")) {
       Some(RectangularS)
-//    } else if (text.contains("rect") && text.contains("large")) {
-//      Some(RectangularL)
+    } else if (text.contains("rect") && text.contains("large")) {
+      Some(RectangularL)
     } else {
       None
     }

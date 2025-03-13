@@ -68,7 +68,9 @@ object GossiperForTesting {
 
         Behaviors.same
 
-      case SubmitVote(vote) => ???
+      case SubmitVote(vote) =>
+        // FIXME: ignore votes for now
+        Behaviors.same
     }
   }
 }

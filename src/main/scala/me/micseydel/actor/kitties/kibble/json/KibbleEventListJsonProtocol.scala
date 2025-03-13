@@ -11,7 +11,7 @@ case object KibbleEventListJsonProtocol extends DefaultJsonProtocol {
       JsString(m match {
         case Circular1 => "Circular1"
         case Circular2 => "Circular2"
-//        case RectangularL => "RectangularL"
+        case RectangularL => "RectangularL"
         case RectangularS => "RectangularS"
       })
     }

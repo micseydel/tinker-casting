@@ -115,36 +115,43 @@ class KibbleManagerActorTestingSpec extends TestTinkerContainer {
 
         println()
 
+        Thread.sleep(200) // FIXME: better way to do this?
+
         val noteContents: String = noteRef.interceptWrite
 
         noteContents shouldEqual """# Summary
                                    |
-                                   |- for the human to play with, uninterrupted
+                                   |## Containers
+                                   |
+                                   |- [[Primary Circular Plastic Food Container]] 1g
+                                   |- [[Secondary Circular Plastic Food Container]] 2g
+                                   |- [[Small Rectangular Plastic Food Container]] 3g
+                                   |- [[Large Rectangular Plastic Food Container]] 273g
                                    |
                                    |# Inbox
                                    |
-                                   |- \[2024-11-03 07:10\] I just measured the larger rectangular container as having a mass of 545 grams of Gilmore and the container so not just the dry food. ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
-                                   |- \[2024-11-04 07:01\] I just measured 430 grams of remaining kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
-                                   |- \[2024-11-05 06:17\] I just measured the large rectangular kibble container as containing 289 grams with the dry food. ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
+                                   |- \[2024-11-03 07:10\] Measured RectangularL at 545g ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
+                                   |- \[2024-11-04 07:01\] Measured RectangularL at 430g ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
+                                   |- \[2024-11-05 06:17\] Measured RectangularL at 289g ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
                                    |- \[2024-11-05 07:06\] Discarded 24g kibble ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
-                                   |- \[2024-11-05 23:47\] I just refilled the rectangular large kibble to 558 grams. ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
+                                   |- \[2024-11-05 23:47\] Refilled RectangularL to 558g ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
                                    |- \[2024-11-06 07:18\] Discarded 32g kibble ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
-                                   |- \[2024-11-06 07:19\] I just measured the large rectangular kibble container as containing 502 grams of dry food plus the container. ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
-                                   |- \[2024-11-07 07:05\] I just measured the large rectangular kibble container as having 392 grams of dry food. ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
-                                   |- \[2024-11-08 07:15\] I just measured 273 grams of kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
+                                   |- \[2024-11-06 07:19\] Measured RectangularL at 502g ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
+                                   |- \[2024-11-07 07:05\] Measured RectangularL at 392g ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
+                                   |- \[2024-11-08 07:15\] Measured RectangularL at 273g ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
                                    |- \[2024-11-08 07:16\] Discarded 23g kibble ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
                                    |
                                    |# History
                                    |
-                                   |- \[2024-11-03 07:10\] I just measured the larger rectangular container as having a mass of 545 grams of Gilmore and the container so not just the dry food. ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
-                                   |- \[2024-11-04 07:01\] I just measured 430 grams of remaining kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
-                                   |- \[2024-11-05 06:17\] I just measured the large rectangular kibble container as containing 289 grams with the dry food. ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
+                                   |- \[2024-11-03 07:10\] Measured RectangularL at 545g ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
+                                   |- \[2024-11-04 07:01\] Measured RectangularL at 430g ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
+                                   |- \[2024-11-05 06:17\] Measured RectangularL at 289g ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
                                    |- \[2024-11-05 07:06\] Discarded 24g kibble ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
-                                   |- \[2024-11-05 23:47\] I just refilled the rectangular large kibble to 558 grams. ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
+                                   |- \[2024-11-05 23:47\] Refilled RectangularL to 558g ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
                                    |- \[2024-11-06 07:18\] Discarded 32g kibble ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
-                                   |- \[2024-11-06 07:19\] I just measured the large rectangular kibble container as containing 502 grams of dry food plus the container. ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
-                                   |- \[2024-11-07 07:05\] I just measured the large rectangular kibble container as having 392 grams of dry food. ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
-                                   |- \[2024-11-08 07:15\] I just measured 273 grams of kibble in the large rectangular dry food container. ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
+                                   |- \[2024-11-06 07:19\] Measured RectangularL at 502g ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
+                                   |- \[2024-11-07 07:05\] Measured RectangularL at 392g ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
+                                   |- \[2024-11-08 07:15\] Measured RectangularL at 273g ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
                                    |- \[2024-11-08 07:16\] Discarded 23g kibble ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
                                    |""".stripMargin
 

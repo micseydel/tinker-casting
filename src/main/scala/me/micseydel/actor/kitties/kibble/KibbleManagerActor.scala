@@ -189,7 +189,12 @@ object KibbleManagerActor {
     if (original.isEmpty) {
       s"""# Summary
          |
-         |- for the human to play with, uninterrupted
+         |## Containers
+         |
+         |- [[Primary Circular Plastic Food Container]] 1g
+         |- [[Secondary Circular Plastic Food Container]] 2g
+         |- [[Small Rectangular Plastic Food Container]] 3g
+         |- [[Large Rectangular Plastic Food Container]] 4g
          |
          |# Inbox
          |

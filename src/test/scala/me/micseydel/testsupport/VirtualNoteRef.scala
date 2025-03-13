@@ -75,7 +75,7 @@ object NoteRefWatcherHelper {
             waitingForUpdate(replyTo)
         }
       case UpdateMarkdown(newerMarkdown) =>
-        maybeBufferedMarkdown.foreach(md => context.log.warn(s"Dropping old markdown for new: $md"))
+        maybeBufferedMarkdown.foreach(md => context.log.debug(s"Dropping old markdown for new: $md"))
         waitingForListener(Some(newerMarkdown))
     }
   }

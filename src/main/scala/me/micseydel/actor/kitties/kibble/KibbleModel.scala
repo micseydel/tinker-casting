@@ -7,7 +7,7 @@ object KibbleModel {
 
   final case object Circular2 extends KibbleContainer(122, "Secondary Circular Plastic Food Container")
 
-//  final case object RectangularL extends KibbleContainer(189)
+  final case object RectangularL extends KibbleContainer(189, "Large Rectangular Plastic Food Container")
 
   final case object RectangularS extends KibbleContainer(157, "Small Rectangular Plastic Food Container")
 }
