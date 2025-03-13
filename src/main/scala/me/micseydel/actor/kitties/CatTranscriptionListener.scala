@@ -7,6 +7,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl._
 import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener
@@ -21,13 +22,15 @@ import java.time.ZonedDateTime
 import scala.annotation.unused
 
 object CatTranscriptionListener {
-  sealed trait Message {
-    def when: ZonedDateTime
-  }
+  sealed trait Message
 
   case class TranscriptionEvent(rasaAnnotatedNotedTranscription: RasaAnnotatedNotedTranscription) extends Message {
-    override def when: ZonedDateTime = rasaAnnotatedNotedTranscription.notedTranscription.capture.captureTime
+    def when: ZonedDateTime = rasaAnnotatedNotedTranscription.notedTranscription.capture.captureTime
   }
+
+  final case class ReceiveVote(vote: Vote) extends Message
+
+  //
 
   def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
 
@@ -54,6 +57,9 @@ object CatTranscriptionListener {
     message match {
       // FIXME: remove/replace this indirection (REGRET)
       case event@TranscriptionAboutCats(WithIntent(_, noteId, captureTime, catMessage, confidence)) =>
+        val vote = noteId.vote(Left(confidence), context.messageAdapter(ReceiveVote))
+        context.system.gossiper !! Gossiper.SubmitVote(vote)
+
         context.actorContext.log.info(s"Received $noteId about cats at capture time $captureTime, extracted ${catMessage.getClass} with confidence $confidence, noting in MOC and sending to CatsHelper")
         catsHelper !! catMessage
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(event), captureTime.toLocalDate)
@@ -97,6 +103,11 @@ object CatTranscriptionListener {
         } else {
           context.actorContext.log.debug(s"Ignoring $noteId, not about cats")
         }
+        Tinker.steadily
+
+      case ReceiveVote(vote) =>
+        // FIXME: this will be chatty!
+        context.actorContext.log.warn(s"Ignoring $vote")
         Tinker.steadily
 
       case other =>

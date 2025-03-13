@@ -1,10 +1,12 @@
 package me.micseydel.actor
 
+import me.micseydel.actor.HueListener.Message
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.Yellow
 import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -29,6 +31,8 @@ object RemindMeListenerActor {
 
   case class MarkAsDone(notificationId: NotificationId) extends Message
 
+  final case class ReceiveVote(vote: Vote) extends Message
+
   private val NoteName = "Reminders"
   private val JsonName = "reminders_tinkering"
 
@@ -52,6 +56,9 @@ object RemindMeListenerActor {
         context.actorContext.log.info(s"Received $noteId")
         whisperResult match {
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>
+            // experiment: this actor is confident, ignores other voters
+            context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(true), context.messageAdapter(ReceiveVote)))
+
             val reminder = Reminder(captureTime, noteId, text)
             val state = jsonRef.readState()
 
@@ -108,6 +115,11 @@ object RemindMeListenerActor {
           case Failure(exception) => context.actorContext.log.error(s"Failed to update markdown", exception)
           case Success(note) => context.actorContext.log.debug(s"MARKDOWN ${note.markdown}")
         }
+        Tinker.steadily
+
+      case ReceiveVote(vote) =>
+        // FIXME: this will be chatty!
+        context.actorContext.log.warn(s"Ignoring vote $vote")
         Tinker.steadily
     }
   }

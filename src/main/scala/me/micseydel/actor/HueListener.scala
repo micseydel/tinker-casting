@@ -8,6 +8,7 @@ import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener
@@ -25,6 +26,8 @@ object HueListener {
   sealed trait Message
 
   final case class TranscriptionEvent(rasaAnnotatedNotedTranscription: RasaAnnotatedNotedTranscription) extends Message
+
+  final case class ReceiveVote(vote: Vote) extends Message
 
   def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(230, 230, 230), "👂").setup { context =>
     implicit val c: TinkerContext[_] = context
@@ -48,6 +51,9 @@ object HueListener {
         Tinker.steadily
 
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), captureTime), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
+        val vote = noteId.vote(Left(rasaResult.intent.confidence), context.messageAdapter(ReceiveVote))
+        context.system.gossiper !! Gossiper.SubmitVote(vote)
+
         validated match {
           case Valid(SetTheLights(_, maybeColor, maybeBrightness, maybeSetOnOff)) =>
             context.actorContext.log.debug(s"Ignoring maybeSetOnOff $maybeSetOnOff")
@@ -113,6 +119,11 @@ object HueListener {
           context.actorContext.log.debug(s"Ignoring <$text>, no Rasa data")
         }
 
+        Tinker.steadily
+
+      case ReceiveVote(vote) =>
+        // FIXME: this will be chatty!
+        context.actorContext.log.warn(s"Ignoring $vote")
         Tinker.steadily
     }
   }

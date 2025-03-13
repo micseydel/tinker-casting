@@ -4,7 +4,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.dsl.Sender
 import me.micseydel.dsl.cast.Gossiper
-import me.micseydel.dsl.cast.Gossiper.Subscription
+import me.micseydel.dsl.cast.Gossiper.{SubmitVote, Subscription}
 import me.micseydel.model.{BaseModel, LargeModel, NotedTranscription}
 
 object GossiperForTesting {
@@ -36,6 +36,8 @@ object GossiperForTesting {
           context.log.info(s"Buffering $r")
           stash.stash(r)
           Behaviors.same
+
+        case SubmitVote(vote) => ???
       }
     }
   }
@@ -65,6 +67,8 @@ object GossiperForTesting {
         underlying ! subscription
 
         Behaviors.same
+
+      case SubmitVote(vote) => ???
     }
   }
 }

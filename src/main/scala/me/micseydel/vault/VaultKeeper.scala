@@ -3,6 +3,10 @@ package me.micseydel.vault
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import me.micseydel.Common
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.Gossiper.Vote
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+//import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.persistence.{BasicJsonRef, BasicNoteRef, JsonRef, NoteRef}
 import org.yaml.snakeyaml.Yaml
@@ -126,6 +130,9 @@ case class NoteId(id: String
   override def asString: String = id
 
   def heading(heading: String): HeadingId = HeadingId(heading, this)
+
+  def vote(confidence: Either[Double, Boolean], voter: SpiritRef[Vote]): Vote =
+    Vote(this, confidence, voter)
 }
 
 object LinkIdJsonProtocol extends DefaultJsonProtocol {
