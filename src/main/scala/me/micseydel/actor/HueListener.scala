@@ -13,7 +13,7 @@ import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
 import me.micseydel.model.KnownIntent.no_intent
 import me.micseydel.model.Light.AllList
 import me.micseydel.model.LightStates.RelaxedLight
@@ -41,6 +41,7 @@ object HueListener {
   }
 
   private def behavior(hueControl: SpiritRef[HueControl.Message])(alreadySeen: Set[(NoteId, WhisperModel)])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
 
     context.actorContext.log.info(s"alreadySeen size ${alreadySeen.size}")

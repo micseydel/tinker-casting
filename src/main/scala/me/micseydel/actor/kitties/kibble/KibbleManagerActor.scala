@@ -2,7 +2,7 @@ package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.NoOp
 import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularS}
-import me.micseydel.dsl.{Tinker, TinkerContext}
+import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl.cast.Gossiper
@@ -43,7 +43,8 @@ object KibbleManagerActor {
   private val NoteName = "Kibble Tinkering 2.0"
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, CatBrown, "🍚") { (context, noteRef) =>
-    implicit val tc: TinkerContext[_] = context
+    implicit val tc: TinkerClock = context.system.clock
+    implicit val c: TinkerContext[_] = context
 
     @unused // subscribes via Gossiper
     val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")

@@ -10,7 +10,7 @@ import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext, Tinkerer}
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent, WhisperSegment}
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.util.StringImplicits.RichString
@@ -49,6 +49,7 @@ object RemindMeListenerActor {
   }
 
   private def behavior(noteRef: NoteRef, jsonRef: TypedJsonRef[State])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(Yellow, "⚠️").receive { (context, message) =>
+    implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     val replyTo = Some(SpiritId)
     message match {

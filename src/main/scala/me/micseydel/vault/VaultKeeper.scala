@@ -5,7 +5,9 @@ import akka.actor.typed.{ActorRef, Behavior}
 import me.micseydel.Common
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper.Vote
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
+
+import java.time.ZonedDateTime
 //import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.persistence.{BasicJsonRef, BasicNoteRef, JsonRef, NoteRef}
@@ -131,8 +133,8 @@ case class NoteId(id: String
 
   def heading(heading: String): HeadingId = HeadingId(heading, this)
 
-  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote]): Vote =
-    Vote(this, confidence, voter)
+  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote])(implicit clock: TinkerClock): Vote =
+    Vote(this, confidence, voter, clock.now())
 }
 
 object LinkIdJsonProtocol extends DefaultJsonProtocol {

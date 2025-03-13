@@ -52,6 +52,7 @@ object CatTranscriptionListener {
                         dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[TranscriptionEvent]]],
                         alreadyAcked: Set[NoteId]
                       )(implicit Tinker: Tinker): Ability[Message] = Tinker.receive[Message] { (context, message) =>
+    implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     context.actorContext.log.debug("Received message, processing...")
     message match {

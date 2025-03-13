@@ -1,5 +1,6 @@
 package me.micseydel.dsl.cast
 
+import akka.actor.ActorPath
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.dsl.Tinker.Ability
@@ -8,6 +9,8 @@ import me.micseydel.dsl.cast.TinkerBrainUtil.Listeners
 import me.micseydel.dsl.{Sender, SpiritRef, Tinker, Tinkerer}
 import me.micseydel.model.{BaseModel, LargeModel, NotedTranscription}
 import me.micseydel.vault.NoteId
+
+import java.time.ZonedDateTime
 
 object Gossiper {
   sealed trait Message
@@ -18,7 +21,7 @@ object Gossiper {
 
   // rudimentary
   final case class SubmitVote(vote: Vote) extends Message
-  final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote])
+  final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote], voteTime: ZonedDateTime)
 
   sealed trait Subscription extends Message {
     def subscriber: SpiritRef[NotedTranscription]
@@ -48,10 +51,13 @@ object Gossiper {
   private def finishInitializing()(implicit Tinker: Tinker): Ability[Message] =
     Tinkerer(rgb(255, 190, 230), "🗣️").setup(_ => behavior(Set.empty, Set.empty, Map.empty))
 
+  /**
+   * @param votes the inner key is the result of normalizedUri() called on the voter's ActorPath
+   */
   private def behavior(
                         accurateListeners: Set[SpiritRef[NotedTranscription]],
                         fastListeners: Set[SpiritRef[NotedTranscription]],
-                        votes: Map[NoteId, Vote]
+                        votes: Map[NoteId, Map[String, Vote]]
                       )(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
       implicit val sender: Sender = Sender(context.self.path)
       implicit val tinkerBrain: ActorRef[TinkerBrain.Message] = context.system.tinkerBrain
@@ -84,30 +90,40 @@ object Gossiper {
 
           // experiment; voting on notes may generalize well
         case SubmitVote(newVote) =>
-          val otherVotersToNotify = if (votes.contains(newVote.noteId)) {
-            votes.values.filterNot(sameVoters(_, newVote)).map(_.voter)
-          } else {
-            context.actorContext.log.warn(s"Sending ${newVote.voter} the ${newVote.noteId} backlog (${votes.size})")
-            for (oldVote <- votes.values) {
-              newVote.voter !!! oldVote
-            }
+          val normalizedUri: String = toNormalizedUri(newVote.voter.path.toSerializationFormat)
+          votes.get(newVote.noteId) match {
+            case None =>
+              val updatedVotes = votes.updated(newVote.noteId, Map(normalizedUri -> newVote))
+              behavior(accurateListeners, fastListeners, updatedVotes)
+            case Some(voterToVotesMap) =>
+              voterToVotesMap.get(normalizedUri) match {
+                case None =>
+                  for (vote <- voterToVotesMap.values) {
+                    newVote.voter !!! vote
+                  }
+                  val updatedVotes = voterToVotesMap.updated(normalizedUri, newVote)
+                  behavior(accurateListeners, fastListeners, votes.updated(newVote.noteId, updatedVotes))
 
-            votes.values.map(_.voter)
+                case Some(voteToReplace) =>
+                  if (voteToReplace.voteTime == newVote.voteTime) {
+                    context.actorContext.log.warn(s"Ignoring vote on ${newVote.noteId} by $normalizedUri, already seen the timestamp for the ntoeId by the voter")
+                    Tinker.steadily
+                  } else {
+                    val votersToNotify = voterToVotesMap.values.filterNot(sameVoters(voteToReplace, _))
+                    for (cachedVoter <- votersToNotify.map(_.voter)) {
+                      cachedVoter !!! newVote
+                    }
+
+                    val updatedVotes = voterToVotesMap.updated(normalizedUri, newVote)
+                    behavior(accurateListeners, fastListeners, votes.updated(newVote.noteId, updatedVotes))
+                  }
+              }
           }
-
-          for (voter <- otherVotersToNotify) {
-            voter !!! newVote
-          }
-
-          val updatedVotes = votes.updated(newVote.noteId, newVote)
-          context.actorContext.log.warn(s"Received vote $newVote, latest votes $updatedVotes")
-
-          behavior(accurateListeners, fastListeners, updatedVotes)
       }
     }
 
   private def sameVoters(firstVote: Vote, secondVote: Vote): Boolean =
-    normalizedUri(firstVote.voter.path.toSerializationFormat) == normalizedUri(secondVote.voter.path.toSerializationFormat)
+    toNormalizedUri(firstVote.voter.path.toSerializationFormat) == toNormalizedUri(secondVote.voter.path.toSerializationFormat)
 
-  private def normalizedUri(uri: String): String = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
+  private def toNormalizedUri(uri: String): String = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
 }
