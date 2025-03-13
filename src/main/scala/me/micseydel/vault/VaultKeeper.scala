@@ -131,7 +131,7 @@ case class NoteId(id: String
 
   def heading(heading: String): HeadingId = HeadingId(heading, this)
 
-  def vote(confidence: Either[Double, Boolean], voter: SpiritRef[Vote]): Vote =
+  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote]): Vote =
     Vote(this, confidence, voter)
 }
 

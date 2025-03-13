@@ -2,9 +2,11 @@ package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.NoOp
 import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularS}
-import me.micseydel.dsl.Tinker
+import me.micseydel.dsl.{Tinker, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
+import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.model.NotedTranscription
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
@@ -19,6 +21,8 @@ import scala.util.{Failure, Success}
 
 object KibbleManagerActor {
   sealed trait Message
+
+  final case class ReceiveVote(vote: Vote) extends Message
 
   private[kitties] final case class MaybeHeardKibbleMention(notedTranscription: NotedTranscription) extends Message
 
@@ -39,6 +43,8 @@ object KibbleManagerActor {
   private val NoteName = "Kibble Tinkering 2.0"
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, CatBrown, "🍚") { (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
+
     @unused // subscribes via Gossiper
     val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
 
@@ -58,6 +64,14 @@ object KibbleManagerActor {
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
+
+        if (mass < 100 || mass > 500) {
+          // uncertain
+          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+        } else {
+          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+        }
+
         Tinker.steadily
 
       case RemainingKibbleMeasure(container, mass, time, noteId) =>
@@ -65,12 +79,33 @@ object KibbleManagerActor {
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
+
+        if (mass < container.baselineWeight || mass > 500) {
+          // uncertain
+          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+        } else {
+          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+        }
+
         Tinker.steadily
 
       case KibbleDiscarded(mass, time, noteId) =>
         val text = s"Discarded ${mass}g kibble"
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+
+        if (mass < 0 || mass > 150) {
+          // uncertain
+          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+        } else {
+          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+        }
+
+        Tinker.steadily
+
+      case ReceiveVote(vote) =>
+        // FIXME: this will be chatty!
+        context.actorContext.log.warn(s"Ignoring $vote")
         Tinker.steadily
     }
   }

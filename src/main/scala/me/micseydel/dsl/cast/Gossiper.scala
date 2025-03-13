@@ -18,7 +18,7 @@ object Gossiper {
 
   // rudimentary
   final case class SubmitVote(vote: Vote) extends Message
-  final case class Vote(noteId: NoteId, confidence: Either[Double, Boolean], voter: SpiritRef[Vote])
+  final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote])
 
   sealed trait Subscription extends Message {
     def subscriber: SpiritRef[NotedTranscription]
@@ -85,15 +85,16 @@ object Gossiper {
           // experiment; voting on notes may generalize well
         case SubmitVote(vote) =>
           val updatedVotes = votes.updated(vote.noteId, vote)
+          context.actorContext.log.warn(s"Received vote $vote, latest votes $updatedVotes")
 
           for (voteToMaybePropagate <- updatedVotes.values if voteToMaybePropagate.voter != vote.voter) {
             for (voter <- updatedVotes.values.map(_.voter)) {
+              context.actorContext.log.warn(s"[${vote.noteId}] Sending vote $voteToMaybePropagate from ${vote.voter}")
               voter !!! voteToMaybePropagate
             }
           }
 
           behavior(accurateListeners, fastListeners, updatedVotes)
-          Tinker.steadily
       }
     }
 }
