@@ -1,7 +1,7 @@
 package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.NoOp
-import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularS}
+import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularL, RectangularS}
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
@@ -182,8 +182,9 @@ object KibbleManagerActor {
                   case Circular1.noteName => Some(Circular1)
                   case Circular2.noteName => Some(Circular2)
                   case RectangularS.noteName => Some(RectangularS)
+                  case RectangularL.noteName => Some(RectangularL)
                   case other =>
-                    log.warn(s"Unrecognized container $other, expected one of: {${Circular1.noteName}, ${Circular2.noteName}, ${RectangularS.noteName}}")
+                    log.warn(s"Unrecognized container $other, expected one of: {${Circular1.noteName}, ${Circular2.noteName}, ${RectangularS.noteName}, RectangularL.noteName}")
                     None
                 }
 
