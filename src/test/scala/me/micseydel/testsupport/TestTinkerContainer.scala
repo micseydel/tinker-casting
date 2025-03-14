@@ -84,7 +84,8 @@ class TinkerSystemForTesting(
                               gossiperActor: ActorRef[Gossiper.Message],
                               operatorActor: ActorRef[Operator.Message],
                               hueControlActor: ActorRef[HueControl.Message],
-                              tinkerClock: TinkerClock
+                              tinkerClock: TinkerClock,
+                              actorNotesFolderWatcherActorForTest: ActorRef[ActorNotesFolderWatcherActor.Message]
                             ) extends TinkerSystem {
   def wrap[T](actorRef: ActorRef[T]): SpiritRef[T] = new SpiritRefForTesting[T](actorRef)
 
@@ -118,7 +119,7 @@ class TinkerSystemForTesting(
 
   override def vaultKeeper: SpiritRef[VaultKeeper.Message] = wrap(vaultKeeperActor)
 
-  override def actorNotesFolderWatcherActor: SpiritRef[ActorNotesFolderWatcherActor.Message] = ???
+  override def actorNotesFolderWatcherActor: SpiritRef[ActorNotesFolderWatcherActor.Message] = wrap(actorNotesFolderWatcherActorForTest)
 
   override def networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost] = ???
 
@@ -178,6 +179,8 @@ abstract class TinkerTest(val noteRefs: Map[String, NoteRef],
   private val clockContainer = testKit.spawn(ContainerActor(ZonedDateTime.now()), "ContainerActor")
   val tinkerClockForTest = new TinkerClockForTest(clockContainer)
 
+  val actorNotesFolderWatcherActorForTest = testKit.spawn(ActorNotesFolderWatcherActorForTest(), "ActorNotesFolderWatcherActorForTest")
+
   implicit val tinkerSystem: TinkerSystemForTesting = new TinkerSystemForTesting(
     chronicler,
     testKit.testKit.system,
@@ -188,7 +191,8 @@ abstract class TinkerTest(val noteRefs: Map[String, NoteRef],
     gossiper,
     operator,
     hueControl,
-    tinkerClockForTest
+    tinkerClockForTest,
+    actorNotesFolderWatcherActorForTest
   )
 
   implicit val tinker: Tinker = new Tinker(tinkerSystem)
@@ -311,6 +315,19 @@ object ContainerActor {
 
     def setValue(value: T): Unit = {
       underlying ! Set(value)
+    }
+  }
+}
+
+object ActorNotesFolderWatcherActorForTest {
+  def apply(): Behavior[ActorNotesFolderWatcherActor.Message] = Behaviors.setup { context =>
+    Behaviors.receiveMessage {
+      case ActorNotesFolderWatcherActor.StartTinkering(tinker) => ???
+      case ActorNotesFolderWatcherActor.SubscribeSubdirectory(subdirectory, replyTo) => ???
+      case ActorNotesFolderWatcherActor.SubscribeNoteRef(noteRef, replyTo) =>
+      // FIXME: ignore
+        Behaviors.same
+      case ActorNotesFolderWatcherActor.ReceiveVaultPathUpdatedEvent(event) => ???
     }
   }
 }

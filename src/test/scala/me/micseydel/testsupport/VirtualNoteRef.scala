@@ -34,6 +34,9 @@ class VirtualNoteRef(noteId: String, private var contents: String = "", val help
   override def append(contents: String): Try[NoOp.type] = {
     this.contents = this.contents + contents
     //    TestHelpers.log(s"""[[$noteId]].append("${TestHelpers.compressedNewlines(contents)}") returning None""")
+    helper.foreach { watcher =>
+      watcher ! NoteRefWatcherHelper.UpdateMarkdown(contents)
+    }
     Success(NoOp)
   }
 

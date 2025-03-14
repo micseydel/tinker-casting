@@ -86,7 +86,9 @@ object CatsHelper {
 
     val litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message] = context.cast(LitterBoxesHelper(), "LitterBoxesHelper")
 
-    val litterTrackingDashboardActor: SpiritRef[LitterTrackingDashboardActor.Message] = context.cast(LitterTrackingDashboardActor(litterBoxesHelper), "LitterTrackingDashboardActor")
+    val litterTrackingDashboardActor: SpiritRef[LitterTrackingDashboardActor.Message] = context.cast(LitterTrackingDashboardActor(
+    //  litterBoxesHelper
+    ), "LitterTrackingDashboardActor")
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Observation]]] = context.cast(DailyNotesRouter(
       "Structured cats notes",

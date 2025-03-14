@@ -13,7 +13,7 @@ object TestVaultKeeper {
       case VaultKeeper.RequestExclusiveNoteRef(noteId, replyTo, subdirectory) =>
         replyTo ! (noteRefs.get(noteId) match {
           case None =>
-            NoteRefResponse(noteId, Left(s"Note ID $noteId not pre-loaded for testing"))
+            NoteRefResponse(noteId, Left(s"Note ID $noteId not pre-loaded for testing, just: ${noteRefs.keySet}"))
           case Some(noteRef) =>
             NoteRefResponse(noteId, Right(noteRef))
         })

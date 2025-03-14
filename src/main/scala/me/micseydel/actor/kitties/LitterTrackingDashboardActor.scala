@@ -10,6 +10,7 @@ import me.micseydel.model._
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
+import org.slf4j.Logger
 
 import java.time.ZonedDateTime
 import scala.util.{Failure, Success, Try}
@@ -21,13 +22,17 @@ object LitterTrackingDashboardActor {
 
   private case class ReceiveNotePing(ping: Ping) extends Message
 
-  def apply(litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message])(implicit Tinker: Tinker): Ability[Message] =
+  def apply(
+          //   litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message]
+           )(implicit Tinker: Tinker): Ability[Message] =
     AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Litter Tracking Dashboard", CatBrown, "🗑️", ReceiveNotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       implicit val clock: TinkerClock = context.system.clock
+      implicit val l: Logger = context.actorContext.log
 
       Tinker.receiveMessage {
         case PartialMatch(NotedTranscription(capture, noteId), rasaResult) =>
+          context.actorContext.log.info(s"Got a partial match on $noteId")
           noteRef.addToInbox(noteId, capture.captureTime, rasaResult) match {
             case Failure(exception) => throw exception
             case Success(NoOp) =>
@@ -43,7 +48,7 @@ object LitterTrackingDashboardActor {
     }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def addToInbox(noteId: NoteId, time: ZonedDateTime, rasaResult: RasaResult)(implicit clock: TinkerClock): Try[NoOp.type] = {
+    def addToInbox(noteId: NoteId, time: ZonedDateTime, rasaResult: RasaResult)(implicit log: Logger): Try[NoOp.type] = {
       rasaResult match {
         case RasaResult(entities, intent, intent_ranking, text, _) =>
           val formattedEntities = entities.map {
@@ -68,6 +73,8 @@ object LitterTrackingDashboardActor {
                |    - entities:
                |$formattedEntities""".stripMargin
           }
+
+          log.debug(s"Adding contents: $contents")
 
           noteRef.append(contents)
       }
