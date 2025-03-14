@@ -43,15 +43,20 @@ object KibbleManagerActor {
   private val NoteName = "Kibble Tinkering 2.0"
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, CatBrown, "🍚") { (context, noteRef) =>
-    implicit val tc: TinkerClock = context.system.clock
-    implicit val c: TinkerContext[_] = context
-
     @unused // subscribes via Gossiper
     val listener = context.cast(KibbleManagerListenerActor(context.self), "KibbleManagerListenerActor")
 
     val containers: List[(KibbleContainer, Int)] = noteRef.getContainersOrMaybeThrow()(context.actorContext.log)
 
     context.actorContext.log.info(s"Starting with containers: $containers")
+
+    implicit val nr: NoteRef = noteRef
+    behavior(containers.toMap)
+  }
+
+  private def behavior(cachedContainers: Map[KibbleContainer, Int])(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerClock = context.system.clock
+    implicit val c: TinkerContext[_] = context
 
     Tinker.receiveMessage {
       case MaybeHeardKibbleMention(notedTranscription) =>
@@ -69,26 +74,35 @@ object KibbleManagerActor {
         if (mass < 100 || mass > 500) {
           // uncertain
           context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+          Tinker.steadily
         } else {
           context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+          behavior(cachedContainers.updated(container, mass))
         }
-
-        Tinker.steadily
 
       case RemainingKibbleMeasure(container, mass, time, noteId) =>
-        val text = s"Measured $container at ${mass}g"
+        val text = cachedContainers.get(container) match {
+          case None =>
+            s"Measured $container at ${mass}g"
+          case Some(cachedMass) =>
+            if (cachedMass > mass) {
+              s"Measured $container at ${mass}g, previously ${cachedMass}g therefor dispensed ${cachedMass - mass}g"
+            } else {
+              s"Measured $container at ${mass}g, previously ${cachedMass}g"
+            }
+        }
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
-        noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
 
-        if (mass < container.baselineWeight || mass > 500) {
+        if (mass < container.baselineWeight || mass > 1000) {
           // uncertain
           context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+          Tinker.steadily
         } else {
+          noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
           context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+          behavior(cachedContainers.updated(container, mass))
         }
-
-        Tinker.steadily
 
       case KibbleDiscarded(mass, time, noteId) =>
         val text = s"Discarded ${mass}g kibble"
@@ -110,6 +124,8 @@ object KibbleManagerActor {
         Tinker.steadily
     }
   }
+
+  //
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def addOrThrow(line: String)(log: Logger): Unit = {

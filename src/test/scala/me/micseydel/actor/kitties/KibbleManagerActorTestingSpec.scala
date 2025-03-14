@@ -131,27 +131,27 @@ class KibbleManagerActorTestingSpec extends TestTinkerContainer {
                                    |# Inbox
                                    |
                                    |- \[2024-11-03 07:10\] Measured RectangularL at 545g ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
-                                   |- \[2024-11-04 07:01\] Measured RectangularL at 430g ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
-                                   |- \[2024-11-05 06:17\] Measured RectangularL at 289g ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
+                                   |- \[2024-11-04 07:01\] Measured RectangularL at 430g, previously 545g therefor dispensed 115g ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
+                                   |- \[2024-11-05 06:17\] Measured RectangularL at 289g, previously 430g therefor dispensed 141g ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
                                    |- \[2024-11-05 07:06\] Discarded 24g kibble ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
                                    |- \[2024-11-05 23:47\] Refilled RectangularL to 558g ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
                                    |- \[2024-11-06 07:18\] Discarded 32g kibble ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
-                                   |- \[2024-11-06 07:19\] Measured RectangularL at 502g ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
-                                   |- \[2024-11-07 07:05\] Measured RectangularL at 392g ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
-                                   |- \[2024-11-08 07:15\] Measured RectangularL at 273g ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
+                                   |- \[2024-11-06 07:19\] Measured RectangularL at 502g, previously 289g ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
+                                   |- \[2024-11-07 07:05\] Measured RectangularL at 392g, previously 502g therefor dispensed 110g ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
+                                   |- \[2024-11-08 07:15\] Measured RectangularL at 273g, previously 392g therefor dispensed 119g ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
                                    |- \[2024-11-08 07:16\] Discarded 23g kibble ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
                                    |
                                    |# History
                                    |
                                    |- \[2024-11-03 07:10\] Measured RectangularL at 545g ([[Transcription for mobile_audio_capture_20241103-071012.wav|ref]])
-                                   |- \[2024-11-04 07:01\] Measured RectangularL at 430g ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
-                                   |- \[2024-11-05 06:17\] Measured RectangularL at 289g ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
+                                   |- \[2024-11-04 07:01\] Measured RectangularL at 430g, previously 545g therefor dispensed 115g ([[Transcription for mobile_audio_capture_20241104-070146.wav|ref]])
+                                   |- \[2024-11-05 06:17\] Measured RectangularL at 289g, previously 430g therefor dispensed 141g ([[Transcription for mobile_audio_capture_20241105-061741.wav|ref]])
                                    |- \[2024-11-05 07:06\] Discarded 24g kibble ([[Transcription for mobile_audio_capture_20241105-070657.wav|ref]])
                                    |- \[2024-11-05 23:47\] Refilled RectangularL to 558g ([[Transcription for mobile_audio_capture_20241105-234758.wav|ref]])
                                    |- \[2024-11-06 07:18\] Discarded 32g kibble ([[Transcription for mobile_audio_capture_20241106-071856.wav|ref]])
-                                   |- \[2024-11-06 07:19\] Measured RectangularL at 502g ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
-                                   |- \[2024-11-07 07:05\] Measured RectangularL at 392g ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
-                                   |- \[2024-11-08 07:15\] Measured RectangularL at 273g ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
+                                   |- \[2024-11-06 07:19\] Measured RectangularL at 502g, previously 289g ([[Transcription for mobile_audio_capture_20241106-071945.wav|ref]])
+                                   |- \[2024-11-07 07:05\] Measured RectangularL at 392g, previously 502g therefor dispensed 110g ([[Transcription for mobile_audio_capture_20241107-070519.wav|ref]])
+                                   |- \[2024-11-08 07:15\] Measured RectangularL at 273g, previously 392g therefor dispensed 119g ([[Transcription for mobile_audio_capture_20241108-071512.wav|ref]])
                                    |- \[2024-11-08 07:16\] Discarded 23g kibble ([[Transcription for mobile_audio_capture_20241108-071601.wav|ref]])
                                    |""".stripMargin
 
