@@ -60,7 +60,7 @@ object TranscriptionNoteWrapper {
           NotedTranscription(transcriptionCapture, noteRef.noteId)
         }
 
-        listener !! Chronicler.ActOnNoteRef(noteRef.noteId, notedTranscription)
+        listener !! Chronicler.ActOnNoteRef(notedTranscription)
 
         // FIXME
         // FIXME instead of storing all prior messages, just update a state json, because we can't/don't want to store any exceptions, which are just for logs; maybe store a string to associate with the stack trace? a uuid?

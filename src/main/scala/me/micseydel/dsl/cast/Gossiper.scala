@@ -7,6 +7,7 @@ import me.micseydel.NoOp
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TinkerBrainUtil.Listeners
+import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
 import me.micseydel.dsl.{Sender, SpiritRef, Tinker, Tinkerer}
 import me.micseydel.model.{BaseModel, LargeModel, NotedTranscription}
@@ -15,6 +16,7 @@ import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success}
 
 object Gossiper {
@@ -73,10 +75,18 @@ object Gossiper {
 
     val formattedMarkdown = votes.map { case (noteId, votesOnNote) =>
       val formattedVotesOnNote = votesOnNote.values.map {
-        case Vote(noteId, confidence, voter, voteTime) =>
-          MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat)} -> $confidence")
+        case Vote(_, confidence, voter, voteTime) =>
+          MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss.S"))
       }.mkString("    ", "\n    ", "")
-      s"$noteId\n$formattedVotesOnNote"
+      val filename = noteId.asString.drop(18).dropRight(3) + "wav"
+      val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
+        case Left(msg) =>
+          context.actorContext.log.warn(s"Failed to extract time from noteId $filename: $msg")
+          noteId.toString
+        case Right(time) =>
+          MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss.S")).drop(2)
+      }
+      s"$firstLine\n$formattedVotesOnNote"
     }.mkString("- ", "\n- ", "\n")
 
     noteRef.setMarkdown(formattedMarkdown) match {
