@@ -1,4 +1,4 @@
-import {TinkerEdge, TinkerNode, TinkerGraph, isTinkerNode} from './graph.ts'
+import {isTinkerNode, TinkerEdge, TinkerGraph, TinkerNode} from './graph.ts'
 import * as d3 from "d3";
 import {BaseType} from "d3";
 
@@ -274,7 +274,7 @@ export class VisualGraph {
 
     private selectEdges(highlightedEdges: string[]): void {
         this.d3EdgeSelection
-            .style("stroke", d => doesInclude(d, highlightedEdges) ? "red" : "#000")
+            .style("stroke", d => colorForEdge(d, highlightedEdges))
             .style("stroke-width", d => doesInclude(d, highlightedEdges) ? 5 : 1.5)
             .style("stroke-opacity", d => doesInclude(d, highlightedEdges) ? 1 : 0.2)
         ;
@@ -357,6 +357,11 @@ function doesInclude(d: TinkerEdge, highlightedEdges: string[]): boolean {
     let targetId = isTinkerNode(d.target) ? d.target.id : d.target;
     const stringifiedEdge: string = stringEdge(sourceId, targetId);
     return highlightedEdges.includes(stringifiedEdge);
+}
+
+function colorForEdge(d: TinkerEdge, highlightedEdges: string[]): string {
+    const newHighlightColor = isTinkerNode(d.source) ? d.source.color : "red";
+    return doesInclude(d, highlightedEdges) ? newHighlightColor : "#000";
 }
 
 export function getLastPathSegment(inputString: string): string {
