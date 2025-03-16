@@ -108,7 +108,7 @@ object CatTranscriptionListener {
 
       case ReceiveVote(vote) =>
         // FIXME: this will be chatty!
-        context.actorContext.log.warn(s"Ignoring $vote")
+        context.actorContext.log.debug(s"Ignoring $vote")
         Tinker.steadily
 
       case other =>

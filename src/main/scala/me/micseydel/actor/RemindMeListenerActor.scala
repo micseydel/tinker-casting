@@ -121,7 +121,7 @@ object RemindMeListenerActor {
 
       case ReceiveVote(vote) =>
         // FIXME: this will be chatty!
-        context.actorContext.log.warn(s"Ignoring vote $vote")
+        context.actorContext.log.debug(s"Ignoring vote $vote")
         Tinker.steadily
     }
   }

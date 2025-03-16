@@ -63,6 +63,7 @@ object KibbleManagerActor {
         context.actorContext.log.debug(s"Received ${notedTranscription.noteId}")
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+        context.system.gossiper !! Gossiper.SubmitVote(notedTranscription.noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
         Tinker.steadily
 
       case KibbleRefill(container, mass, time, noteId) =>
@@ -120,7 +121,7 @@ object KibbleManagerActor {
 
       case ReceiveVote(vote) =>
         // FIXME: this will be chatty!
-        context.actorContext.log.warn(s"Ignoring $vote")
+        context.actorContext.log.debug(s"Ignoring $vote")
         Tinker.steadily
     }
   }

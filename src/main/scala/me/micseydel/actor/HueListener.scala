@@ -106,13 +106,15 @@ object HueListener {
             Tinker.steadily
         }
 
-      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(_, _), Some(RasaResult(entities, Intent(_, unrecognizedIntent), _, _, _)))) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(_, noteId), Some(rasaResult@RasaResult(entities, Intent(_, unrecognizedIntent), _, _, _)))) =>
         if (unrecognizedIntent != no_intent.IntentName) {
-          context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent with entities $entities")
+          context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent (rasaResult.intent.confidence) with entities $entities")
         }
+        val vote = noteId.vote(Right(Some(false)), context.messageAdapter(ReceiveVote))
+        context.system.gossiper !! Gossiper.SubmitVote(vote)
         Tinker.steadily
 
-      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), _), None)) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), noteId), None)) =>
         val flashCommands = List("please flash the lights", "please do a light show")
         if (flashCommands.contains(text.trim.toLowerCase)) {
           hueControl !! HueControl.FlashTheLights()
@@ -120,11 +122,14 @@ object HueListener {
           context.actorContext.log.debug(s"Ignoring <$text>, no Rasa data")
         }
 
+        val vote = noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote))
+        context.system.gossiper !! Gossiper.SubmitVote(vote)
+
         Tinker.steadily
 
       case ReceiveVote(vote) =>
         // FIXME: this will be chatty!
-        context.actorContext.log.warn(s"Ignoring $vote")
+        context.actorContext.log.debug(s"Ignoring $vote")
         Tinker.steadily
     }
   }
