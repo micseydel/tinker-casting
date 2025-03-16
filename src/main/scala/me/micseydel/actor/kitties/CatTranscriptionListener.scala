@@ -58,8 +58,7 @@ object CatTranscriptionListener {
     message match {
       // FIXME: remove/replace this indirection (REGRET)
       case event@TranscriptionAboutCats(WithIntent(_, noteId, captureTime, catMessage, confidence)) =>
-        val vote = noteId.vote(Left(confidence), context.messageAdapter(ReceiveVote))
-        context.system.gossiper !! Gossiper.SubmitVote(vote)
+        context.system.gossiper !! noteId.voteMeasuredly(confidence, context.messageAdapter(ReceiveVote), Some("rasa matched"))
 
         context.actorContext.log.info(s"Received $noteId about cats at capture time $captureTime, extracted ${catMessage.getClass} with confidence $confidence, noting in MOC and sending to CatsHelper")
         catsHelper !! catMessage

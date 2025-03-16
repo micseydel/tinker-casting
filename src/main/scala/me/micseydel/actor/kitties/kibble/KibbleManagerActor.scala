@@ -63,7 +63,7 @@ object KibbleManagerActor {
         context.actorContext.log.debug(s"Received ${notedTranscription.noteId}")
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
-        context.system.gossiper !! Gossiper.SubmitVote(notedTranscription.noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+        context.system.gossiper !! notedTranscription.noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Definitely maybe"))
         Tinker.steadily
 
       case KibbleRefill(container, mass, time, noteId) =>
@@ -74,10 +74,10 @@ object KibbleManagerActor {
 
         if (mass < 100 || mass > 500) {
           // uncertain
-          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Mass out of range; mis-transcription?"))
           Tinker.steadily
         } else {
-          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("perfect fit"))
           behavior(cachedContainers.updated(container, mass))
         }
 
@@ -97,11 +97,11 @@ object KibbleManagerActor {
 
         if (mass < container.baselineWeight || mass > 1000) {
           // uncertain
-          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Almost matched; mis-transcription?"))
           Tinker.steadily
         } else {
           noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
-          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("perfect fit"))
           behavior(cachedContainers.updated(container, mass))
         }
 
@@ -112,9 +112,9 @@ object KibbleManagerActor {
 
         if (mass < 0 || mass > 150) {
           // uncertain
-          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(None), context.messageAdapter(ReceiveVote)))
+          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Mass out of range; mis-transcription?"))
         } else {
-          context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("perfect fit"))
         }
 
         Tinker.steadily

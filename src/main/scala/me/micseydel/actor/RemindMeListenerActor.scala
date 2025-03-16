@@ -58,7 +58,7 @@ object RemindMeListenerActor {
         whisperResult match {
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>
             // experiment: this actor is confident, ignores other voters
-            context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote)))
+            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("exact match"))
 
             val reminder = Reminder(captureTime, noteId, text)
             val state = jsonRef.readState()
@@ -106,8 +106,10 @@ object RemindMeListenerActor {
             Tinker.steadily
 
           case WhisperResult(WhisperResultContent(text, _), _) =>
-            context.system.gossiper !! Gossiper.SubmitVote(noteId.vote(Right(Some(false)), context.messageAdapter(ReceiveVote)))
-            context.actorContext.log.debug("trigger phrase was not detected, ignoring")
+            context.system.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVote), Some("trigger phrase not detected"))
+            if (context.actorContext.log.isDebugEnabled) {
+              context.actorContext.log.debug(s"trigger phrase was not detected, ignoring ($text)")
+            }
             Tinker.steadily
         }
 

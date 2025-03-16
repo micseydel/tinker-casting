@@ -52,9 +52,6 @@ object HueListener {
         Tinker.steadily
 
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), captureTime), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
-        val vote = noteId.vote(Left(rasaResult.intent.confidence), context.messageAdapter(ReceiveVote))
-        context.system.gossiper !! Gossiper.SubmitVote(vote)
-
         validated match {
           case Valid(SetTheLights(_, maybeColor, maybeBrightness, maybeSetOnOff)) =>
             context.actorContext.log.debug(s"Ignoring maybeSetOnOff $maybeSetOnOff")
@@ -98,10 +95,13 @@ object HueListener {
 
             context.system.chronicler !! ackMessage
 
+            context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, context.messageAdapter(ReceiveVote), Some(s"$model"))
+
             context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
             behavior(hueControl)(alreadySeen + ((noteId, model)))
 
           case Invalid(e) =>
+            context.system.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVote), Some("failed to extract entities"))
             context.actorContext.log.warn(s"Could not extract entities for set_the_lights ${rasaResult.entities}; $e")
             Tinker.steadily
         }
@@ -110,8 +110,7 @@ object HueListener {
         if (unrecognizedIntent != no_intent.IntentName) {
           context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent (rasaResult.intent.confidence) with entities $entities")
         }
-        val vote = noteId.vote(Right(Some(false)), context.messageAdapter(ReceiveVote))
-        context.system.gossiper !! Gossiper.SubmitVote(vote)
+        context.system.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVote), Some(s"unrecognized intent: $unrecognizedIntent"))
         Tinker.steadily
 
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), noteId), None)) =>
@@ -122,8 +121,7 @@ object HueListener {
           context.actorContext.log.debug(s"Ignoring <$text>, no Rasa data")
         }
 
-        val vote = noteId.vote(Right(Some(true)), context.messageAdapter(ReceiveVote))
-        context.system.gossiper !! Gossiper.SubmitVote(vote)
+        context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("exact match"))
 
         Tinker.steadily
 

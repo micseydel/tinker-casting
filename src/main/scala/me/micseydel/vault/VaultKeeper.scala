@@ -4,7 +4,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import me.micseydel.Common
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.Gossiper.Vote
+import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.Gossiper.{SubmitVote, Vote}
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
 
 import java.time.ZonedDateTime
@@ -133,8 +134,14 @@ case class NoteId(id: String
 
   def heading(heading: String): HeadingId = HeadingId(heading, this)
 
-  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote])(implicit clock: TinkerClock): Vote =
-    Vote(this, confidence, voter, clock.now())
+  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote], comments: Option[String])(implicit clock: TinkerClock): Vote =
+    Vote(this, confidence, voter, clock.now(), comments)
+
+  def voteConfidently(confidence: Option[Boolean], voter: SpiritRef[Vote], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
+    Gossiper.SubmitVote(Vote(this, Right(confidence), voter, clock.now(), comments))
+
+  def voteMeasuredly(confidence: Double, voter: SpiritRef[Vote], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
+    Gossiper.SubmitVote(Vote(this, Left(confidence), voter, clock.now(), comments))
 }
 
 object LinkIdJsonProtocol extends DefaultJsonProtocol {
