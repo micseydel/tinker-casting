@@ -60,7 +60,7 @@ object RemindMeListenerActor {
             context.actorContext.log.debug("Base model is only observed for voting, not behavior")
             context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some(s"exact match for ${BaseModel}"))
             Tinker.steadily
-            
+
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>
             context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some(s"exact match for ${meta.model}"))
 

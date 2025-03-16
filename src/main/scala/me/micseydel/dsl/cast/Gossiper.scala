@@ -30,7 +30,7 @@ object Gossiper {
   final case class SubmitVote(vote: Vote) extends Message
 
   final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote], voteTime: ZonedDateTime, comments: Option[String]) {
-    override def toString = s"""Vote($noteId, $confidence, ${toNormalizedUri(voter.path.toSerializationFormat)}, $voteTime, $comments)"""
+    override def toString = s"""Vote($noteId, $confidence, ${toNormalizedUri(voter.path.toSerializationFormat).drop(35)}, ${voteTime.format(DateTimeFormatter.ofPattern("h:mm:ss.SSS"))}, $comments)"""
   }
 
   sealed trait Subscription extends Message {
@@ -79,12 +79,11 @@ object Gossiper {
       val formattedVotesOnNote = votesOnNote.values
         .map {
         case NonEmptyList(Vote(_, confidence, voter, voteTime, maybeComments), theRest) =>
-          val priorVotes = if (theRest.nonEmpty) s"; prior votes: $theRest" else ""
-          MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss.S")) +
+          val priorVotes = if (theRest.nonEmpty) s"$theRest" else ""
+          MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss.SSS")) +
             s"""
               |        - comments: $maybeComments
-              |        - prior votes: $priorVotes
-              |""".stripMargin
+              |        - prior votes: $priorVotes""".stripMargin
       }.mkString("    ", "\n    ", "")
       val filename = noteId.asString.drop(18).dropRight(3) + "wav"
       val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
@@ -92,7 +91,7 @@ object Gossiper {
           context.actorContext.log.warn(s"Failed to extract time from noteId $filename: $msg")
           noteId.toString
         case Right(time) =>
-          MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss.SSS")).drop(2)
+          MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss")).drop(2)
       }
       s"$firstLine\n$formattedVotesOnNote"
     }.mkString("- ", "\n- ", "\n")
