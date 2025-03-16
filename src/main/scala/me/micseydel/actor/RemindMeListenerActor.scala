@@ -11,7 +11,7 @@ import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext, Tinkerer}
-import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent, WhisperSegment}
+import me.micseydel.model.{BaseModel, NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent, WhisperResultMetadata, WhisperSegment}
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
@@ -39,9 +39,9 @@ object RemindMeListenerActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, Yellow, "⚠️") { (context, noteRef) =>
     Tinker.withTypedJson(JsonName, StateJsonProtocol.stateFormat) { jsonRef =>
         implicit val c: TinkerContext[_] = context
-        context.actorContext.log.info(s"Starting RemindMeListenerActor(note=$NoteName, json=$JsonName): sending Gossiper.SubscribeAccurate")
+        context.actorContext.log.info(s"Starting RemindMeListenerActor(note=$NoteName, json=$JsonName): sending Gossiper.SubscribeHybrid")
 
-        context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+        context.system.gossiper !! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
         context.system.notifier !! NotificationCenterManager.RegisterReplyTo(context.messageAdapter(MarkAsDone), SpiritId)
 
         behavior(noteRef, jsonRef)
@@ -56,9 +56,13 @@ object RemindMeListenerActor {
       case TranscriptionEvent(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId)) =>
         context.actorContext.log.info(s"Received $noteId")
         whisperResult match {
+          case WhisperResult(WhisperResultContent(text, _), WhisperResultMetadata(BaseModel, _, _, _)) if isAMatch(text) =>
+            context.actorContext.log.debug("Base model is only observed for voting, not behavior")
+            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some(s"exact match for ${BaseModel}"))
+            Tinker.steadily
+            
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>
-            // experiment: this actor is confident, ignores other voters
-            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("exact match"))
+            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some(s"exact match for ${meta.model}"))
 
             val reminder = Reminder(captureTime, noteId, text)
             val state = jsonRef.readState()
