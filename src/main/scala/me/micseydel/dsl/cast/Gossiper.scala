@@ -15,6 +15,7 @@ import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 
+import Ordering.Implicits._
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success}
@@ -30,7 +31,7 @@ object Gossiper {
   final case class SubmitVote(vote: Vote) extends Message
 
   final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote], voteTime: ZonedDateTime, comments: Option[String]) {
-    override def toString = s"""Vote($noteId, $confidence, ${toNormalizedUri(voter.path.toSerializationFormat).drop(35)}, ${voteTime.format(DateTimeFormatter.ofPattern("h:mm:ss.SSS"))}, $comments)"""
+    override def toString = s"""Vote($noteId, $confidence, ${toNormalizedUri(voter.path.toSerializationFormat).drop(35)}, ${voteTime.format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))}, $comments)"""
   }
 
   sealed trait Subscription extends Message {
@@ -75,26 +76,28 @@ object Gossiper {
     implicit val sender: Sender = Sender(context.self.path)
     implicit val tinkerBrain: ActorRef[TinkerBrain.Message] = context.system.tinkerBrain
 
-    val formattedMarkdown = votesMapping.map { case (noteId, votesOnNote) =>
-      val formattedVotesOnNote = votesOnNote.values
-        .map {
-        case NonEmptyList(Vote(_, confidence, voter, voteTime, maybeComments), theRest) =>
-          val priorVotes = if (theRest.nonEmpty) s"$theRest" else ""
-          MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss.SSS")) +
-            s"""
-              |        - comments: $maybeComments
-              |        - prior votes: $priorVotes""".stripMargin
-      }.mkString("    ", "\n    ", "")
-      val filename = noteId.asString.drop(18).dropRight(3) + "wav"
-      val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
-        case Left(msg) =>
-          context.actorContext.log.warn(s"Failed to extract time from noteId $filename: $msg")
-          noteId.toString
-        case Right(time) =>
-          MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ss")).drop(2)
-      }
-      s"$firstLine\n$formattedVotesOnNote"
-    }.mkString("- ", "\n- ", "\n")
+    val formattedMarkdown = votesMapping
+      .toSeq.sortBy(_._2.values.toList.map(_.head).map(_.voteTime))
+      .map { case (noteId, votesOnNote) =>
+        val formattedVotesOnNote = votesOnNote.values
+          .map {
+            case NonEmptyList(Vote(_, confidence, voter, voteTime, maybeComments), theRest) =>
+              val priorVotes = if (theRest.nonEmpty) s"$theRest" else ""
+              MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) +
+                s"""
+                   |        - comments: $maybeComments
+                   |        - prior votes: $priorVotes""".stripMargin
+          }.mkString("    ", "\n    ", "")
+        val filename = noteId.asString.drop(18).dropRight(3) + "wav"
+        val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
+          case Left(msg) =>
+            context.actorContext.log.warn(s"Failed to extract time from noteId $filename: $msg")
+            noteId.toString
+          case Right(time) =>
+            MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")).drop(2)
+        }
+        s"$firstLine\n$formattedVotesOnNote"
+      }.mkString("- ", "\n- ", "\n")
 
     noteRef.setMarkdown(formattedMarkdown) match {
       case Failure(exception) => throw exception
@@ -170,5 +173,5 @@ object Gossiper {
   private def sameVoters(firstVote: Vote, secondVote: Vote): Boolean =
     toNormalizedUri(firstVote.voter.path.toSerializationFormat) == toNormalizedUri(secondVote.voter.path.toSerializationFormat)
 
-  private def toNormalizedUri(uri: String): String = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
+  def toNormalizedUri(uri: String): String = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
 }

@@ -48,6 +48,7 @@ object HueListener {
 
     message match {
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(capture, noteId), _)) if alreadySeen.contains((noteId, capture.whisperResult.whisperResultMetadata.model)) =>
+        context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("already seen (or reminder), ignoring"))
         context.actorContext.log.debug(s"Already processed $noteId, ignoring")
         Tinker.steadily
 
@@ -126,9 +127,25 @@ object HueListener {
         Tinker.steadily
 
       case ReceiveVote(vote) =>
-        // FIXME: this will be chatty!
-        context.actorContext.log.debug(s"Ignoring $vote")
-        Tinker.steadily
+        // FIXME: this is absolutely a hack
+        vote match {
+          case Vote(noteId, Right(Some(true)), voter, _, Some(comments)) =>
+            (comments match {
+              case t if t.contains("BaseModel") => Some(BaseModel)
+              case t if t.contains("LargeModel") => Some(LargeModel)
+              case _ => None
+            }) match {
+              case Some(model: WhisperModel) if Gossiper.toNormalizedUri(voter.path.toSerializationFormat).endsWith("RemindMeListenerActor") =>
+                behavior(hueControl)(alreadySeen + ((noteId, model)))
+              case _ =>
+                Tinker.steadily
+            }
+
+          case _ =>
+            // FIXME: this will be chatty!
+            context.actorContext.log.debug(s"Ignoring $vote")
+            Tinker.steadily
+        }
     }
   }
 }
