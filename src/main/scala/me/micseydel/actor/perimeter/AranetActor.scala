@@ -162,10 +162,7 @@ private object HttpFetchAndUnmarshall {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received HttpResponse, beginning unmarshalling process")
 
-        val umarshal: Unmarshal[ResponseEntity] = Unmarshal(httpResponse.entity)
-        val fut: Future[String] = umarshal.to[String]
-
-        context.pipeToSelf(fut) {
+        context.pipeToSelf(Unmarshal(httpResponse.entity).to[String]) {
           case Failure(exception) => ReceiveFailedHttpResponse(exception)
           case Success(models) =>
             try {
