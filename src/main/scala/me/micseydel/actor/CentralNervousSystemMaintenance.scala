@@ -12,7 +12,6 @@ object CentralNervousSystemMaintenance {
   sealed trait Message
 
   def apply(config: Config)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
     val fitbitActor: SpiritRef[FitbitActor.Message] = context.cast(FitbitActor(config.fitbitAuthorizationBasic), "FitbitActor")
 
     context.actorContext.log.info("Started FitbitActor, starting Halto")

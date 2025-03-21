@@ -4,6 +4,7 @@ import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import me.micseydel.actor.perimeter.fitbit.FitbitActor.{RequestSleep, TriggerAuthRefresh}
 import me.micseydel.actor.perimeter.fitbit.FitbitModel.{Auth, AuthJsonProtocol, SleepReport}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
@@ -14,22 +15,26 @@ import org.slf4j.Logger
 import spray.json._
 
 import java.io.FileNotFoundException
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.LocalDate
 import scala.concurrent.{ExecutionContextExecutorService, Future}
 import scala.util.{Failure, Success, Try}
 
 object FitbitActor {
   sealed trait Message
 
-  case class RequestSleep(replyTo: SpiritRef[SleepReport], day: LocalDate) extends Message
+  sealed trait Request extends Message
 
-  private case class FitbitHttpCallResult(msg: String, exception: Option[Throwable]) extends Message
+  case class RequestSleep(replyTo: SpiritRef[SleepReport], day: LocalDate) extends Request
 
-  private[fitbit] case class TriggerAuthRefresh(deferred: Message) extends Message
+//  case class RequestSteps(replyTo: SpiritRef[(LocalDate, Int)], day: LocalDate) extends Request
 
-  private[fitbit] case class ReceiveAuthRefresh(auth: Try[Auth], deferred: Message) extends Message
+  private[fitbit] sealed trait Refresh extends Message
 
-  def apply(authorizationBasic: Option[String])(implicit httpExecutionContext: ExecutionContextExecutorService, Tinker: Tinker): Ability[Message] = {
+  private[fitbit] case class TriggerAuthRefresh(deferred: Request) extends Refresh
+
+  private[fitbit] case class ReceiveAuthRefresh(auth: Try[Auth], deferred: Message) extends Refresh
+
+  def apply(authorizationBasic: Option[String])(implicit Tinker: Tinker): Ability[Message] = {
     val jsonFilename = "fitbit_auth"
     Tinkerer(rgb(20, 20, 20), "⌚️").initializedWithTypedJson(jsonFilename, AuthJsonProtocol.authFormat) { case (context, typedJsonRef) =>
       context.actorContext.log.info("Initializing Fitbit monitoring")
@@ -53,42 +58,19 @@ object FitbitActor {
     }
   }
 
-  def ability(auth: Auth, jsonRef: TypedJsonRef[Auth], consecutiveFailures: Int, maybeAuthorizationBasic: Option[String])(implicit httpExecutionContext: ExecutionContextExecutorService, Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  // FIXME: states - awaitingRequests, refreshing
+
+  private def ability(auth: Auth, jsonRef: TypedJsonRef[Auth], consecutiveFailures: Int, maybeAuthorizationBasic: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val system: ActorSystem[HttpRequest] = context.system.actorSystem.asInstanceOf[ActorSystem[HttpRequest]]
     implicit val c: TinkerContext[_] = context
+    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
     implicit val log: Logger = context.actorContext.log
     context.actorContext.log.info(s"Current consecutiveFailures $consecutiveFailures")
 
     message match {
       case RequestSleep(replyTo, forDay) =>
-        fitbitHttpGetCall(forDay, auth.httpHeadersBearer).onComplete {
-          case Success(httpResponse) =>
-            val resultString: Future[String] = Unmarshal(httpResponse.entity).to[String]
-
-            context.pipeToSelf(resultString) {
-              case Failure(throwable) =>
-                FitbitHttpCallResult("oops", Some(throwable))
-              case Success(string) =>
-                if (httpResponse.status == StatusCode.int2StatusCode(200)) {
-                  import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
-                  Try(string.parseJson.convertTo[SleepReport]) match {
-                    case Success(result) =>
-                      replyTo !! result
-                      FitbitHttpCallResult(s"success $string extracted and sent to ${replyTo.actorPath}", None)
-                    case Failure(throwable) =>
-                      FitbitHttpCallResult(s"failure $string NOT extracted NOR sent to ${replyTo.actorPath}", Some(throwable))
-                  }
-                } else if (httpResponse.status == StatusCode.int2StatusCode(401)) {
-                  context.actorContext.log.debug(s"Got a 401 response, triggering refresh")
-                  TriggerAuthRefresh(message)
-                } else {
-                  FitbitHttpCallResult(s"success $string sent to ${replyTo.actorPath}", None)
-                }
-            }
-          case Failure(throwable) =>
-            FitbitHttpCallResult("oops", Some(throwable))
-        }
-
+        context.actorContext.log.info(s"Spawning anonymous fetcher for $forDay, with replyTo ${replyTo.actorPath}")
+        context.castAnonymous(FitbitSleepFetcher(auth, replyTo, forDay, context.self))
         Tinker.steadily
 
       case TriggerAuthRefresh(deferred) =>
@@ -112,35 +94,93 @@ object FitbitActor {
 
         context.self !! deferred
         ability(newAuth, jsonRef, consecutiveFailures, maybeAuthorizationBasic)
-
-      case FitbitHttpCallResult(msg, maybeException) =>
-        maybeException match {
-          case None =>
-            context.actorContext.log.debug("Successful FitbitHttpCallResult!")
-            ability(auth, jsonRef, 0, maybeAuthorizationBasic)
-          case Some(exception) =>
-            val newFailureCount = consecutiveFailures + 1
-            context.actorContext.log.error(s"Fitbit fetch failed ($newFailureCount): $msg", exception)
-            if (newFailureCount >= 3) {
-              context.actorContext.log.error(s"Stopping, $newFailureCount failures so preventing a loop")
-              Tinker.done
-            } else {
-              ability(auth, jsonRef, newFailureCount, maybeAuthorizationBasic)
-            }
-        }
     }
   }
+}
 
-  // util
 
-  private def fitbitHttpGetCall(forDay: LocalDate, headers: List[HttpHeader])(implicit log: Logger, system: ActorSystem[HttpRequest]): Future[HttpResponse] = {
+object FitbitSleepFetcher {
+  sealed trait Message
+
+  private case class ReceiveUnmarshaled(statusCode: StatusCode, responsePayload: String) extends Message
+
+  private case class ReceiveHttpResponse(httpResponse: HttpResponse) extends Message
+
+  private case class ReceiveException(throwable: Throwable) extends Message
+
+  //
+
+  def apply(auth: Auth, replyTo: SpiritRef[SleepReport], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    implicit val system: ActorSystem[HttpRequest] = context.system.actorSystem.asInstanceOf[ActorSystem[HttpRequest]]
+    implicit val c: TinkerContext[_] = context
+    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
+    implicit val log: Logger = context.actorContext.log
+
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
-    // https://dev.fitbit.com/build/reference/web-api/sleep/get-sleep-log-by-date/
-    val url = s"https://api.fitbit.com/1.2/user/-/sleep/date/$day.json"
 
+    import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
+
+    // https://dev.fitbit.com/build/reference/web-api/sleep/get-sleep-log-by-date/
+    context.pipeToSelf(FetcherUtil.fitbitHttpGetCall(s"/1.2/user/-/sleep/date/$day.json", auth.httpHeadersBearer)) {
+      case Failure(exception) => ReceiveException(exception)
+      case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
+    }
+
+    Tinker.receiveMessage {
+      case ReceiveHttpResponse(httpResponse) =>
+        context.pipeToSelf(Unmarshal(httpResponse.entity).to[String]) {
+          case Failure(exception) =>
+            ReceiveException(exception)
+          case Success(unmarshalled) =>
+            ReceiveUnmarshaled(httpResponse.status, unmarshalled)
+        }
+
+        context.actorContext.log.debug("Just sent HTTP request, will followup when the reply is received")
+
+        Tinker.steadily
+
+      case ReceiveException(throwable) =>
+        context.actorContext.log.error(s"Failed to fetch sleep for $forDay, will NOT be notifying ${replyTo.actorPath}", throwable)
+        Tinker.done
+
+      case ReceiveUnmarshaled(statusCode, responsePayload) =>
+        if (statusCode == StatusCodes.OK) {
+          Try(responsePayload.parseJson.convertTo[SleepReport]) match {
+            case Failure(throwable) =>
+              context.actorContext.log.error(s"Failed to fetch sleep for $forDay, will NOT be notifying ${replyTo.actorPath}", throwable)
+
+            case Success(sleepReport) =>
+              replyTo !! sleepReport
+          }
+        } else if (statusCode == StatusCodes.Unauthorized) {
+          context.actorContext.log.warn(s"Got a status 401, triggering an auth refresh with deferred sleep fetch")
+          supervisor !! TriggerAuthRefresh(RequestSleep(replyTo, forDay))
+        } else {
+          context.actorContext.log.error(s"Unexpected status code: $statusCode (expected a 200, or 401 to trigger auth refres)")
+        }
+
+        Tinker.done
+    }
+  }
+}
+
+
+//object FitbitStepsFetcher {
+//  def apply(auth: Auth)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+//    implicit val system: ActorSystem[HttpRequest] = context.system.actorSystem.asInstanceOf[ActorSystem[HttpRequest]]
+//    implicit val c: TinkerContext[_] = context
+//    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
+//    implicit val log: Logger = context.actorContext.log
+//    FetcherUtil.fitbitHttpGetCall("/1/user/-/activities/tracker/steps.json", auth.httpHeadersBearer)
+//    Tinker.unhandled
+//  }
+//}
+
+private[fitbit] object FetcherUtil {
+  def fitbitHttpGetCall(urlPath: String, headers: List[HttpHeader])(implicit log: Logger, system: ActorSystem[HttpRequest]): Future[HttpResponse] = {
     Http().singleRequest(HttpRequest(
       method = HttpMethods.GET,
-      uri = url,
+      uri = s"https://api.fitbit.com$urlPath",
       headers = headers
     ))
   }
