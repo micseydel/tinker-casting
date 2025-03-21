@@ -133,7 +133,7 @@ object Gossiper {
 
       // experiment; voting on notes may generalize well
       case SubmitVote(newVote) =>
-        context.actorContext.log.warn(s"new vote $newVote") // FIXME: chatty
+        context.actorContext.log.info(s"new vote $newVote") // FIXME: chatty
         val normalizedUri: String = toNormalizedUri(newVote.voter.path.toSerializationFormat)
         votesMapping.get(newVote.noteId) match {
           case None =>

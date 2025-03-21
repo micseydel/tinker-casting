@@ -2,6 +2,7 @@ package me.micseydel.actor.perimeter.fitbit
 
 import akka.http.scaladsl.model.HttpHeader
 import akka.http.scaladsl.model.headers.RawHeader
+import spray.json.JsObject
 //import me.micseydel.util.ShapelessJsonSupport
 import spray.json.{DefaultJsonProtocol, JsNumber, JsString, JsValue, JsonFormat, RootJsonFormat, deserializationError}
 
@@ -67,8 +68,8 @@ object FitbitModel {
   case class SleepReport(sleep: Seq[SleepEntry], summary: SleepSummary)
 
   object SleepJsonProtocol extends DefaultJsonProtocol
-//    with ShapelessJsonSupport
-    {
+    //    with ShapelessJsonSupport
+  {
 
     implicit object ZonedDateTimeFormat extends JsonFormat[ZonedDateTime] {
       private val dateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
@@ -116,7 +117,18 @@ object FitbitModel {
     implicit val levelsDataFormat: RootJsonFormat[LevelsData] = jsonFormat2(LevelsData)
     implicit val sleepEntryFormat: RootJsonFormat[SleepEntry] = jsonFormat13(SleepEntry)
     implicit val sleepSummaryFormat: RootJsonFormat[SleepSummary] = jsonFormat3(SleepSummary)
-    implicit val sleepReportFormat: JsonFormat[SleepReport] = jsonFormat2(SleepReport)
+    implicit val sleepReportFormat: RootJsonFormat[SleepReport] = jsonFormat2(SleepReport)
+
+    // FIXME: HACK
+    implicit object StepsFormat extends RootJsonFormat[String] {
+      def write(obj: String): JsValue = JsString(obj)
+
+      def read(json: JsValue): String = json match {
+        case JsString(s) => s
+        case o@JsObject(_) => o.toString()
+        case other => deserializationError(s"Expected a string but got $other")
+      }
+    }
   }
 
   private[fitbit] case class Auth(access_token: String, refresh_token: String) {
@@ -124,7 +136,7 @@ object FitbitModel {
 
     // FIXME: https://dev.fitbit.com/build/reference/web-api/troubleshooting-guide/oauth2-tutorial/
     // "Basic " + base64encode(client_id + ":" + client_secret)
-//    def httpHeadersBasic: List[HttpHeader] = List(RawHeader("Authorization", s"Basic "))
+    //    def httpHeadersBasic: List[HttpHeader] = List(RawHeader("Authorization", s"Basic "))
   }
 
   private[fitbit] object AuthJsonProtocol extends DefaultJsonProtocol {

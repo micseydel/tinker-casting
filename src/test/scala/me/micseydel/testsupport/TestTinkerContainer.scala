@@ -217,7 +217,7 @@ object ChroniclerForTest {
         message match {
           case Chronicler.TranscriptionStartedEvent(capture) => ???
           case Chronicler.TranscriptionCompletedEvent(event) => ???
-          case Chronicler.ActOnNoteRef(noteId, event) => ???
+          case Chronicler.ActOnNoteRef(event) => ???
           case ack@Chronicler.ListenerAcknowledgement(noteRef, timeOfAck, details, setNoteState) => context.log.info(s"Ignoring $ack")
           case ReceiveNotePing(ping) => ???
         }
