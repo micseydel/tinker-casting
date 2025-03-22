@@ -5,8 +5,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import me.micseydel.actor.perimeter.fitbit.FitbitActor.{Request, RequestSleep, RequestSteps, TriggerAuthRefresh}
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.{Auth, AuthJsonProtocol, SleepReport}
+import me.micseydel.actor.perimeter.fitbit.FitbitActor.{Request, RequestActiveTimes, RequestActivities, RequestCalories, RequestHeartRate, RequestSleep, RequestSteps, TriggerAuthRefresh}
+import me.micseydel.actor.perimeter.fitbit.FitbitModel.{Auth, AuthJsonProtocol, FitbitSteps, SleepReport}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
@@ -28,7 +28,7 @@ object FitbitActor {
 
   case class RequestSleep(replyTo: SpiritRef[SleepReport], day: LocalDate) extends Request
 
-  case class RequestSteps(replyTo: SpiritRef[String], day: LocalDate) extends Request
+  case class RequestSteps(replyTo: SpiritRef[FitbitSteps], day: LocalDate) extends Request
 
   case class RequestHeartRate(replyTo: SpiritRef[String], day: LocalDate) extends Request
 
@@ -244,10 +244,10 @@ object FitbitSleepFetcher {
 
 
 object FitbitStepsFetcher {
-  def apply(auth: Auth, replyTo: SpiritRef[String], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
+  def apply(auth: Auth, replyTo: SpiritRef[FitbitSteps], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Fetching Fitbit steps for $forDay")
-    implicit val stepsFormat: RootJsonFormat[String] = FetcherUtil.StringNoMatterWhatFormat
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
+    import me.micseydel.actor.perimeter.fitbit.FitbitModel.StepsJsonFormat.fitbitStepsFormat
 
     // /1/user/-/activities/steps/date/[date]/[end-date]/[detail-level].json
     FitbitFetcherHelper(s"/1/user/-/activities/steps/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestSteps(replyTo, forDay))
@@ -260,7 +260,7 @@ object FitbitCaloriesFetcher {
     implicit val stepsFormat: RootJsonFormat[String] = FetcherUtil.StringNoMatterWhatFormat
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
 
-    FitbitFetcherHelper(s"/1/user/-/activities/calories/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestSteps(replyTo, forDay))
+    FitbitFetcherHelper(s"/1/user/-/activities/calories/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestCalories(replyTo, forDay))
   }
 }
 
@@ -271,7 +271,7 @@ object FitbitHeartRateFetcher {
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
 
     //https://dev.fitbit.com/build/reference/web-api/intraday/get-heartrate-intraday-by-date/
-    FitbitFetcherHelper(s"/1/user/-/activities/heart/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestSteps(replyTo, forDay))
+    FitbitFetcherHelper(s"/1/user/-/activities/heart/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestHeartRate(replyTo, forDay))
   }
 }
 
@@ -292,27 +292,6 @@ private[fitbit] object FetcherUtil {
       case JsString(s) => s
       case other => other.toString()
     }
-  }
-
-  case class StepsSummary(dateTime: String, value: String)
-
-  case class StepsAt(time: String, value: Int)
-
-  case class StepsDataSet(dataset: List[StepsAt], datasetInterval: Int, datasetType: String)
-
-  case class FitbitSteps(
-                          `activities-steps`: List[StepsSummary],
-                          `activities-steps-intraday`: StepsDataSet
-                        )
-
-  object StepsJsonFormat extends DefaultJsonProtocol {
-    implicit val stepsSummaryFormat: RootJsonFormat[StepsSummary] = jsonFormat2(StepsSummary)
-    implicit val stepsSummaryListFormat: RootJsonFormat[List[StepsSummary]] = listFormat[StepsSummary]
-    implicit val stepsAtFormat: RootJsonFormat[StepsAt] = jsonFormat2(StepsAt)
-    implicit val StepsAtListFormat: RootJsonFormat[List[StepsAt]] = listFormat[StepsAt]
-    implicit val StepsDataSetFormat: RootJsonFormat[StepsDataSet] = jsonFormat3(StepsDataSet)
-
-    implicit val fitbitStepsFormat: RootJsonFormat[FitbitSteps] = jsonFormat2(FitbitSteps)
   }
 }
 
@@ -384,21 +363,21 @@ object FitbitActivitiesFetcher {
   def apply(auth: Auth, replyTo: SpiritRef[String], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Starting FitbitActivitiesFetcher for $forDay")
 
-    implicit val format: FetcherUtil.StringNoMatterWhatFormat.type = FetcherUtil.StringNoMatterWhatFormat
+    implicit val format: RootJsonFormat[String] = FetcherUtil.StringNoMatterWhatFormat
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
 
     // https://dev.fitbit.com/build/reference/web-api/activity-timeseries/get-activity-timeseries-by-date/
-    FitbitFetcherHelper(s"/1/user/-/activities/steps/date/$day/1d.json", auth, replyTo, supervisor, RequestSteps(replyTo, forDay))
+    FitbitFetcherHelper(s"/1/user/-/activities/steps/date/$day/1d.json", auth, replyTo, supervisor, RequestActivities(replyTo, forDay))
   }
 }
 
 object FitbitActiveZoneMinutesFetcher {
   def apply(auth: Auth, replyTo: SpiritRef[String], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Starting FitbitActiveZoneMinutesFetcher for day $forDay")
-    implicit val format: FetcherUtil.StringNoMatterWhatFormat.type = FetcherUtil.StringNoMatterWhatFormat
+    implicit val format: RootJsonFormat[String] = FetcherUtil.StringNoMatterWhatFormat
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
 
     // https://dev.fitbit.com/build/reference/web-api/intraday/get-azm-intraday-by-date/
-    FitbitFetcherHelper(s"/1/user/-/activities/active-zone-minutes/date/$day/1d/15min.json", auth, replyTo, supervisor, RequestSteps(replyTo, forDay))
+    FitbitFetcherHelper(s"/1/user/-/activities/active-zone-minutes/date/$day/1d/15min.json", auth, replyTo, supervisor, RequestActiveTimes(replyTo, forDay))
   }
 }

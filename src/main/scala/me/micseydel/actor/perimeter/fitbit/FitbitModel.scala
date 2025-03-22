@@ -131,4 +131,25 @@ object FitbitModel {
   private[fitbit] object AuthJsonProtocol extends DefaultJsonProtocol {
     implicit val authFormat: RootJsonFormat[Auth] = jsonFormat2(Auth)
   }
+
+  case class StepsSummary(dateTime: String, value: String)
+
+  case class StepsAt(time: String, value: Int)
+
+  case class StepsDataSet(dataset: List[StepsAt], datasetInterval: Int, datasetType: String)
+
+  case class FitbitSteps(
+                          `activities-steps`: List[StepsSummary],
+                          `activities-steps-intraday`: StepsDataSet
+                        )
+
+  object StepsJsonFormat extends DefaultJsonProtocol {
+    implicit val stepsSummaryFormat: RootJsonFormat[StepsSummary] = jsonFormat2(StepsSummary)
+    implicit val stepsSummaryListFormat: RootJsonFormat[List[StepsSummary]] = listFormat[StepsSummary]
+    implicit val stepsAtFormat: RootJsonFormat[StepsAt] = jsonFormat2(StepsAt)
+    implicit val StepsAtListFormat: RootJsonFormat[List[StepsAt]] = listFormat[StepsAt]
+    implicit val StepsDataSetFormat: RootJsonFormat[StepsDataSet] = jsonFormat3(StepsDataSet)
+
+    implicit val fitbitStepsFormat: RootJsonFormat[FitbitSteps] = jsonFormat2(FitbitSteps)
+  }
 }

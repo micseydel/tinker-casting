@@ -2,7 +2,7 @@ package me.micseydel.actor.perimeter.fitbit
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitSteps
+import me.micseydel.actor.perimeter.fitbit.FitbitModel.FitbitSteps
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -13,7 +13,7 @@ import scala.util.{Failure, Success, Try}
   object FitbitTesterActor {
     sealed trait Message
 
-    private case class ReceiveSteps(payload: String) extends Message
+    private case class ReceiveSteps(payload: FitbitSteps) extends Message
 
     private case class ReceiveHeartRate(payload: String) extends Message
 
@@ -39,7 +39,7 @@ import scala.util.{Failure, Success, Try}
       val today = context.system.clock.today()
 
       // context.messageAdapter doesn't work, because Akka treats all the string-accepting adapters as the same
-      val stepsProxy = context.cast(createProxy(ReceiveSteps, context.self), "steps-proxy")
+      val stepsProxy = context.messageAdapter(ReceiveSteps)
       val hrProxy = context.cast(createProxy(ReceiveHeartRate, context.self), "hr-proxy")
       val caloriesProxy = context.cast(createProxy(ReceiveCalories, context.self), "calories-proxy")
       val activitiesProxy = context.cast(createProxy(ReceiveActivities, context.self), "activities-proxy")
@@ -62,33 +62,17 @@ import scala.util.{Failure, Success, Try}
       state match {
         case State(stepsPayload, heartRatePayload, caloriesPayload, activitiesPayload, activeTimesPayload) =>
 
-          import me.micseydel.actor.perimeter.fitbit.FetcherUtil.StepsJsonFormat.fitbitStepsFormat
+          import me.micseydel.actor.perimeter.fitbit.FitbitModel.StepsJsonFormat.fitbitStepsFormat
           import spray.json._
 
-          val flag = if (stepsPayload != "-") {
-            val t: Try[FitbitSteps] = Try(stepsPayload.parseJson.convertTo[FitbitSteps])
-
-            t match {
-              case Failure(exception) =>
-                context.actorContext.log.warn("steps extraction failed", exception)
-                "see log"
-              case Success(_) =>
-                "success!"
-            }
-
-          } else {
-            "🤷"
-          }
-
+          val formattedSteps = stepsPayload.map(_.toJson).getOrElse("none")
 
           noteRef.setMarkdown(
             s"""- Generated ${context.system.clock.now()}
                |# Steps Payload
                |
-               |json processing works? $flag
-               |
                |```
-               |$stepsPayload
+               |$formattedSteps
                |```
                |
                |# Heart Rate Payload
@@ -120,7 +104,7 @@ import scala.util.{Failure, Success, Try}
       Tinker.receiveMessage { message =>
         context.actorContext.log.info(s"Processing message $message")
         message match {
-          case ReceiveSteps(payload) => behavior(state.copy(stepsPayload = payload))
+          case ReceiveSteps(payload) => behavior(state.copy(steps = Some(payload)))
           case ReceiveHeartRate(payload) => behavior(state.copy(heartRatePayload = payload))
           case ReceiveCalories(payload) => behavior(state.copy(caloriesPayload = payload))
           case ReceiveActivities(payload) => behavior(state.copy(activitiesPayload = payload))
@@ -130,7 +114,7 @@ import scala.util.{Failure, Success, Try}
     }
 
     private case class State(
-      stepsPayload: String = "-",
+      steps: Option[FitbitSteps] = None,
       heartRatePayload: String = "-",
       caloriesPayload: String = "-",
       activitiesPayload: String = "-",
