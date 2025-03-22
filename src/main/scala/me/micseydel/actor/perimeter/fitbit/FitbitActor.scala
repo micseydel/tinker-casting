@@ -5,6 +5,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitHeartRate
 import me.micseydel.actor.perimeter.fitbit.FitbitActor.{Request, RequestActiveTimes, RequestActivities, RequestCalories, RequestHeartRate, RequestSleep, RequestSteps, TriggerAuthRefresh}
 import me.micseydel.actor.perimeter.fitbit.FitbitModel.{Auth, AuthJsonProtocol, FitbitSteps, SleepReport}
 import me.micseydel.dsl.Tinker.Ability
@@ -30,7 +31,7 @@ object FitbitActor {
 
   case class RequestSteps(replyTo: SpiritRef[FitbitSteps], day: LocalDate) extends Request
 
-  case class RequestHeartRate(replyTo: SpiritRef[String], day: LocalDate) extends Request
+  case class RequestHeartRate(replyTo: SpiritRef[FitbitHeartRate], day: LocalDate) extends Request
 
   case class RequestCalories(replyTo: SpiritRef[String], day: LocalDate) extends Request
 
@@ -268,10 +269,11 @@ object FitbitCaloriesFetcher {
 }
 
 object FitbitHeartRateFetcher {
-  def apply(auth: Auth, replyTo: SpiritRef[String], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
+  def apply(auth: Auth, replyTo: SpiritRef[FitbitHeartRate], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Starting FitbitHeartRateFetcher for $forDay")
-    implicit val stepsFormat: RootJsonFormat[String] = FetcherUtil.StringNoMatterWhatFormat
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
+
+    import me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitHeartRateJsonFormat.fitbitHeartRateJsonFormat
 
     //https://dev.fitbit.com/build/reference/web-api/intraday/get-heartrate-intraday-by-date/
     FitbitFetcherHelper(s"/1/user/-/activities/heart/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestHeartRate(replyTo, forDay))
@@ -295,6 +297,37 @@ private[fitbit] object FetcherUtil {
       case JsString(s) => s
       case other => other.toString()
     }
+  }
+
+  //
+
+  case class DataPoint(time: String, value: Int)
+
+  case class HeartRateZone(caloriesOut: Double, max: Int, min: Int, minutes: Int, name: String)
+
+  case class ActivitiesHeartIntraday(dataset: List[DataPoint], datasetInterval: Int, datasetType: String)
+
+  // customHeartRateZones is ignored; it was empty for me
+  case class ActivitiesHeartValue(restingHeartRate: Int, heartRateZones: List[HeartRateZone])
+
+  case class ActivitiesHeartSummary(dateTime: String, value: ActivitiesHeartValue)
+
+  case class FitbitHeartRate(
+                              `activities-heart`: List[ActivitiesHeartSummary],
+                              `activities-heart-intraday`: ActivitiesHeartIntraday
+                            )
+
+  object FitbitHeartRateJsonFormat extends DefaultJsonProtocol {
+    implicit val dataPointJsonFormat: RootJsonFormat[DataPoint] = jsonFormat2(DataPoint)
+    implicit val heartRateZoneJsonFormat: RootJsonFormat[HeartRateZone] = jsonFormat5(HeartRateZone)
+
+    implicit val activitiesHeartValueJsonFormat: RootJsonFormat[ActivitiesHeartValue] = jsonFormat2(ActivitiesHeartValue)
+    implicit val activitiesHeartIntradayJsonFormat: RootJsonFormat[ActivitiesHeartIntraday] = jsonFormat3(ActivitiesHeartIntraday)
+
+    implicit val activitiesHeartJsonFormat: RootJsonFormat[ActivitiesHeartSummary] = jsonFormat2(ActivitiesHeartSummary)
+    implicit val activitiesHeartSummaryListJsonFormat: RootJsonFormat[List[ActivitiesHeartSummary]] = listFormat[ActivitiesHeartSummary]
+
+    implicit val fitbitHeartRateJsonFormat: RootJsonFormat[FitbitHeartRate] = jsonFormat2(FitbitHeartRate)
   }
 }
 

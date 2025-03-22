@@ -2,18 +2,24 @@ package me.micseydel.actor.perimeter.fitbit
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import me.micseydel.Common
+import me.micseydel.actor.perimeter.fitbit.FetcherUtil.{ActivitiesHeartIntraday, ActivitiesHeartSummary, ActivitiesHeartValue, DataPoint, FitbitHeartRate, HeartRateZone}
 import me.micseydel.actor.perimeter.fitbit.FitbitModel.{FitbitSteps, StepsAt, StepsDataSet, StepsSummary}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.persistence.NoteRef
+import spray.json.DefaultJsonProtocol.StringJsonFormat
+import spray.json._
+
+import scala.util.{Failure, Success, Try}
 
 object FitbitTesterActor {
   sealed trait Message
 
   private case class ReceiveSteps(payload: FitbitSteps) extends Message
 
-  private case class ReceiveHeartRate(payload: String) extends Message
+  private case class ReceiveHeartRate(payload: FitbitHeartRate) extends Message
 
   private case class ReceiveCalories(payload: String) extends Message
 
@@ -39,14 +45,12 @@ object FitbitTesterActor {
       }
 
     // context.messageAdapter doesn't work, because Akka treats all the string-accepting adapters as the same
-    // this is a simple dev hack,
-    val hrProxy = context.cast(createProxy(ReceiveHeartRate, context.self), "hr-proxy")
     val caloriesProxy = context.cast(createProxy(ReceiveCalories, context.self), "calories-proxy")
     val activitiesProxy = context.cast(createProxy(ReceiveActivities, context.self), "activities-proxy")
     val activeTimesProxy = context.cast(createProxy(ReceiveActiveTimes, context.self), "activetimes-proxy")
 
     fitbit !! FitbitActor.RequestSteps(context.messageAdapter(ReceiveSteps), today)
-    fitbit !! FitbitActor.RequestHeartRate(hrProxy, today)
+    fitbit !! FitbitActor.RequestHeartRate(context.messageAdapter(ReceiveHeartRate), today)
     fitbit !! FitbitActor.RequestCalories(caloriesProxy, today)
     fitbit !! FitbitActor.RequestActivities(activitiesProxy, today)
     fitbit !! FitbitActor.RequestActiveTimes(activeTimesProxy, today)
@@ -72,17 +76,33 @@ object FitbitTesterActor {
             }.mkString(s"- $summary\n", "\n", "")
         }.getOrElse("none")
 
+        val formattedHeartRate = heartRatePayload.collect {
+          case FitbitHeartRate(List(ActivitiesHeartSummary(dateTime, ActivitiesHeartValue(restingHeartRate, heartRateZones))), ActivitiesHeartIntraday(dataset, datasetInterval, datasetType)) =>
+            val list = dataset.map {
+              case DataPoint(time, value) =>
+                s"    - $time $value"
+            }.mkString("\n")
+
+            val formattedHeartRateZones = heartRateZones.collect {
+              case HeartRateZone(caloriesOut, max, min, minutes, name) if minutes > 0 =>
+                s"    - $name: expended ~${caloriesOut.toInt} calories over $minutes minutes in range \\[$min, $max]"
+            }.mkString("\n")
+
+            s"- Resting heart rate $restingHeartRate for $dateTime\n- Zones:\n$formattedHeartRateZones\n- Data points:\n$list"
+        }.getOrElse("none")
+
         noteRef.setMarkdown(
           s"""- Generated ${context.system.clock.now()}
-             |# Steps Payload
+             |
+             |# Heart Rate
+             |
+             |$formattedHeartRate
+             |
+             |# Steps
              |
              |$formattedSteps
              |
-             |# Heart Rate Payload
-             |
-             |```
-             |$heartRatePayload
-             |```
+             |---
              |
              |# Calories Payload
              |
@@ -108,7 +128,7 @@ object FitbitTesterActor {
       context.actorContext.log.info(s"Processing message $message")
       message match {
         case ReceiveSteps(payload) => behavior(state.copy(steps = Some(payload)))
-        case ReceiveHeartRate(payload) => behavior(state.copy(heartRatePayload = payload))
+        case ReceiveHeartRate(payload) => behavior(state.copy(heartRatePayload = Some(payload)))
         case ReceiveCalories(payload) => behavior(state.copy(caloriesPayload = payload))
         case ReceiveActivities(payload) => behavior(state.copy(activitiesPayload = payload))
         case ReceiveActiveTimes(payload) => behavior(state.copy(activeTimesPayload = payload))
@@ -118,7 +138,7 @@ object FitbitTesterActor {
 
   private case class State(
                             steps: Option[FitbitSteps] = None,
-                            heartRatePayload: String = "-",
+                            heartRatePayload: Option[FitbitHeartRate] = None,
                             caloriesPayload: String = "-",
                             activitiesPayload: String = "-",
                             activeTimesPayload: String = "-"
