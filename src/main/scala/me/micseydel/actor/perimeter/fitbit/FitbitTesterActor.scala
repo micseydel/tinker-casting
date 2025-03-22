@@ -3,7 +3,7 @@ package me.micseydel.actor.perimeter.fitbit
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.Common
-import me.micseydel.actor.perimeter.fitbit.FetcherUtil.{ActivitiesHeartIntraday, ActivitiesHeartSummary, ActivitiesHeartValue, DataPoint, FitbitHeartRate, HeartRateZone}
+import me.micseydel.actor.perimeter.fitbit.FetcherUtil.{ActivitiesHeartIntraday, ActivitiesHeartSummary, ActivitiesHeartValue, DataPoint, FitbitActiveTimes, FitbitActiveTimesIntraday, FitbitHeartRate, FitbitMinute, FitbitMinuteValue, HeartRateZone}
 import me.micseydel.actor.perimeter.fitbit.FitbitModel.{FitbitSteps, StepsAt, StepsDataSet, StepsSummary}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -91,8 +91,34 @@ object FitbitTesterActor {
             s"- Resting heart rate $restingHeartRate for $dateTime\n- Zones:\n$formattedHeartRateZones\n- Data points:\n$list"
         }.getOrElse("none")
 
+        import spray.json._
+        implicit val jsonFormat: RootJsonFormat[FitbitActiveTimesIntraday] = me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitActiveTimesJsonFormat.FitbitActiveTimesIntradayJsonFormat
+        val formattedActiveTimes = Try(activeTimesPayload.parseJson.convertTo[FitbitActiveTimesIntraday]) match {
+          case Failure(exception) => s"""\n```\n${Common.getStackTraceString(exception)}\n```"""
+          case Success(FitbitActiveTimesIntraday(List(FitbitActiveTimes(dateTime, minutes)))) =>
+            val formattedMinutes = minutes.collect {
+              case FitbitMinute(minute, FitbitMinuteValue(activeZoneMinutes)) if activeZoneMinutes > 0 =>
+                s"    - $minute $activeZoneMinutes"
+            }.mkString("\n")
+            s"- $dateTime\n$formattedMinutes"
+          case Success(FitbitActiveTimesIntraday(list)) =>
+            s"- unexpected $list"
+        }
+
         noteRef.setMarkdown(
           s"""- Generated ${context.system.clock.now()}
+             |
+             |# Active Times Payload
+             |
+             |## Formatted
+             |
+             |$formattedActiveTimes
+             |
+             |## Raw
+             |
+             |```
+             |$activeTimesPayload
+             |```
              |
              |# Heart Rate
              |
@@ -114,12 +140,6 @@ object FitbitTesterActor {
              |
              |```
              |$activitiesPayload
-             |```
-             |
-             |# Active Times Payload
-             |
-             |```
-             |$activeTimesPayload
              |```
              |""".stripMargin)
     }

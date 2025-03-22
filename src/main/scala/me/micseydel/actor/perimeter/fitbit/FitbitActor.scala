@@ -14,6 +14,7 @@ import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.TypedJsonRef
+import spray.json.DefaultJsonProtocol.listFormat
 import spray.json._
 
 import java.io.FileNotFoundException
@@ -328,6 +329,25 @@ private[fitbit] object FetcherUtil {
     implicit val activitiesHeartSummaryListJsonFormat: RootJsonFormat[List[ActivitiesHeartSummary]] = listFormat[ActivitiesHeartSummary]
 
     implicit val fitbitHeartRateJsonFormat: RootJsonFormat[FitbitHeartRate] = jsonFormat2(FitbitHeartRate)
+  }
+
+  //
+
+  case class FitbitMinuteValue(activeZoneMinutes: Int)
+
+  case class FitbitMinute(minute: String, value: FitbitMinuteValue)
+
+  case class FitbitActiveTimes(dateTime: String, minutes: List[FitbitMinute])
+
+  case class FitbitActiveTimesIntraday(`activities-active-zone-minutes-intraday`: List[FitbitActiveTimes])
+
+  object FitbitActiveTimesJsonFormat extends DefaultJsonProtocol {
+    implicit val fitbitMinuteValueJsonFormat: RootJsonFormat[FitbitMinuteValue] = jsonFormat1(FitbitMinuteValue)
+    implicit val fitbitMinuteJsonFormat: RootJsonFormat[FitbitMinute] = jsonFormat2(FitbitMinute)
+
+    implicit val fitbitActiveTimesJsonFormat: RootJsonFormat[FitbitActiveTimes] = jsonFormat2(FitbitActiveTimes)
+
+    implicit val FitbitActiveTimesIntradayJsonFormat: RootJsonFormat[FitbitActiveTimesIntraday] = jsonFormat1(FitbitActiveTimesIntraday)
   }
 }
 
