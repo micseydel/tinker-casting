@@ -2,7 +2,7 @@ package me.micseydel.actor.perimeter.fitbit
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.FitbitSteps
+import me.micseydel.actor.perimeter.fitbit.FitbitModel.{FitbitSteps, StepsAt, StepsDataSet, StepsSummary}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
@@ -59,19 +59,24 @@ object FitbitTesterActor {
   private def behavior(state: State)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     state match {
       case State(stepsPayload, heartRatePayload, caloriesPayload, activitiesPayload, activeTimesPayload) =>
+        val formattedSteps = stepsPayload.map {
+          case FitbitSteps(activitiesSteps, StepsDataSet(dataset, datasetInterval, datasetType)) =>
+            val summary = activitiesSteps match {
+              case List(StepsSummary(dateTime, value)) => s"$value steps on $dateTime ($datasetInterval $datasetType interval, 0s excluded)"
+              case other => s"Non-singular summary: $other"
+            }
 
-        import me.micseydel.actor.perimeter.fitbit.FitbitModel.StepsJsonFormat.fitbitStepsFormat
-        import spray.json._
-
-        val formattedSteps = stepsPayload.map(_.toJson).getOrElse("none")
+            dataset.collect {
+              case StepsAt(time, value) if value > 0 =>
+                s"    - $time: $value"
+            }.mkString(s"- $summary\n", "\n", "")
+        }.getOrElse("none")
 
         noteRef.setMarkdown(
           s"""- Generated ${context.system.clock.now()}
              |# Steps Payload
              |
-             |```
              |$formattedSteps
-             |```
              |
              |# Heart Rate Payload
              |

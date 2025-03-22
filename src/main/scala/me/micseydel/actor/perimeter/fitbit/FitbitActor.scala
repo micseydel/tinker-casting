@@ -250,6 +250,9 @@ object FitbitStepsFetcher {
     import me.micseydel.actor.perimeter.fitbit.FitbitModel.StepsJsonFormat.fitbitStepsFormat
 
     // /1/user/-/activities/steps/date/[date]/[end-date]/[detail-level].json
+
+    // detail-level (interval): {1min, 15min}
+
     FitbitFetcherHelper(s"/1/user/-/activities/steps/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestSteps(replyTo, forDay))
   }
 }
