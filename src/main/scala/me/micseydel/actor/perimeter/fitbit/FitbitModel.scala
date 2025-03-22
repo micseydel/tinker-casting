@@ -118,17 +118,6 @@ object FitbitModel {
     implicit val sleepEntryFormat: RootJsonFormat[SleepEntry] = jsonFormat13(SleepEntry)
     implicit val sleepSummaryFormat: RootJsonFormat[SleepSummary] = jsonFormat3(SleepSummary)
     implicit val sleepReportFormat: RootJsonFormat[SleepReport] = jsonFormat2(SleepReport)
-
-    // FIXME: HACK
-    implicit object StepsFormat extends RootJsonFormat[String] {
-      def write(obj: String): JsValue = JsString(obj)
-
-      def read(json: JsValue): String = json match {
-        case JsString(s) => s
-        case o@JsObject(_) => o.toString()
-        case other => deserializationError(s"Expected a string but got $other")
-      }
-    }
   }
 
   private[fitbit] case class Auth(access_token: String, refresh_token: String) {

@@ -2,10 +2,13 @@ package me.micseydel.actor.perimeter.fitbit
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitSteps
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
+
+import scala.util.{Failure, Success, Try}
 
   object FitbitTesterActor {
     sealed trait Message
@@ -58,9 +61,31 @@ import me.micseydel.vault.persistence.NoteRef
     private def behavior(state: State)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
       state match {
         case State(stepsPayload, heartRatePayload, caloriesPayload, activitiesPayload, activeTimesPayload) =>
+
+          import me.micseydel.actor.perimeter.fitbit.FetcherUtil.StepsJsonFormat.fitbitStepsFormat
+          import spray.json._
+
+          val flag = if (stepsPayload != "-") {
+            val t: Try[FitbitSteps] = Try(stepsPayload.parseJson.convertTo[FitbitSteps])
+
+            t match {
+              case Failure(exception) =>
+                context.actorContext.log.warn("steps extraction failed", exception)
+                "see log"
+              case Success(_) =>
+                "success!"
+            }
+
+          } else {
+            "🤷"
+          }
+
+
           noteRef.setMarkdown(
             s"""- Generated ${context.system.clock.now()}
                |# Steps Payload
+               |
+               |json processing works? $flag
                |
                |```
                |$stepsPayload
