@@ -30,7 +30,7 @@ object Gossiper {
   // rudimentary
   final case class SubmitVote(vote: Vote) extends Message
 
-  final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote], voteTime: ZonedDateTime, comments: Option[String]) {
+  final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[NonEmptyList[Vote]], voteTime: ZonedDateTime, comments: Option[String]) {
     override def toString = s"""Vote($noteId, $confidence, ${toNormalizedUri(voter.path.toSerializationFormat).drop(35)}, ${voteTime.format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))}, $comments)"""
   }
 
@@ -84,9 +84,14 @@ object Gossiper {
             case NonEmptyList(Vote(_, confidence, voter, voteTime, maybeComments), theRest) =>
               val priorVotes = if (theRest.nonEmpty) s"$theRest" else ""
               MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) +
-                s"""
-                   |        - comments: $maybeComments
-                   |        - prior votes: $priorVotes""".stripMargin
+                (if (priorVotes.nonEmpty) {
+                  s"""
+                     |        - comments: $maybeComments
+                     |        - prior votes: $priorVotes""".stripMargin
+                } else {
+                  s"""
+                     |        - comments: $maybeComments""".stripMargin
+                })
           }.mkString("    ", "\n    ", "")
         val filename = noteId.asString.drop(18).dropRight(3) + "wav"
         val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
@@ -131,9 +136,9 @@ object Gossiper {
         context.actorContext.log.warn("Received redundant StartTinkering message, ignoring")
         Tinker.steadily
 
-      // experiment; voting on notes may generalize well
+      // experiment; voting on *notes* may generalize well, but requires receivers to interpret arbitrarily
       case SubmitVote(newVote) =>
-        context.actorContext.log.info(s"new vote $newVote") // FIXME: chatty
+        context.actorContext.log.info(s"new vote $newVote") // FIXME: chatty, but it seemed like stuff was being dropped...
         val normalizedUri: String = toNormalizedUri(newVote.voter.path.toSerializationFormat)
         votesMapping.get(newVote.noteId) match {
           case None =>
@@ -142,9 +147,13 @@ object Gossiper {
           case Some(voterToVotesMap) =>
             voterToVotesMap.get(normalizedUri) match {
               case None =>
-                for (vote <- voterToVotesMap.values.map(_.head)) {
-                  newVote.voter !!! vote
+                voterToVotesMap.values.map(_.head).toList match {
+                  case head :: tail =>
+                    val cachedVotes: NonEmptyList[Vote] = NonEmptyList(head, tail)
+                    newVote.voter !!! cachedVotes
+                  case Nil =>
                 }
+
                 val updatedVotes: Map[String, NonEmptyList[Vote]] = voterToVotesMap.updated(normalizedUri, NonEmptyList.of(newVote))
                 behavior(accurateListeners, fastListeners, votesMapping.updated(newVote.noteId, updatedVotes))
 
@@ -156,7 +165,7 @@ object Gossiper {
                 } else {
                   val votersToNotify = voterToVotesMap.values.map(_.head).filterNot(sameVoters(latestVote, _))
                   for (cachedVoter <- votersToNotify.map(_.voter)) {
-                    cachedVoter !!! newVote
+                    cachedVoter !!! NonEmptyList.of(newVote)
                   }
 
                   val updatedVotesListForVoter = newVote :: votes

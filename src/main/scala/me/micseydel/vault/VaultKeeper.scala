@@ -2,6 +2,7 @@ package me.micseydel.vault
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
+import cats.data.NonEmptyList
 import me.micseydel.Common
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
@@ -134,13 +135,13 @@ case class NoteId(id: String
 
   def heading(heading: String): HeadingId = HeadingId(heading, this)
 
-  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[Vote], comments: Option[String])(implicit clock: TinkerClock): Vote =
+  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[NonEmptyList[Vote]], comments: Option[String])(implicit clock: TinkerClock): Vote =
     Vote(this, confidence, voter, clock.now(), comments)
 
-  def voteConfidently(confidence: Option[Boolean], voter: SpiritRef[Vote], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
+  def voteConfidently(confidence: Option[Boolean], voter: SpiritRef[NonEmptyList[Vote]], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
     Gossiper.SubmitVote(Vote(this, Right(confidence), voter, clock.now(), comments))
 
-  def voteMeasuredly(confidence: Double, voter: SpiritRef[Vote], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
+  def voteMeasuredly(confidence: Double, voter: SpiritRef[NonEmptyList[Vote]], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
     Gossiper.SubmitVote(Vote(this, Left(confidence), voter, clock.now(), comments))
 }
 

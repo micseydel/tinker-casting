@@ -12,6 +12,7 @@ object TimeUtil {
   val WithinDayDateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm:ssa")
   val WithinDay24HourDateTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
   val MonthDayTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+  val MonthDayTimeSecondFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
   def zonedDateTimeToTimeWithinDay(zonedDateTime: ZonedDateTime): String = zonedDateTime.format(WithinDayDateTimeFormatter)
 

@@ -1,5 +1,6 @@
 package me.micseydel.actor.kitties.kibble
 
+import cats.data.NonEmptyList
 import me.micseydel.NoOp
 import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularL, RectangularS}
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext}
@@ -22,7 +23,7 @@ import scala.util.{Failure, Success}
 object KibbleManagerActor {
   sealed trait Message
 
-  final case class ReceiveVote(vote: Vote) extends Message
+  final case class ReceiveVotes(votes: NonEmptyList[Vote]) extends Message
 
   private[kitties] final case class MaybeHeardKibbleMention(notedTranscription: NotedTranscription) extends Message
 
@@ -63,7 +64,7 @@ object KibbleManagerActor {
         context.actorContext.log.debug(s"Received ${notedTranscription.noteId}")
         val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
-        context.system.gossiper !! notedTranscription.noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Definitely maybe"))
+        context.system.gossiper !! notedTranscription.noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Definitely maybe"))
         Tinker.steadily
 
       case KibbleRefill(container, mass, time, noteId) =>
@@ -74,10 +75,10 @@ object KibbleManagerActor {
 
         if (mass < 100 || mass > 500) {
           // uncertain
-          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Mass out of range; mis-transcription?"))
+          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Mass out of range; mis-transcription?"))
           Tinker.steadily
         } else {
-          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("perfect fit"))
+          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("perfect fit"))
           behavior(cachedContainers.updated(container, mass))
         }
 
@@ -97,11 +98,11 @@ object KibbleManagerActor {
 
         if (mass < container.baselineWeight || mass > 1000) {
           // uncertain
-          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Almost matched; mis-transcription?"))
+          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Almost matched; mis-transcription?"))
           Tinker.steadily
         } else {
           noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
-          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("perfect fit"))
+          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("perfect fit"))
           behavior(cachedContainers.updated(container, mass))
         }
 
@@ -112,16 +113,16 @@ object KibbleManagerActor {
 
         if (mass < 0 || mass > 150) {
           // uncertain
-          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVote), Some("Mass out of range; mis-transcription?"))
+          context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Mass out of range; mis-transcription?"))
         } else {
-          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some("perfect fit"))
+          context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("perfect fit"))
         }
 
         Tinker.steadily
 
-      case ReceiveVote(vote) =>
+      case ReceiveVotes(votes) =>
         // FIXME: this will be chatty!
-        context.actorContext.log.debug(s"Ignoring $vote")
+        context.actorContext.log.debug(s"Ignoring $votes")
         Tinker.steadily
     }
   }

@@ -1,5 +1,6 @@
 package me.micseydel.actor.kitties
 
+import cats.data.NonEmptyList
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
 import me.micseydel.actor.kitties.TranscriptionAboutCats.{NoIntentJustWordMatch, NotAboutCats, WithIntent, WithIntentFailedExtraction}
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
@@ -28,7 +29,7 @@ object CatTranscriptionListener {
     def when: ZonedDateTime = rasaAnnotatedNotedTranscription.notedTranscription.capture.captureTime
   }
 
-  final case class ReceiveVote(vote: Vote) extends Message
+  final case class ReceiveVotes(votes: NonEmptyList[Vote]) extends Message
 
   //
 
@@ -58,7 +59,7 @@ object CatTranscriptionListener {
     message match {
       // FIXME: remove/replace this indirection (REGRET)
       case event@TranscriptionAboutCats(WithIntent(_, noteId, captureTime, catMessage, confidence)) =>
-        context.system.gossiper !! noteId.voteMeasuredly(confidence, context.messageAdapter(ReceiveVote), Some("rasa matched"))
+        context.system.gossiper !! noteId.voteMeasuredly(confidence, context.messageAdapter(ReceiveVotes), Some("rasa matched"))
 
         context.actorContext.log.info(s"Received $noteId about cats at capture time $captureTime, extracted ${catMessage.getClass} with confidence $confidence, noting in MOC and sending to CatsHelper")
         catsHelper !! catMessage
@@ -105,7 +106,7 @@ object CatTranscriptionListener {
         }
         Tinker.steadily
 
-      case ReceiveVote(vote) =>
+      case ReceiveVotes(vote) =>
         // FIXME: this will be chatty!
         context.actorContext.log.debug(s"Ignoring $vote")
         Tinker.steadily

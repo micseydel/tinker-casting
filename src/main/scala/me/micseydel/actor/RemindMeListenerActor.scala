@@ -1,5 +1,6 @@
 package me.micseydel.actor
 
+import cats.data.NonEmptyList
 import me.micseydel.actor.HueListener.Message
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
@@ -31,7 +32,7 @@ object RemindMeListenerActor {
 
   case class MarkAsDone(notificationId: NotificationId) extends Message
 
-  final case class ReceiveVote(vote: Vote) extends Message
+  final case class ReceiveVotes(votes: NonEmptyList[Vote]) extends Message
 
   private val NoteName = "Reminders"
   private val JsonName = "reminders_tinkering"
@@ -58,11 +59,11 @@ object RemindMeListenerActor {
         whisperResult match {
           case WhisperResult(WhisperResultContent(text, _), WhisperResultMetadata(BaseModel, _, _, _)) if isAMatch(text) =>
             context.actorContext.log.debug("Base model is only observed for voting, not behavior")
-            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some(s"exact match for ${BaseModel}"))
+            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"exact match for ${BaseModel}"))
             Tinker.steadily
 
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>
-            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVote), Some(s"exact match for ${meta.model}"))
+            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"exact match for ${meta.model}"))
 
             val reminder = Reminder(captureTime, noteId, text)
             val state = jsonRef.readState()
@@ -110,7 +111,7 @@ object RemindMeListenerActor {
             Tinker.steadily
 
           case WhisperResult(WhisperResultContent(text, _), _) =>
-            context.system.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVote), Some("trigger phrase not detected"))
+            context.system.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVotes), Some("trigger phrase not detected"))
             if (context.actorContext.log.isDebugEnabled) {
               context.actorContext.log.debug(s"trigger phrase was not detected, ignoring ($text)")
             }
@@ -125,9 +126,9 @@ object RemindMeListenerActor {
         }
         Tinker.steadily
 
-      case ReceiveVote(vote) =>
+      case ReceiveVotes(votes) =>
         // FIXME: this will be chatty!
-        context.actorContext.log.debug(s"Ignoring vote $vote")
+        context.actorContext.log.debug(s"Ignoring vote $votes")
         Tinker.steadily
     }
   }
