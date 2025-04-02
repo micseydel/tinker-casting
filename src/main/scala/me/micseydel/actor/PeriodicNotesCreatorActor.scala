@@ -84,6 +84,7 @@ object PeriodicNotesCreatorActor {
        |
        |- Prior day: [[${isoDateFormatter.format(yesterday)}]]
        |- Next day: [[${isoDateFormatter.format(tomorrow)}]]
+       |- [[Things I wish I had time for (${isoDateFormatter.format(tomorrow)})]]
        |- Captures
        |    - [[Transcribed mobile notes (${isoDateFormatter.format(today)})]]
        |        - Cats
