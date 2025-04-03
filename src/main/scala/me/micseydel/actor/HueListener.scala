@@ -20,9 +20,12 @@ import me.micseydel.model.Light.AllList
 import me.micseydel.model.LightStates.RelaxedLight
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
-import me.micseydel.vault.NoteId
-import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
+import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
+import org.slf4j.Logger
+import spray.json.{DefaultJsonProtocol, JsonFormat, RootJsonFormat}
 
+import java.time.ZonedDateTime
 import scala.annotation.unused
 
 object HueListener {
@@ -32,87 +35,70 @@ object HueListener {
 
   final case class ReceiveVotes(votes: NonEmptyList[Vote]) extends Message
 
+  //
+
   def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("HueListener Experiment", rgb(230, 230, 230), "👂") { (context, noteRef) =>
-    @unused // subscribes to Gossiper on our behalf
-    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent), Some("lights_test")), "RasaListener")
+    Tinker.withTypedJson("huelistener_experiment", StateJsonProtocol.stateFormat) { jsonRef =>
+      @unused // subscribes to Gossiper on our behalf
+      val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent), Some("lights_test")), "RasaListener")
 
-    context.actorContext.log.info("HueListener initialized")
+      context.actorContext.log.info("HueListener initialized")
 
-    implicit val h: SpiritRef[HueControl.Message] = hueControl
-    implicit val adapter: SpiritRef[NonEmptyList[Vote]] = context.messageAdapter(ReceiveVotes)
-    implicit val nr: NoteRef = noteRef
+      implicit val h: SpiritRef[HueControl.Message] = hueControl
+      implicit val adapter: SpiritRef[NonEmptyList[Vote]] = context.messageAdapter(ReceiveVotes)
+      implicit val nr: NoteRef = noteRef
+      implicit val jr: TypedJsonRef[State] = jsonRef
 
-    behavior(Set.empty, Map.empty)
+      behavior(Set.empty, Map.empty)
+    }
   }
 
-  private def behavior(alreadySeen: Set[(NoteId, WhisperModel)], trackedVotes: Map[(NoteId, WhisperModel), Vote])(implicit Tinker: Tinker, noteRef: NoteRef, hueControl: SpiritRef[HueControl.Message], receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(alreadySeen: Set[(NoteId, WhisperModel)], trackedVotes: Map[(NoteId, WhisperModel), Vote])
+                      (implicit Tinker: Tinker,
+                       noteRef: NoteRef, jsonRef: TypedJsonRef[State], hueControl: SpiritRef[HueControl.Message], receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
+    implicit val log: Logger = context.actorContext.log
 
-    context.actorContext.log.info(s"alreadySeen size ${alreadySeen.size}")
+    log.info(s"alreadySeen size ${alreadySeen.size}")
 
     Tinker.receiveMessage {
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(capture, noteId), _)) if alreadySeen.contains((noteId, capture.whisperResult.whisperResultMetadata.model)) =>
-        context.system.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("already seen (or reminder), ignoring"))
-        context.actorContext.log.debug(s"Already processed $noteId, ignoring")
+        context.actorContext.log.debug(s"Already processed $noteId,${capture.whisperResult.whisperResultMetadata.model}, ignoring")
         Tinker.steadily
 
+        // Rasa match
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), _), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
         val key = (noteId, model)
 
-        trackedVotes.get(key) match {
-          case Some(vote) =>
-            noteRef.appendConfidently(s"Could have used this vote to avoid changing the lights! $vote")
-          case None =>
-        }
+        val reminderConfidence: Option[Either[Double, Option[Boolean]]] = trackedVotes.get(key).map(_.confidence)
 
         validated match {
           case Valid(SetTheLights(_, maybeColor, maybeBrightness, maybeSetOnOff)) =>
-            context.actorContext.log.debug(s"Ignoring maybeSetOnOff $maybeSetOnOff")
+            // FIXME: why is maybeSetOnOff unused? is it because it's broken?
 
-            val color = maybeColor match {
-              case None =>
-                context.actorContext.log.debug("No color, using RelaxedLight")
-                RelaxedLight
-              case Some(c) => c
+
+            val thisAppearsToJustBeAReminder = justAReminder(trackedVotes.get(key), rasaResult.intent.confidence)
+            if (thisAppearsToJustBeAReminder) {
+              log.info(s"NoteId $noteId seems to refer to a reminder, so not making any light update; doing a Success Chime though")
+              context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Success(Material)))
+              Tinker.steadily
+            } else {
+              context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
+
+              val finalLightState = genLightState(maybeColor, maybeBrightness)
+              for (light <- AllList) {
+                hueControl !! HueControl.SetLight(light, finalLightState)
+              }
+
+              context.system.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
+
+              context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
+
+              context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
+              behavior(alreadySeen + key, trackedVotes)
             }
 
-            maybeBrightness match {
-              case None =>
-                for (light <- AllList) {
-                  hueControl !! HueControl.SetLight(light, color)
-                }
-              case Some(brightness) =>
-                val adjustedBrightness = if (brightness >= 0 && brightness <= 100) {
-                  brightness
-                } else {
-                  if (brightness > 200 && brightness < 300) {
-                    brightness - 200
-                  } else {
-                    context.actorContext.log.warn(s"Weird $brightness, falling back to default 10")
-                    10
-                  }
-                }
-                val colorWithBrightness = color.copy(bri = adjustedBrightness)
-                for (light <- AllList) {
-                  hueControl !! HueControl.SetLight(light, colorWithBrightness)
-                }
-                context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
-            }
-
-            val ackMessage: Chronicler.ListenerAcknowledgement = Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), model match {
-              case BaseModel =>
-                s"Updated the lights (fast): ${whisperResultContent.text}"
-              case LargeModel =>
-                s"Updated the lights (accurate): ${whisperResultContent.text}"
-            }, Some(AutomaticallyIntegrated))
-
-            context.system.chronicler !! ackMessage
-
-            context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
-
-            context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
-            behavior(alreadySeen + key, trackedVotes)
 
           case Invalid(e) =>
             context.system.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some("failed to extract entities"))
@@ -120,6 +106,7 @@ object HueListener {
             Tinker.steadily
         }
 
+        // not a light change
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(_, noteId), Some(RasaResult(entities, Intent(_, unrecognizedIntent), _, _, _)))) =>
         if (unrecognizedIntent != no_intent.IntentName) {
           context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent (rasaResult.intent.confidence) with entities $entities")
@@ -127,6 +114,7 @@ object HueListener {
         context.system.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some(s"unrecognized intent: $unrecognizedIntent"))
         Tinker.steadily
 
+        // no Rasa, maybe an exact-match
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), noteId), None)) =>
         val flashCommands = List("please flash the lights", "please do a light show")
         if (flashCommands.contains(text.trim.toLowerCase)) {
@@ -139,6 +127,7 @@ object HueListener {
 
         Tinker.steadily
 
+        // non-light changing
       case ReceiveVotes(votes) =>
         val (matched, discard) = votes.toList.partition(v => Gossiper.toNormalizedUri(v.voter.path.toSerializationFormat).endsWith("RemindMeListenerActor"))
 
@@ -157,14 +146,14 @@ object HueListener {
           }
 
           maybeModel.map { model =>
-              val key = vote.noteId -> model
-              if (alreadySeen.contains(key)) {
-                noteRef.appendConfidently(s"Too late for $vote")
-              } else {
-                noteRef.appendConfidently(s"Storing vote for later: $vote")
-              }
+            val key = vote.noteId -> model
+            if (alreadySeen.contains(key)) {
+              noteRef.appendConfidently(s"Too late for $vote")
+            } else {
+              noteRef.appendConfidently(s"Storing vote for later: $vote")
+            }
 
-              key -> vote
+            key -> vote
           }
         }
 
@@ -177,9 +166,72 @@ object HueListener {
     }
   }
 
+  //
+
+  def normalizeBrightness(brightness: Int)(implicit log: Logger): Int = if (brightness >= 0 && brightness <= 100) {
+    brightness
+  } else {
+    if (brightness > 200 && brightness < 300) {
+      brightness - 200
+    } else {
+      log.warn(s"Weird $brightness, falling back to default 10")
+      10
+    }
+  }
+
+  def genAckMessage(noteId: NoteId, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
+    val ackText = model match {
+      case BaseModel =>
+        s"Updated the lights (fast): $text"
+      case LargeModel =>
+        s"Updated the lights (accurate): $text"
+    }
+
+    Chronicler.ListenerAcknowledgement(noteId, clock.now(), ackText, Some(AutomaticallyIntegrated))
+  }
+
+  private def genLightState(maybeLightState: Option[LightState], maybeBrightness: Option[Int])(implicit log: Logger): LightState = {
+    val pending = maybeLightState match {
+      case None =>
+        log.debug("No color, using RelaxedLight")
+        RelaxedLight
+      case Some(c) => c
+    }
+
+    maybeBrightness match {
+      case None => pending
+      case Some(rawBrightness) => pending.copy(bri = normalizeBrightness(rawBrightness))
+    }
+  }
+
+  private def justAReminder(maybeVote: Option[Vote], rasaConfidence: Double): Boolean = {
+    maybeVote.map(_.confidence).exists {
+      case Left(justAReminderConfidence) =>
+        justAReminderConfidence > rasaConfidence
+      case Right(None) => false
+      case Right(Some(certainty)) => certainty
+    }
+  }
+
+  //
+
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def appendConfidently(line: String)(implicit clock: TinkerClock): Unit = {
       noteRef.appendOrThrow(MarkdownUtil.listLineWithTimestamp(clock.now(), line, dateTimeFormatter = TimeUtil.MonthDayTimeSecondFormatter))
     }
+  }
+
+  //
+
+  case class Experiment(startTime: ZonedDateTime, history: List[String])
+
+  case class State(map: Map[NoteId, Experiment])
+
+  object StateJsonProtocol extends DefaultJsonProtocol {
+    import me.micseydel.Common.ZonedDateTimeJsonFormat
+    implicit val linkIdFormat: JsonFormat[NoteId] = LinkIdJsonProtocol.noteIdFormat
+    implicit val experimentFormat: RootJsonFormat[Experiment] = jsonFormat2(Experiment)
+    implicit val stateMapFormat: RootJsonFormat[Map[NoteId, Experiment]] = mapFormat[NoteId, Experiment]
+    implicit val stateFormat: RootJsonFormat[State] = jsonFormat1(State)
   }
 }
