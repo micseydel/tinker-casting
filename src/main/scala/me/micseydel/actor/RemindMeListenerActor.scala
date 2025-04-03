@@ -96,7 +96,7 @@ object RemindMeListenerActor {
                     (noteId, text)
                 }
               } else {
-                val notification = Notification(captureTime, text, maybeRef = Some(noteId), NotificationId(blockId), sideEffects = Nil, replyTo)
+                val notification = Notification(captureTime, text.replace("Remind me to ", "").replace("Remind me that ", "").replace("Remind me ", ""), maybeRef = Some(noteId), NotificationId(blockId), sideEffects = Nil, replyTo)
                 context.system.notifier !! NotificationCenterManager.NewNotification(notification)
                 (noteId, text)
               }
