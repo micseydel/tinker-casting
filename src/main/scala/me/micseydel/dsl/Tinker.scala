@@ -227,11 +227,6 @@ case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] =
     setup(_ => Tinker.initializedWithNote(noteName, subdirectory)(f))
   }
 
-  // FIXME: remove?
-  //  private[dsl] def withWatchedActorNote(noteName: String, adapterF: Ping => T)(f: (TinkerContext[T], NoteRef) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
-  //    setup(_ => Tinker.withWatchedActorNote(noteName, adapterF)(f))
-  //  }
-
   def initializedWithTypedJson[J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
     setup(context => Tinker.withTypedJson(jsonName, jsonFormat)(f(context, _)))
   }
@@ -239,10 +234,6 @@ case class Tinkerer[T](color: TinkerColor, emoji: String, href: Option[String] =
   def initializedWithPersistedMessages[J](jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], JsonlRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
     setup(context => Tinker.withPersistedMessages(jsonName, jsonFormat)(f(context, _)))
   }
-
-  //  def initializedWithNoteAndTypedPersistence[J](noteName: String, jsonName: String, jsonFormat: JsonFormat[J])(f: (TinkerContext[T], NoteRef, TypedJsonRef[J]) => Ability[T])(implicit Tinker: Tinker): Ability[T] = {
-  //    setup(_ => Tinker.initializedWithNoteAndTypedPersistence(noteName, jsonName, jsonFormat)(f))
-  //  }
 }
 
 case class TinkerColor(r: Int, g: Int, b: Int, o: Double = 1.0) {
