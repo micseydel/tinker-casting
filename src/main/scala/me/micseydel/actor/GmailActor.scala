@@ -13,7 +13,7 @@ import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.{MessagePart, MessagePartHeader}
 
 import java.io.{File, FileInputStream, InputStreamReader}
-import java.time.format.DateTimeFormatter
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.{Base64, Collections}
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -117,8 +117,16 @@ object GmailActor {
 
     headers.find(_.getName.equalsIgnoreCase("Date"))
       .map { header =>
-        val cleanedDate = header.getValue.replaceAll("\\s*\\(.*\\)", "") // Remove (PDT), (UTC), etc.
-        ZonedDateTime.parse(cleanedDate, DateTimeFormatter.RFC_1123_DATE_TIME)
+        val raw = header.getValue
+        val cleanedDate = raw.replaceAll("\\s*\\(.*\\)", "") // Remove (PDT), (UTC), etc.
+        Try(ZonedDateTime.parse(cleanedDate, DateTimeFormatter.RFC_1123_DATE_TIME)) match {
+          case Failure(exception: DateTimeParseException) =>
+            // FIXME: log!
+            s"failed to parse $raw"
+          case Failure(exception) =>
+            throw exception
+          case Success(date) => date.toString
+        }
       }
       .getOrElse(ZonedDateTime.now(ZoneId.systemDefault()))
       .toString
