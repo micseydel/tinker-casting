@@ -17,13 +17,17 @@ object TinkerOrchestrator {
                     aranetConfig: Option[AranetConfig],
                     ntfyKeys: NtfyKeys,
                     fitbitAuthorizationBasic: Option[String],
-                    wyzeUri: Option[String]
+                    wyzeUri: Option[String],
+                    gmail: Option[GmailConfig]
                    )
 
   // behavior
 
   def apply(config: Config)(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
-//    val locationTracker: SpiritRef[LocationTracker.Message] = context.cast(LocationTracker(), "LocationTracker")
+    config.gmail.foreach { gmailConfig =>
+      context.actorContext.log.debug("Casting GmailTestActor")
+      context.cast(GmailExperimentActor(gmailConfig), "GmailTestActor")
+    }
 
     val hypothesisListener = context.cast(HypothesisListener(), "HypothesisListener")
 

@@ -32,7 +32,8 @@ object TinkerContainer {
         config.aranetConfig,
         config.ntfyKeys,
         config.fitbitAuthorizationBasic,
-        config.wyzeUri
+        config.wyzeUri,
+        config.gmail
       ))(tinker), NtfyerActor()(_)
     )
 

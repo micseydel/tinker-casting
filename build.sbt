@@ -31,6 +31,12 @@ lazy val additionalLibraryDependencies = Seq(
   "org.yaml" % "snakeyaml" % "2.4",
 //  "org.virtuslab" %% "scala-yaml" % "0.1.0",
 
+  "com.google.api-client" % "google-api-client" % "2.7.2",
+  "com.google.oauth-client" % "google-oauth-client-jetty" % "1.39.0",
+  "com.google.apis" % "google-api-services-gmail" % "v1-rev20240520-2.0.0",
+  "com.fasterxml.jackson.core" % "jackson-databind" % "2.18.3",
+  "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.18.3",
+
   // testing
 
   "com.typesafe.akka" %% "akka-http-testkit"         % akkaHttpVersion % Test,

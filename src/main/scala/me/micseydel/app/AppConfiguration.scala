@@ -2,6 +2,7 @@ package me.micseydel.app
 
 import cats.data.{Validated, ValidatedNel}
 import com.typesafe.config.{Config, ConfigException, ConfigFactory}
+import me.micseydel.actor.GmailConfig
 import me.micseydel.actor.perimeter.HueControl.HueConfig
 import me.micseydel.vault.VaultPath
 
@@ -19,7 +20,8 @@ object AppConfiguration {
     fitbitAuthorizationBasic: Option[String],
     purpleAirUri: Option[String],
     wyzeUri: Option[String],
-    rasaHost: String
+    rasaHost: String,
+    gmail: Option[GmailConfig]
   )
 
   /**
@@ -71,7 +73,9 @@ object AppConfiguration {
           getOptionalString(config, "fitbit.authorizationBasic"),
           getOptionalString(config, "purpleair.uri"),
           getOptionalString(config, "wyze.uri"),
-          config.getString("rasa.host")
+          config.getString("rasa.host"),
+          for (credsPath <- getOptionalString(config, "gmail.creds"); tokensPath <- getOptionalString(config, "gmail.tokens"))
+            yield GmailConfig(credsPath, tokensPath)
         ))
     }
   }
