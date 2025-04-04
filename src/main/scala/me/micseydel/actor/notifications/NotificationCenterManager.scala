@@ -6,6 +6,7 @@ import me.micseydel.actor.notifications.NotificationCenterManager._
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
+import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault._
@@ -13,6 +14,7 @@ import me.micseydel.vault.persistence.TypedJsonRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
 import java.time.ZonedDateTime
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success}
 
 object NotificationCenterManager {
@@ -25,13 +27,18 @@ object NotificationCenterManager {
 
   case class StartTinkering(tinker: Tinker) extends Message
 
+  private case class ExpireCooldown(key: String) extends Message
+
   sealed trait NotificationMessage extends Message
 
   case class NewNotification(notification: Notification) extends NotificationMessage
 
   case class CompleteNotification(notificationId: String) extends NotificationMessage
 
-  case class JustSideEffect(sideEffect: SideEffect) extends NotificationMessage
+  /**
+   * @param cooldown (key, minutes)
+   */
+  case class JustSideEffect(sideEffect: SideEffect, cooldown: Option[(String, Int)] = None) extends NotificationMessage
 
   // FIXME: move this to the Operator?
   case class RegisterReplyTo(replyTo: SpiritRef[NotificationId], id: SpiritId) extends NotificationMessage
@@ -81,6 +88,10 @@ object NotificationCenterManager {
 
         case StartTinkering(tinker) =>
           stash.unstashAll(finishInitializing(ntfyAbility(tinker))(tinker))
+
+        case ExpireCooldown(_) =>
+          // weird, but just ignore it
+          Behaviors.same
       }
     }
 
@@ -94,27 +105,42 @@ object NotificationCenterManager {
 
         val chime: SpiritRef[ChimeActor.Command] = context.cast(ChimeActor(), "Chime")
 
-        ability(Map.empty)(Tinker, upcomingNotificationsManager, notificationCenterActor, jsonRef, ntfyer, chime)
+        val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
+
+        ability(Map.empty, Set.empty)(Tinker, upcomingNotificationsManager, notificationCenterActor, jsonRef, ntfyer, chime, timeKeeper)
     }
 
-  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Command]): Ability[Message] =
+  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]], cooldowns: Set[String])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Command], timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] =
     Tinker.receive { (context, message) =>
       implicit val c: TinkerContext[_] = context
       message match {
         case RegisterReplyTo(replyTo, id) =>
           val updated = replyTos.updated(id, replyTo)
           context.actorContext.log.info(s"Registering id $id to ${replyTo.path}; map size currently ${updated.size}")
-          ability(updated)
+          ability(updated, cooldowns)
 
-        case JustSideEffect(sideEffect) =>
-          sideEffect match {
-            case PushNotification(key, message) =>
-              ntfyer !! NtfyerActor.DoNotify(key, message)
-            case HueCommand(command) =>
-              context.system.hueControl !! command
-            case Chime(message) =>
-              chime !! message
+        case ExpireCooldown(key) =>
+          ability(replyTos, cooldowns - key)
+
+        case JustSideEffect(sideEffect, maybeCooldown) =>
+
+          maybeCooldown match {
+            case Some((key, cooldownMinutes)) if !cooldowns.contains(key) =>
+              sideEffect match {
+                case PushNotification(key, message) =>
+                  ntfyer !! NtfyerActor.DoNotify(key, message)
+                case HueCommand(command) =>
+                  context.system.hueControl !! command
+                case Chime(message) =>
+                  chime !! message
+              }
+
+              // FIXME: this is silly and lazy - I should just add a Map[key, ZonedDateTime] that can simply BE stale
+              timeKeeper !! TimeKeeper.RemindMeIn(cooldownMinutes.minutes, context.self, ExpireCooldown(key), Some(key))
+
+            case _ =>
           }
+
           Tinker.steadily
 
         case NewNotification(notification) if notification.time.minusSeconds(1).isAfter(context.system.clock.now()) =>

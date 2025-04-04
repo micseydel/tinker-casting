@@ -53,6 +53,8 @@ object HueListener {
     }
   }
 
+  private val IgnoredMinutesAgo = 3
+
   private def behavior(alreadySeen: Set[(NoteId, WhisperModel)], trackedVotes: Map[(NoteId, WhisperModel), Vote])
                       (implicit Tinker: Tinker,
                        noteRef: NoteRef, jsonRef: TypedJsonRef[State], hueControl: SpiritRef[HueControl.Message], receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]]): Ability[Message] = Tinker.setup { context =>
@@ -68,18 +70,21 @@ object HueListener {
         Tinker.steadily
 
         // Rasa match
-      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), _), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
-        val key = (noteId, model)
-
-        val reminderConfidence: Option[Either[Double, Option[Boolean]]] = trackedVotes.get(key).map(_.confidence)
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), capturedTime), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
 
         validated match {
           case Valid(SetTheLights(_, maybeColor, maybeBrightness, maybeSetOnOff)) =>
             // FIXME: why is maybeSetOnOff unused? is it because it's broken?
 
-
+            val key = (noteId, model)
+            val isStale = TimeUtil.timeSince(capturedTime).toMinutes > IgnoredMinutesAgo
             val thisAppearsToJustBeAReminder = justAReminder(trackedVotes.get(key), rasaResult.intent.confidence)
-            if (thisAppearsToJustBeAReminder) {
+
+            if (isStale) {
+              log.warn(s"Ignored $noteId because it was more than $IgnoredMinutesAgo minutes ago")
+              context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Warning(Material)), Some(("isstale", 1)))
+              Tinker.steadily
+            } else if (thisAppearsToJustBeAReminder) {
               log.info(s"NoteId $noteId seems to refer to a reminder, so not making any light update; doing a Success Chime though")
               context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Success(Material)))
               Tinker.steadily
@@ -92,13 +97,11 @@ object HueListener {
               }
 
               context.system.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
-
               context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
 
               context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
               behavior(alreadySeen + key, trackedVotes)
             }
-
 
           case Invalid(e) =>
             context.system.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some("failed to extract entities"))
