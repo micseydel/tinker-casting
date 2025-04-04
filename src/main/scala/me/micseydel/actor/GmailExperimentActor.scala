@@ -4,7 +4,9 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 
-import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.{ZoneId, ZonedDateTime}
+import scala.util.Try
 
 object GmailExperimentActor {
   sealed trait Message
@@ -22,7 +24,8 @@ object GmailExperimentActor {
       case ReceiveEmail(emails) =>
         val formattedEmails = emails.map {
           case GmailActor.Email(sender, subject, _, sentAt, _) =>
-            s"- \\[$sentAt] \\<$sender> **$subject**"
+            val formattedSentAt = utcToLosAngeles(sentAt).getOrElse(sentAt)
+            s"- \\[$formattedSentAt] \\<$sender> **$subject**"
         }.mkString("", "\n", "\n")
 
         val formattedHeaders = emails.map {
@@ -57,5 +60,13 @@ object GmailExperimentActor {
 
         Tinker.steadily
     }
+  }
+
+
+  private def utcToLosAngeles(string: String): Try[String] = Try {
+    val utcDateTime = ZonedDateTime.parse(string)
+    val pacificDateTime = utcDateTime.withZoneSameInstant(ZoneId.of("America/Los_Angeles"))
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z")
+    pacificDateTime.format(formatter)
   }
 }

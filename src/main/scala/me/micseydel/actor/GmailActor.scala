@@ -167,20 +167,3 @@ object GmailAuth {
     new AuthorizationCodeInstalledApp(flow, receiver).authorize("user")
   }
 }
-
-
-// FIXME: testing for re-formatting
-object Main {
-  def main(args: Array[String]): Unit = {
-    // Given ZonedDateTime in UTC
-    val inputDateTime = "2025-04-03T04:27:41Z"
-    val utcDateTime = ZonedDateTime.parse(inputDateTime)
-    // Convert to Pacific Time
-    val pacificDateTime = utcDateTime.withZoneSameInstant(ZoneId.of("America/Los_Angeles"))
-    // Define desired format
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z")
-    // Format and print
-    val formattedDate = pacificDateTime.format(formatter)
-    System.out.println(formattedDate)
-  }
-}
