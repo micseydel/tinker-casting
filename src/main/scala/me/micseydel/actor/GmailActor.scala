@@ -16,6 +16,7 @@ import java.io.{File, FileInputStream, InputStreamReader}
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.{Base64, Collections}
+import scala.collection.mutable
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
@@ -31,7 +32,7 @@ object GmailActor {
 
   //
 
-  case class Email(sender: String, subject: String, body: String, sentAt: String, headers: List[MessagePartHeader])
+  case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]])
 
   def apply(config: GmailConfig): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("Starting gmail service")
@@ -78,6 +79,7 @@ object GmailActor {
   private def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor): Future[Seq[Email]] = Future {
     val messages: List[com.google.api.services.gmail.model.Message] = {
       val rawMessages = gmailService.users().messages().list("me")
+        // FIXME
         .setLabelIds(List("INBOX").asJava)
         .setQ("is:unread")
         .setMaxResults(5).execute().getMessages
@@ -86,6 +88,7 @@ object GmailActor {
     }
 
     messages.flatMap { msg =>
+      // FIXME: should these be Futures?
       val fullMessage = gmailService.users().messages().get("me", msg.getId).execute()
       val payload: MessagePart = fullMessage.getPayload
       val headers = payload.getHeaders.asScala
@@ -101,7 +104,9 @@ object GmailActor {
 
       val time = getSentTimeFromHeaders(payload)
 
-      Some(Email(sender, subject, body, time, headers.toList))
+      val groupedHeaders = headers.groupBy(_.getName).map { case (k, v) => k -> v.map(_.getValue).toList }
+
+      Some(Email(sender, subject, body, time, groupedHeaders))
     }
   }
 
@@ -122,7 +127,7 @@ object GmailActor {
         Try(ZonedDateTime.parse(cleanedDate, DateTimeFormatter.RFC_1123_DATE_TIME)) match {
           case Failure(exception: DateTimeParseException) =>
             // FIXME: log!
-            s"failed to parse $raw"
+            raw
           case Failure(exception) =>
             throw exception
           case Success(date) => date.toString

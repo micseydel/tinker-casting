@@ -8,6 +8,7 @@ import java.time.ZonedDateTime
 
 object GmailExperimentActor {
   sealed trait Message
+
   private case class ReceiveEmail(emails: Seq[GmailActor.Email]) extends Message
 
   def apply(gmailConfig: GmailConfig)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Gmail API Integration Testing", TinkerColor.random(), "📮") { (context, noteRef) =>
@@ -26,12 +27,21 @@ object GmailExperimentActor {
 
         val formattedHeaders = emails.map {
           case GmailActor.Email(_, _, body, sentAt, headers) =>
-              s"""## $sentAt
-                |
-                |```
-                |${headers.map(_.toString).mkString("\n\n")}
-                |```
-                |""".stripMargin
+            val formattedHeaders = headers.map {
+              case (key, List(justOne)) =>
+                if (justOne.length > 200) {
+                  s"- $key\n    - `$justOne`"
+                } else {
+                  s"- $key: `$justOne`"
+                }
+              case (key, list) =>
+                (s"- $key" :: list.map(s => s"    - `$s`")).mkString("\n")
+            }.mkString("\n")
+
+            s"""## $sentAt
+               |
+               |$formattedHeaders
+               |""".stripMargin
         }.mkString("", "\n", "\n")
 
         noteRef.setMarkdown(
