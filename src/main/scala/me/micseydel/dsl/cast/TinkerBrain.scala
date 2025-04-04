@@ -167,7 +167,7 @@ object TinkerBrain {
         val (nodes: Set[TinkerNode], edges: Set[TinkerEdge], _) =
           graphForLast3Days(readJson, tinkerers)(context.log, new TinkerClockImpl())
         // FIXME: hacky
-        context.spawnAnonymous(TinkerNoteWriter(nodes, edges)(tinker))
+        context.spawnAnonymous(TinkerNoteWriter(nodes, edges, tinkerers)(tinker))
         Behaviors.same
     }
   }
@@ -214,7 +214,7 @@ object TinkerBrain {
         val (nodes: Set[TinkerNode], edges: Set[TinkerEdge], _) =
           graphForLast3Days(readJson, tinkerers)(context.log, new TinkerClockImpl())
         // FIXME: hacky
-        context.spawnAnonymous(TinkerNoteWriter(nodes, edges)(tinker))
+        context.spawnAnonymous(TinkerNoteWriter(nodes, edges, tinkerers)(tinker))
     }
 
     Behaviors.same
@@ -224,7 +224,7 @@ object TinkerBrain {
 private object TinkerNoteWriter {
   sealed trait Message
 
-  def apply(nodes: Set[TinkerNode], edges: Set[TinkerEdge])(implicit Tinker: Tinker): Ability[Message] = Tinker.initializedWithNote("Tinker Brain") { (context, noteRef) =>
+  def apply(nodes: Set[TinkerNode], edges: Set[TinkerEdge], tinkerers: Map[ActorPath, Tinkerer[_]])(implicit Tinker: Tinker): Ability[Message] = Tinker.initializedWithNote("Tinker Brain") { (context, noteRef) =>
     context.actorContext.log.info(s"Writing note")
 
     val formattedNodes = nodes.map {
@@ -239,10 +239,15 @@ private object TinkerNoteWriter {
         s"`$source` -> `$target`"
     }.mkString("- ", "\n- ", "")
 
+    val formattedTinkerers = tinkerers.map { case (key, tinkerer) =>
+      s"- $key\n    - $tinkerer"
+    }.mkString("\n")
+
     noteRef.setMarkdown(
       s"""- Generated ${context.system.clock.now()}
          |- Nodes: ${nodes.size}
          |- Edges: ${edges.size}
+         |- Registered tinkerers: ${tinkerers.size}
          |# Nodes
          |
          |$formattedNodes
@@ -250,6 +255,10 @@ private object TinkerNoteWriter {
          |# Edges
          |
          |$formattedEdges
+         |
+         |# Registered Tinkerers
+         |
+         |$formattedTinkerers
          |""".stripMargin)
 
     context.actorContext.log.info(s"Done writing note")
@@ -330,15 +339,12 @@ private object TinkerBrainUtil {
         .filterNot(_.id.contains("TranscriptionNoteWrapper_"))
         .filterNot(_.id.contains("ChroniclerMOC"))
         .filterNot(_.id.contains("Operator"))
-      // ReadingPollingActor temporary, to be removed after a few days
-        .filterNot(_.id.contains("ReadingPollingActor"))
       ,
       edges.filterNot {
         case TinkerEdge(source, target) =>
           source.contains("TranscriptionNoteWrapper_") || target.contains("TranscriptionNoteWrapper_") ||
             source.contains("ChroniclerMOC") || target.contains("ChroniclerMOC") ||
-            source.contains("Operator") || target.contains("Operator") ||
-            source.contains("ReadingPollingActor") || target.contains("ReadingPollingActor")
+            source.contains("Operator") || target.contains("Operator")
       },
       todaysFrames
     )

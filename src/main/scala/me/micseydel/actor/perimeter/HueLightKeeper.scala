@@ -142,7 +142,7 @@ private object HueLightKeeperAPIActor {
   private case class ReceiveLightPutFromHttp(result: Either[(StatusCode, String), NoOp.type]) extends Message
   // FIXME: add a timeout message and have a timekeeper spawn off a message
 
-  def apply(light: Light)(implicit Tinker: Tinker, hueConfig: HueConfig): Ability[Message] = Tinkerer(rgb(230, 230, 230), "☁️").setup { context =>
+  def apply(light: Light)(implicit Tinker: Tinker, hueConfig: HueConfig): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
     implicit val s: ActorSystem[_] = context.system.actorSystem

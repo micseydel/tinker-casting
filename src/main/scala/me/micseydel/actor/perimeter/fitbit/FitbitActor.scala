@@ -404,7 +404,7 @@ object FitbitFetcherHelper {
               replyTo !! sleepReport
           }
         } else if (statusCode == StatusCodes.Unauthorized) {
-          context.actorContext.log.warn(s"Got a status 401, triggering an auth refresh with deferred sleep fetch")
+          context.actorContext.log.info(s"Got a status 401, triggering an auth refresh with deferred sleep fetch")
           supervisor !! TriggerAuthRefresh(messageForRefresh)
         } else {
           context.actorContext.log.error(s"Unexpected status code: $statusCode (expected a 200, or 401 to trigger auth refresh); $responsePayload")

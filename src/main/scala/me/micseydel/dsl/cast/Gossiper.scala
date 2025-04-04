@@ -182,5 +182,11 @@ object Gossiper {
   private def sameVoters(firstVote: Vote, secondVote: Vote): Boolean =
     toNormalizedUri(firstVote.voter.path.toSerializationFormat) == toNormalizedUri(secondVote.voter.path.toSerializationFormat)
 
-  def toNormalizedUri(uri: String): String = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
+  def toNormalizedUri(uri: String): String = {
+    val t = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
+    t.split('#').toList match {
+      case List(wanted, _) => wanted
+      case _ => t
+    }
+  }
 }
