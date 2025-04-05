@@ -1,5 +1,6 @@
 package me.micseydel.actor
 
+import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext, Tinkerer}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
@@ -13,7 +14,8 @@ object HypothesisListener {
   sealed trait Message
 
   def apply()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = {
-    behavior()
+//    behavior()
+    Behaviors.ignore
   }
 
   private def behavior()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = Tinkerer(TinkerColor.rgb(30, 250, 70), "🥼").setup { context =>

@@ -25,7 +25,7 @@ object LitterTrackingDashboardActor {
   def apply(
           //   litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message]
            )(implicit Tinker: Tinker): Ability[Message] =
-    AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Litter Tracking Dashboard", CatBrown, "🗑️", ReceiveNotePing) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Litter Tracking Dashboard", CatBrown, "🧪", ReceiveNotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       implicit val clock: TinkerClock = context.system.clock
       implicit val l: Logger = context.actorContext.log

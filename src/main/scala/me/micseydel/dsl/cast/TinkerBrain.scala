@@ -270,24 +270,24 @@ private object TinkerNoteWriter {
 private object TinkerBrainUtil {
   // utils
 
-//  private val Prefix = "akka://AkkaActor/system/TinkerCast/"
-//  private val CharsToDrop = Prefix.length
+  //  private val Prefix = "akka://AkkaActor/system/TinkerCast/"
+  //  private val CharsToDrop = Prefix.length
 
   def cleanerUri(uri: String): String = {
     val adaptersRemoved = uri.split("/").toList.reverse.dropWhile(_.startsWith("$")).reverse.mkString("/")
     adaptersRemoved.drop(7)
-//    if (adaptersRemoved.startsWith(Prefix)) {
-//      adaptersRemoved.drop(CharsToDrop)
-//    } else {
-//      adaptersRemoved
-//    }
+    //    if (adaptersRemoved.startsWith(Prefix)) {
+    //      adaptersRemoved.drop(CharsToDrop)
+    //    } else {
+    //      adaptersRemoved
+    //    }
 
     //    val soFar = uri.substring(7)
-//    if (soFar.endsWith("/$$a-adapter")) {
-//      soFar.dropRight(12)
-//    } else {
-//      soFar
-//    }
+    //    if (soFar.endsWith("/$$a-adapter")) {
+    //      soFar.dropRight(12)
+    //    } else {
+    //      soFar
+    //    }
   }
 
   import java.time.ZonedDateTime
@@ -339,16 +339,18 @@ private object TinkerBrainUtil {
         .filterNot(_.id.contains("TranscriptionNoteWrapper_"))
         .filterNot(_.id.contains("ChroniclerMOC"))
         .filterNot(_.id.contains("Operator"))
+        // FIXME can be removed after a couple days
+        .filterNot(_.id.contains("HypothesisListener"))
       ,
       edges.filterNot {
         case TinkerEdge(source, target) =>
           source.contains("TranscriptionNoteWrapper_") || target.contains("TranscriptionNoteWrapper_") ||
             source.contains("ChroniclerMOC") || target.contains("ChroniclerMOC") ||
-            source.contains("Operator") || target.contains("Operator")
+            source.contains("Operator") || target.contains("Operator") || source.contains("HypothesisListener") || target.contains("HypothesisListener")
       },
       todaysFrames
     )
-//    (nodes, edges, todaysFrames)
+    //    (nodes, edges, todaysFrames)
   }
 
   def graphFor(messages: List[PersistedMessage], tinkerers: Map[String, Tinkerer[_]])(implicit log: Logger, clock: TinkerClock): (Set[TinkerNode], Set[TinkerEdge], List[List[TinkerEdge]]) = {
@@ -357,52 +359,65 @@ private object TinkerBrainUtil {
 
     val edges = messages.flatMap(_.edges).toSet
 
-    val nodes = uniqueNodeNames.map { nodeName =>
-      val nodeNameParts = nodeName.split("/")
-      (0 until nodeNameParts.size).map { dropNum =>
-        nodeNameParts
-          .dropRight(dropNum)
-          .mkString("/")
-      }.map(tinkerers.get).collectFirst {
-        case Some(tinkerer) => tinkerer
-      } match {
-        case Some(Tinkerer(color, emoji, href)) =>
-          TinkerNode(
-            nodeName,
-            color.toString,
-            Some(emoji),
-            None, None,
-            href
-          )
+    val nodesAndMaybeRemappings = uniqueNodeNames
+      .map { nodeName =>
+        val nodeNameParts = nodeName.split("/")
+        (0 until nodeNameParts.size).map { dropNum =>
+          nodeNameParts
+            .dropRight(dropNum)
+            .mkString("/")
+        }.map(nodeOrSuperVisor => tinkerers.get(nodeOrSuperVisor).map(nodeOrSuperVisor -> _)).collectFirst {
+          case Some(tinkerer) => tinkerer
+        } match {
+          case Some(nodeOrSuperVisor -> Tinkerer(color, emoji, href)) =>
+            val maybeRemap = if (nodeOrSuperVisor != nodeName) {
+              Some(nodeName -> nodeOrSuperVisor)
+            } else {
+              None
+            }
+            (TinkerNode(
+              nodeOrSuperVisor,
+              color.toString,
+              Some(emoji),
+              None, None,
+              href
+            ), maybeRemap)
 
-        case None =>
-          log.debug(s"nodeName $nodeName not found in ${tinkerers.keys}")
+          case None =>
+            log.debug(s"nodeName $nodeName not found in ${tinkerers.keys}")
 
-          if (nodeName.endsWith("Operator")) {
-            TinkerNode(
-              nodeName,
-              TinkerColor(0, 0, 0).toString,
-              Some("☎️"), None, None, None
-            )
-          } else if (nodeName.endsWith("VaultKeeper")) {
-            TinkerNode(
-              nodeName,
-              TinkerColor(151, 7, 223).toString,
-              Some("🏦"), None, None, None
-            )
-          } else {
-            TinkerNode(
-              nodeName,
-              TinkerColor.random().toString,
-              None, None, None, None
-            )
-          }
+            if (nodeName.endsWith("Operator")) {
+              (TinkerNode(
+                nodeName,
+                TinkerColor(0, 0, 0).toString,
+                Some("☎️"), None, None, None
+              ), None)
+            } else if (nodeName.endsWith("VaultKeeper")) {
+              (TinkerNode(
+                nodeName,
+                TinkerColor(151, 7, 223).toString,
+                Some("🏦"), None, None, None
+              ), None)
+            } else {
+              (TinkerNode(
+                nodeName,
+                TinkerColor.random().toString,
+                None, None, None, None
+              ), None)
+            }
+        }
       }
-    }
+
+    val nodes = nodesAndMaybeRemappings.map(_._1)
+
+    val remappings = nodesAndMaybeRemappings.flatMap(_._2).toMap
 
     val priorFrames = bucketMessagesByMinute(messages)
 
-    (nodes, edges, priorFrames)
+    (nodes, edges.map {
+      case TinkerEdge(source, target) =>
+        TinkerEdge(remappings.getOrElse(source, source), remappings.getOrElse(target, target))
+    }, priorFrames)
   }
 
   implicit class Listeners(spirits: Set[SpiritRef[NotedTranscription]]) {
@@ -431,7 +446,9 @@ private object RealtimeFrameBatcher {
   sealed trait Message
 
   final case class Receive(toForward: SendClientMessage) extends Message
+
   final case class Reset() extends Message
+
   private case class Burst() extends Message
 
   def apply(batchWindow: FiniteDuration, webSocketMessageActor: ActorRef[WebSocketMessageActor.Command]): Behavior[Message] = Behaviors.setup { context =>

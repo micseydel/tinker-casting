@@ -6,7 +6,7 @@ import me.micseydel.actor.kitties.LitterBoxesHelper.{EventCapture, LitterSifted,
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext, Tinkerer}
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
@@ -33,7 +33,7 @@ object LitterBoxesHelper {
 
   // behavior
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🤖").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[EventCapture]]] = context.cast(DailyNotesRouter(

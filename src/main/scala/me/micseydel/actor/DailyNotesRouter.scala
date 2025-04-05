@@ -36,7 +36,7 @@ object DailyNotesRouter {
     apply[DailyMarkdownFromPersistedMessagesActor.Message[T]](abilityForDay)
   }
 
-  def apply[M](abilityGenerator: (LocalDate, TinkerColor, String) => (String, Ability[M]))(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinker.setup { context =>
+  def apply[M](abilityGenerator: (LocalDate, TinkerColor, String) => (String, Ability[M]))(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinkerer(Purple, "☸️").setup { context =>
     context.actorContext.log.info(s"Creating spirit lookup")
     val freshLokUpSpiritByDay = LookUpSpiritByDay[M] { (context, captureDate) =>
       val opaqacity = TimeUtil.daysSince(captureDate)(context.system.clock) match {

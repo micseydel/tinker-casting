@@ -38,7 +38,7 @@ object LitterBoxReportActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] =
     setup()
 
-  private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _)), "DailyNotesRouter")

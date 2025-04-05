@@ -3,14 +3,14 @@ package me.micseydel.actor
 import me.micseydel.actor.TinkerOrchestrator.Config
 import me.micseydel.actor.perimeter.fitbit.{FitbitActor, FitbitTesterActor}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, Tinkerer}
 
 import scala.annotation.unused
 
 object CentralNervousSystemMaintenance {
   sealed trait Message
 
-  def apply(config: Config)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(config: Config)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(100, 100, 200), "😵‍💫").setup { context =>
     val fitbitActor: SpiritRef[FitbitActor.Message] = context.cast(FitbitActor(config.fitbitAuthorizationBasic), "FitbitActor")
     context.castAnonymous(FitbitTesterActor(fitbitActor))
 

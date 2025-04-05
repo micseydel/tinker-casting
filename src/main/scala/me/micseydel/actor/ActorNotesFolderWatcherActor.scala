@@ -55,7 +55,7 @@ object ActorNotesFolderWatcherActor {
   private def finishingInitialization(
                            folders: Map[String, SpiritRef[FolderWatcherActor.Message]],
                            topLevelNoteWatchers: Map[String, SpiritRef[Ping]]
-                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = NoteMakingTinkerer("ActorNotesFolderWatcherActor", TinkerColor(25, 25, 25), "👀") { (context, noteRef) =>
+                         )(implicit Tinker: Tinker, actorNotesFolder: Path): Ability[Message] = NoteMakingTinkerer("ActorNotesFolderWatcherActor", TinkerColor(25, 25, 25), "🦾") { (context, noteRef) =>
     @unused // driven by an internal thread
     val actorNotesFolderWatcher = context.spawn(
       FolderWatcherActor(
