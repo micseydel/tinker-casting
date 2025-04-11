@@ -102,7 +102,7 @@ object HttpFetchAndUnmarshallEXPeriment {
 
     Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
-        context.actorContext.log.info("Received HttpResponse, beginning unmarshalling process")
+        context.actorContext.log.debug("Received HttpResponse, beginning unmarshalling process")
 
         val umarshal: Unmarshal[ResponseEntity] = Unmarshal(httpResponse.entity)
         val fut: Future[String] = umarshal.to[String]

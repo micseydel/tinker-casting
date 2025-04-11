@@ -184,7 +184,7 @@ object VaultPathAdapter {
   }
 
   def apply(actorFolderPath: Path, forwardTo: SpiritRef[VaultPathUpdatedEvent]): Behavior[PathUpdatedEvent] = Behaviors.receive { (context, message) =>
-    context.log.info("Running experimental adapter...")
+    context.log.debug("Running experimental adapter...")
 
     VaultPathUpdatedEvent(actorFolderPath)(message) match {
       case Valid(event) =>

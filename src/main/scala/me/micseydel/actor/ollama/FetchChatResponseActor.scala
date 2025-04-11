@@ -150,7 +150,7 @@ private object EXPERIMENTHttpFetchAndUnmarshall {
         Tinker.steadily
 
       case ReceiveUnmarshalling(response) =>
-        context.actorContext.log.info("Unmarshalling succeeding, replying now")
+        context.actorContext.log.debug("Unmarshalling succeeding, replying now")
         replyTo !! response
         Tinker.steadily // FIXME
     }

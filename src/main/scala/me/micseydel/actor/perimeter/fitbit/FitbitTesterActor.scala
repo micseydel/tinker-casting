@@ -145,7 +145,7 @@ object FitbitTesterActor {
     }
 
     Tinker.receiveMessage { message =>
-      context.actorContext.log.info(s"Processing message $message")
+      context.actorContext.log.debug(s"Processing message $message")
       message match {
         case ReceiveSteps(payload) => behavior(state.copy(steps = Some(payload)))
         case ReceiveHeartRate(payload) => behavior(state.copy(heartRatePayload = Some(payload)))
