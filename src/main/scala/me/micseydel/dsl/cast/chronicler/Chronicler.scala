@@ -1,5 +1,6 @@
 package me.micseydel.dsl.cast.chronicler
 
+import akka.actor.InvalidActorNameException
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import me.micseydel.{Common, NoOp}
@@ -143,16 +144,19 @@ object Chronicler {
               // FIXME: kinda hacky, but let's just not send any redundant events to the wrapper for now (though later)
               wavNameToTranscriptionNoteOwner
             case None =>
-              val wrapper = {
-                val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
-                val behavior = TranscriptionNoteWrapper(capture, context.self, ollamaTranscriptionSummarizer)
-                context.actorContext.log.debug(
-                  s"Creating note wrapper actor with name $name (wavPath $wavPath); " +
-                    s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(wavName)}")
-                context.cast(behavior, name)
+              val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
+              val behavior = TranscriptionNoteWrapper(capture, context.self, ollamaTranscriptionSummarizer)
+              context.actorContext.log.debug(
+                s"Creating note wrapper actor with name $name (wavPath $wavPath); " +
+                  s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(wavName)}")
+              try {
+                val wrapper = context.cast(behavior, name)
+                wavNameToTranscriptionNoteOwner.updated(wavName, wrapper)
+              } catch {
+                case _: InvalidActorNameException =>
+                  context.actorContext.log.warn(s"Failed to create already-existing actor name $name for wav $wavName")
+                  wavNameToTranscriptionNoteOwner
               }
-
-              wavNameToTranscriptionNoteOwner.updated(wavName, wrapper)
           }
 
           behavior(updatedNoteNameToTranscriptionNoteOwner)
