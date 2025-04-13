@@ -109,7 +109,7 @@ object ChimeActor {
         Tinker.steadily
 
       case ReceivePing(_) =>
-        context.actorContext.log.warn("Got a note ping...")
+        context.actorContext.log.debug("Got a note ping...")
         noteRef.readNote().flatMap { note =>
           val maybeUpdatedTheme = getFirstSelectedListItemForHeader(note.markdown, "Select a Theme")
           val maybeSelectedCommand = getFirstSelectedListItemForHeader(note.markdown, "Issue Command")
