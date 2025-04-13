@@ -124,21 +124,28 @@ object NotificationCenterManager {
 
         case JustSideEffect(sideEffect, maybeCooldown) =>
 
+          def doSideeffect(): Unit = {
+            sideEffect match {
+              case PushNotification(key, message) =>
+                ntfyer !! NtfyerActor.DoNotify(key, message)
+              case HueCommand(command) =>
+                context.system.hueControl !! command
+              case Chime(message) =>
+                chime !! message
+            }
+          }
+
           maybeCooldown match {
-            case Some((key, cooldownMinutes)) if !cooldowns.contains(key) =>
-              sideEffect match {
-                case PushNotification(key, message) =>
-                  ntfyer !! NtfyerActor.DoNotify(key, message)
-                case HueCommand(command) =>
-                  context.system.hueControl !! command
-                case Chime(message) =>
-                  chime !! message
+            case Some((key, cooldownMinutes)) =>
+              if (!cooldowns.contains(key)) {
+                doSideeffect()
+                // FIXME: this is silly and lazy - I should just add a Map[key, ZonedDateTime] that can simply BE stale
+                timeKeeper !! TimeKeeper.RemindMeIn(cooldownMinutes.minutes, context.self, ExpireCooldown(key), Some(key))
+              } else {
+                context.actorContext.log.warn(s"key $key is under cooldown")
               }
-
-              // FIXME: this is silly and lazy - I should just add a Map[key, ZonedDateTime] that can simply BE stale
-              timeKeeper !! TimeKeeper.RemindMeIn(cooldownMinutes.minutes, context.self, ExpireCooldown(key), Some(key))
-
             case _ =>
+              doSideeffect()
           }
 
           Tinker.steadily
