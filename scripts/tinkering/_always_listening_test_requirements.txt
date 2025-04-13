@@ -1,0 +1,12 @@
+numpy
+transformers>=4.19.0
+ffmpeg-python==0.2.0
+
+pyaudio
+SpeechRecognition
+pydub
+openai-whisper
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch
+bleak
+bitstruct
