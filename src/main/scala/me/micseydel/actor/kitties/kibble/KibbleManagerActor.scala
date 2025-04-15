@@ -121,8 +121,16 @@ object KibbleManagerActor {
         Tinker.steadily
 
       case ReceiveVotes(votes) =>
-        // FIXME: this will be chatty!
-        context.actorContext.log.debug(s"Ignoring $votes")
+        // copy-paste from HueListener
+        val maybeReminderVotes = votes.filter(v => Gossiper.toNormalizedUri(v.voter.path.toSerializationFormat).endsWith("RemindMeListenerActor"))
+
+        if (maybeReminderVotes.isEmpty) {
+          // FIXME: this will be chatty!
+          context.actorContext.log.debug(s"Ignoring $votes")
+        } else {
+          context.actorContext.log.warn(s"Ignoring useful vote(s) from reminder actor $maybeReminderVotes")
+        }
+
         Tinker.steadily
     }
   }
