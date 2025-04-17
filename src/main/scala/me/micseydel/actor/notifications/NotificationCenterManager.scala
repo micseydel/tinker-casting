@@ -27,7 +27,8 @@ object NotificationCenterManager {
 
   case class StartTinkering(tinker: Tinker) extends Message
 
-  private case class ExpireCooldown(key: String) extends Message
+//  private
+  case class ExpireCooldown(key: String) extends Message
 
   sealed trait NotificationMessage extends Message
 

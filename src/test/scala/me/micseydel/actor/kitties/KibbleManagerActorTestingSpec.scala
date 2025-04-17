@@ -104,7 +104,7 @@ class KibbleManagerActorTestingSpec extends TestTinkerContainer {
 
         for ((rawStartTime, text) <- transcriptions) {
           val time = ZonedDateTime.parse(rawStartTime)
-          val noteId = NoteId(generateFileName(time))
+          val noteId = NoteId(KibbleManagerActorTestingSpec.generateFileName(time))
           gossiper ! Gossiper.Receive(TestHelpers.simpleNotedTranscription(text, time, noteId))
         }
 
@@ -246,7 +246,10 @@ class KibbleManagerActorTestingSpec extends TestTinkerContainer {
 //    }
   }
 
-  private def generateFileName(timestamp: ZonedDateTime): String = {
+}
+
+object KibbleManagerActorTestingSpec {
+  def generateFileName(timestamp: ZonedDateTime): String = {
     // Define a formatter for the desired date pattern
     val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 

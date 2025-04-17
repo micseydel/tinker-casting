@@ -3,7 +3,7 @@ package me.micseydel.testsupport
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.actor.notifications.NotificationCenterManager
-import me.micseydel.actor.notifications.NotificationCenterManager.{Chime, Notification}
+import me.micseydel.actor.notifications.NotificationCenterManager.{Chime, ExpireCooldown, Notification}
 import me.micseydel.actor.perimeter.NtfyerActor
 
 object NotifierForTesting {
@@ -17,7 +17,7 @@ object NotifierForTesting {
           case NotificationCenterManager.NewNotification(Notification(time, string, maybeRef, notificationId, sideEffects, requestNotificationOnCompletion)) => sideEffects
           case NotificationCenterManager.CompleteNotification(notificationId) => Nil
 //          case NotificationCenterManager.UpcomingNotification(Notification(time, string, maybeRef, notificationId, sideEffects, requestNotificationOnCompletion)) => sideEffects
-          case NotificationCenterManager.JustSideEffect(sideEffect) => List(sideEffect)
+          case NotificationCenterManager.JustSideEffect(sideEffect, _) => List(sideEffect)
           case NotificationCenterManager.RegisterReplyTo(replyTo, id) => Nil
         }
 
@@ -33,6 +33,8 @@ object NotifierForTesting {
         }
 
         Behaviors.same
+
+      case ExpireCooldown(_) => ???
     }
   }
 }
