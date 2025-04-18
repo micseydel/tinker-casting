@@ -1,5 +1,6 @@
 package me.micseydel.prototyping
 
+import me.micseydel.prototyping.ObsidianCharts.Series
 import spray.json.DefaultJsonProtocol._
 import spray.json.enrichAny
 
@@ -19,6 +20,12 @@ object ObsidianCharts {
        |$formattedSeries
        |```""".stripMargin
   }
+
+  def chart(series: Series): String = {
+    chart(series.data.map(_ => ""), List(series))
+  }
+
+  // model
 
   case class Series(title: String, data: List[Int])
 }
