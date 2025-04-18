@@ -4,7 +4,7 @@ import struct
 import sys
 
 import requests
-from bleak import BleakClient, BleakScanner
+from bleak import BleakClient, BleakScanner, exc
 
 
 HR_MEAS = "00002A37-0000-1000-8000-00805F9B34FB"
@@ -49,26 +49,28 @@ async def run(address, url, debug=False):
         while await client.is_connected():
             await asyncio.sleep(1)
 
-async def print_devices():
+async def print_devices(out):
     devices = await BleakScanner.discover()
     likely_candidates = []
     for d in devices:
-        print(d)
+        print(d, file=out)
         if 'Polar' in (d.name or ""):
             likely_candidates.append(d)
 
     if likely_candidates:
-        print("\nMost likely candidates:")
+        print("\nMost likely candidates:", file=out)
         for candidate in likely_candidates:
-            print(candidate)
+            print(candidate, file=out)
+    else:
+        print("\nNo good candidates (expected 'Polar' in a name)", file=out)
 
 
 if __name__ == "__main__":
     try:
         _, address, url = sys.argv
     except ValueError:
-        print("An address and URL are required parameters, fetching then printing the available addresses now...\n")
-        asyncio.run(print_devices())
+        print("An address and URL are required parameters, fetching then printing the available addresses now...\n", file=sys.stderr)
+        asyncio.run(print_devices(sys.stderr))
         exit(1)
 
     print(f"Using {address} and connecting to {url}")
@@ -77,4 +79,8 @@ if __name__ == "__main__":
         loop.run_until_complete(run(address, url))
     except KeyboardInterrupt:
         print("Exiting per Ctrl+C")
+    except exc.BleakDeviceNotFoundError:
+        print(f"Device {address} not found, scanning for any likely candidates now...", file=sys.stderr)
+        asyncio.run(print_devices(sys.stderr))
+        exit(1)
 
