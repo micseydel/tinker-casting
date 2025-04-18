@@ -2,7 +2,8 @@ package me.micseydel.actor.kitties
 
 import akka.event.slf4j.Logger
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor.KibbleRefill
-import me.micseydel.actor.kitties.kibble.{KibbleManagerActor, KibbleManagerListenerActor}
+import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, RectangularS}
+import me.micseydel.actor.kitties.kibble.{KibbleManagerActor, KibbleManagerListenerActor, KibbleModel}
 import me.micseydel.model.NotedTranscription
 import me.micseydel.testsupport.TestHelpers
 import me.micseydel.vault.NoteId
@@ -12,6 +13,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 import java.time.ZonedDateTime
+import scala.annotation.tailrec
 
 class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
   with MockFactory
@@ -28,22 +30,67 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
 
   "KibbleEventsIntegration" must {
     "..." in {
-      val t = RawEvents
+      val events: List[KibbleManagerActor.Message] = RawEvents
         .map(toSimpleNotedTranscription)
         .map(KibbleManagerListenerActor.lineToMeasurementEvent)
         .map(_.get)
 
-      t match {
+      events match {
         case (first: KibbleRefill) :: (second: KibbleRefill) :: (third: KibbleRefill) :: theRest =>
+          val tested = toTest(List(first, second, third), theRest)
+          println(tested)
+          tested match {
+            case Containers(primCirc, secCirc, smallRec) =>
+              println(s"Remaining: primCirc=${primCirc - Circular1.baselineWeight}, secCirc=${secCirc - Circular2.baselineWeight}, smallRec=${smallRec - RectangularS.baselineWeight}")
+          }
+
         case _ => ???
       }
-
-      println(t)
     }
   }
 
-  def toTest(): Unit = {
+  case class Containers(primCirc: Int, secCirc: Int, smallRec: Int) {
+    override def toString: String = s"Containers(primCirc=$primCirc, secCirc=$secCirc, smallRec=$smallRec, total=${primCirc + secCirc + smallRec})"
+  }
 
+  def toTest(startingContents: List[KibbleRefill], events: List[KibbleManagerActor.Message]): Containers = {
+    val containers = startingContents match {
+      // FIXME hardcoded
+      case List(first, second, third) =>
+        Containers(first.massGrams, second.massGrams, third.massGrams)
+
+      case _ => ???
+    }
+
+    println(containers)
+
+    @tailrec
+    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.Event]): Containers = {
+      remainingEvents match {
+        case Nil => currentContainers
+        case event :: eventsToRecursOn =>
+          val updatedContainers = event match {
+            case KibbleManagerActor.KibbleDiscarded(massGrams, time, noteId) => currentContainers // FIXME ignored
+            case measurement: KibbleManagerActor.KibbleContainerMeasurement =>
+              measurement.container match {
+                case KibbleModel.Circular1 => currentContainers.copy(primCirc = measurement.massGrams)
+                case KibbleModel.Circular2 => currentContainers.copy(secCirc = measurement.massGrams)
+                case KibbleModel.RectangularS => currentContainers.copy(smallRec = measurement.massGrams)
+                case KibbleModel.RectangularL => ???
+              }
+          }
+
+          r(updatedContainers, eventsToRecursOn)
+      }
+    }
+
+    val simplifiedEvents = events.map {
+      case KibbleManagerActor.ReceiveVotes(votes) => ???
+      case KibbleManagerActor.MaybeHeardKibbleMention(notedTranscription) => ???
+      case event: KibbleManagerActor.Event => event
+    }
+
+    r(containers, simplifiedEvents)
   }
 
   //
