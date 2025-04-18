@@ -43,7 +43,13 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
             case Containers(primCirc, secCirc, smallRec) =>
               println(s"Remaining: primCirc=${primCirc - Circular1.baselineWeight}, secCirc=${secCirc - Circular2.baselineWeight}, smallRec=${smallRec - RectangularS.baselineWeight} sum=${primCirc - Circular1.baselineWeight + secCirc - Circular2.baselineWeight + smallRec - RectangularS.baselineWeight}")
           }
-          println(s"dispensed $dispensed ∑-> ${dispensed.totalDispensed} ~ ${containersAfterDispensing.total - Circular1.baselineWeight - Circular2.baselineWeight - RectangularS.baselineWeight}")
+          println(s"${dispensed.totalDispensed} ~ ${containersAfterDispensing.total - Circular1.baselineWeight - Circular2.baselineWeight - RectangularS.baselineWeight}")
+
+          dispensed.map.toList.sortBy(_._1).foreach {
+            case (date, entry) => println(s"$date $entry net ${entry.dispensed - entry.discarded}")
+          }
+
+//          println(s"dispensed $dispensed ∑-> ${dispensed.totalDispensed} ~ ${containersAfterDispensing.total - Circular1.baselineWeight - Circular2.baselineWeight - RectangularS.baselineWeight}")
 
         case _ => ???
       }
