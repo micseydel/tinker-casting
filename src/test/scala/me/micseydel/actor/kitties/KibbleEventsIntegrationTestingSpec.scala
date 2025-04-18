@@ -2,7 +2,7 @@ package me.micseydel.actor.kitties
 
 import akka.event.slf4j.Logger
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor.KibbleRefill
-import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, RectangularS}
+import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularS}
 import me.micseydel.actor.kitties.kibble.{KibbleManagerActor, KibbleManagerListenerActor, KibbleModel}
 import me.micseydel.model.NotedTranscription
 import me.micseydel.testsupport.TestHelpers
@@ -12,7 +12,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
-import java.time.ZonedDateTime
+import java.time.{LocalDate, ZonedDateTime}
 import scala.annotation.tailrec
 
 class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
@@ -43,7 +43,7 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
             case Containers(primCirc, secCirc, smallRec) =>
               println(s"Remaining: primCirc=${primCirc - Circular1.baselineWeight}, secCirc=${secCirc - Circular2.baselineWeight}, smallRec=${smallRec - RectangularS.baselineWeight} sum=${primCirc - Circular1.baselineWeight + secCirc - Circular2.baselineWeight + smallRec - RectangularS.baselineWeight}")
           }
-          println(s"dispensed $dispensed ∑-> ${dispensed.sum} ~ ${containersAfterDispensing.total - Circular1.baselineWeight - Circular2.baselineWeight - RectangularS.baselineWeight}")
+          println(s"dispensed $dispensed ∑-> ${dispensed.totalDispensed} ~ ${containersAfterDispensing.total - Circular1.baselineWeight - Circular2.baselineWeight - RectangularS.baselineWeight}")
 
         case _ => ???
       }
@@ -56,7 +56,28 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
     def total: Int = primCirc + secCirc + smallRec
   }
 
-  def toTest(startingContents: List[KibbleRefill], events: List[KibbleManagerActor.Message]): (Containers, List[Int]) = {
+  case class KibbleDispensingEntry(dispensed: Int = 0, discarded: Int = 0)
+  case class KibbleDispensing(map: Map[LocalDate, KibbleDispensingEntry]) {
+    def addDispensed(forDay: LocalDate, dispensed: Int): KibbleDispensing =
+      this.copy(map.updatedWith(forDay) {
+        case Some(KibbleDispensingEntry(previouslyDispensed, discarded)) =>
+          Some(KibbleDispensingEntry(previouslyDispensed + dispensed, discarded))
+        case None =>
+          Some(KibbleDispensingEntry(dispensed = dispensed))
+      })
+
+    def addDiscard(forDay: LocalDate, discarded: Int): KibbleDispensing =
+      this.copy(map.updatedWith(forDay) {
+        case Some(KibbleDispensingEntry(dispensed, previouslyDiscarded)) =>
+          Some(KibbleDispensingEntry(dispensed, previouslyDiscarded + discarded))
+        case None =>
+          Some(KibbleDispensingEntry(discarded = discarded))
+      })
+
+    def totalDispensed: Int = map.valuesIterator.map(_.dispensed).sum
+  }
+
+  def toTest(startingContents: List[KibbleRefill], events: List[KibbleManagerActor.Message]): (Containers, KibbleDispensing) = {
     val containers = startingContents match {
       // FIXME hardcoded
       case List(first, second, third) =>
@@ -68,35 +89,49 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
     println(containers)
 
     @tailrec
-    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.Event], dispensed: List[Int]): (Containers, List[Int]) = {
+    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.Event], accumulator: KibbleDispensing, lastUsedContainer: Option[KibbleContainer]): (Containers, KibbleDispensing) = {
       remainingEvents match {
-        case Nil => (currentContainers, dispensed)
+        case Nil => (currentContainers, accumulator)
         case event :: eventsToRecursOn =>
-          val (updatedContainers: Containers, justDispensed: Int) = event match {
-            case KibbleManagerActor.KibbleDiscarded(massGrams, time, noteId) => (currentContainers, 0) // FIXME ignored
+          val (updatedContainers: Containers, updatedDispensing: KibbleDispensing, latestContainer: Option[KibbleContainer]) = event match {
+            case KibbleManagerActor.KibbleDiscarded(massGrams, time, _) => (currentContainers, accumulator.addDiscard(time.toLocalDate, massGrams), lastUsedContainer)
             case measurement: KibbleManagerActor.KibbleContainerMeasurement =>
+              val inferredRemainingFromPriorContainer = lastUsedContainer.filter(_ != measurement.container).map {
+                case KibbleModel.Circular1 => currentContainers.primCirc - measurement.container.baselineWeight
+                case KibbleModel.Circular2 => currentContainers.secCirc - measurement.container.baselineWeight
+                case KibbleModel.RectangularS => currentContainers.smallRec - measurement.container.baselineWeight
+                case KibbleModel.RectangularL => ???
+              }.getOrElse(0)
               measurement.container match {
                 case KibbleModel.Circular1 =>
-                  (currentContainers.copy(primCirc = measurement.massGrams), currentContainers.primCirc - measurement.massGrams)
+                  val dispensed = currentContainers.primCirc - measurement.massGrams + inferredRemainingFromPriorContainer
+                  val updatedAccumulator: KibbleDispensing = accumulator.addDispensed(event.time.toLocalDate, dispensed)
+                  (currentContainers.copy(primCirc = measurement.massGrams), updatedAccumulator, Some(measurement.container))
                 case KibbleModel.Circular2 =>
-                  (currentContainers.copy(secCirc = measurement.massGrams), currentContainers.secCirc - measurement.massGrams)
+                  val dispensed = currentContainers.secCirc - measurement.massGrams + inferredRemainingFromPriorContainer
+                  val updatedAccumulator: KibbleDispensing = accumulator.addDispensed(event.time.toLocalDate, dispensed)
+                  (currentContainers.copy(secCirc = measurement.massGrams), updatedAccumulator, Some(measurement.container))
                 case KibbleModel.RectangularS =>
-                  (currentContainers.copy(smallRec = measurement.massGrams), currentContainers.smallRec - measurement.massGrams)
+                  val dispensed = currentContainers.smallRec - measurement.massGrams + inferredRemainingFromPriorContainer
+                  val updatedAccumulator: KibbleDispensing = accumulator.addDispensed(event.time.toLocalDate, dispensed)
+                  (currentContainers.copy(smallRec = measurement.massGrams), updatedAccumulator, Some(measurement.container))
                 case KibbleModel.RectangularL => ???
               }
           }
 
-          r(updatedContainers, eventsToRecursOn, justDispensed :: dispensed)
+          r(updatedContainers, eventsToRecursOn, updatedDispensing, latestContainer)
       }
     }
 
-    val simplifiedEvents = events.map {
+    val simplifiedEvents: List[KibbleManagerActor.Event] = events.map {
       case KibbleManagerActor.ReceiveVotes(votes) => ???
       case KibbleManagerActor.MaybeHeardKibbleMention(notedTranscription) => ???
       case event: KibbleManagerActor.Event => event
     }
 
-    r(containers, simplifiedEvents, Nil)
+    println(s"CANARY ${simplifiedEvents.map(_.time.toLocalDate).distinct}")
+
+    r(containers, simplifiedEvents, KibbleDispensing(Map.empty), None)
   }
 
   //

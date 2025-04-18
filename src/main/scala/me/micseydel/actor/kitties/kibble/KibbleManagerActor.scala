@@ -27,11 +27,12 @@ object KibbleManagerActor {
 
   private[kitties] final case class MaybeHeardKibbleMention(notedTranscription: NotedTranscription) extends Message
 
-  sealed trait Event extends Message
+  sealed trait Event extends Message {
+    def time: ZonedDateTime
+  }
 
   private[kitties] sealed trait KibbleContainerMeasurement extends Event {
     def container: KibbleContainer
-
     def massGrams: Int
   }
 
