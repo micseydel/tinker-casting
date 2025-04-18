@@ -37,12 +37,13 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
 
       events match {
         case (first: KibbleRefill) :: (second: KibbleRefill) :: (third: KibbleRefill) :: theRest =>
-          val tested = toTest(List(first, second, third), theRest)
-          println(tested)
-          tested match {
+          val (containersAfterDispensing, dispensed) = toTest(List(first, second, third), theRest)
+          println(containersAfterDispensing)
+          containersAfterDispensing match {
             case Containers(primCirc, secCirc, smallRec) =>
-              println(s"Remaining: primCirc=${primCirc - Circular1.baselineWeight}, secCirc=${secCirc - Circular2.baselineWeight}, smallRec=${smallRec - RectangularS.baselineWeight}")
+              println(s"Remaining: primCirc=${primCirc - Circular1.baselineWeight}, secCirc=${secCirc - Circular2.baselineWeight}, smallRec=${smallRec - RectangularS.baselineWeight} sum=${primCirc - Circular1.baselineWeight + secCirc - Circular2.baselineWeight + smallRec - RectangularS.baselineWeight}")
           }
+          println(s"dispensed $dispensed ∑-> ${dispensed.sum} ~ ${containersAfterDispensing.total - Circular1.baselineWeight - Circular2.baselineWeight - RectangularS.baselineWeight}")
 
         case _ => ???
       }
@@ -50,10 +51,12 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
   }
 
   case class Containers(primCirc: Int, secCirc: Int, smallRec: Int) {
-    override def toString: String = s"Containers(primCirc=$primCirc, secCirc=$secCirc, smallRec=$smallRec, total=${primCirc + secCirc + smallRec})"
+    override def toString: String = s"Containers(primCirc=$primCirc, secCirc=$secCirc, smallRec=$smallRec, total=$total)"
+
+    def total: Int = primCirc + secCirc + smallRec
   }
 
-  def toTest(startingContents: List[KibbleRefill], events: List[KibbleManagerActor.Message]): Containers = {
+  def toTest(startingContents: List[KibbleRefill], events: List[KibbleManagerActor.Message]): (Containers, List[Int]) = {
     val containers = startingContents match {
       // FIXME hardcoded
       case List(first, second, third) =>
@@ -65,22 +68,25 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
     println(containers)
 
     @tailrec
-    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.Event]): Containers = {
+    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.Event], dispensed: List[Int]): (Containers, List[Int]) = {
       remainingEvents match {
-        case Nil => currentContainers
+        case Nil => (currentContainers, dispensed)
         case event :: eventsToRecursOn =>
-          val updatedContainers = event match {
-            case KibbleManagerActor.KibbleDiscarded(massGrams, time, noteId) => currentContainers // FIXME ignored
+          val (updatedContainers: Containers, justDispensed: Int) = event match {
+            case KibbleManagerActor.KibbleDiscarded(massGrams, time, noteId) => (currentContainers, 0) // FIXME ignored
             case measurement: KibbleManagerActor.KibbleContainerMeasurement =>
               measurement.container match {
-                case KibbleModel.Circular1 => currentContainers.copy(primCirc = measurement.massGrams)
-                case KibbleModel.Circular2 => currentContainers.copy(secCirc = measurement.massGrams)
-                case KibbleModel.RectangularS => currentContainers.copy(smallRec = measurement.massGrams)
+                case KibbleModel.Circular1 =>
+                  (currentContainers.copy(primCirc = measurement.massGrams), currentContainers.primCirc - measurement.massGrams)
+                case KibbleModel.Circular2 =>
+                  (currentContainers.copy(secCirc = measurement.massGrams), currentContainers.secCirc - measurement.massGrams)
+                case KibbleModel.RectangularS =>
+                  (currentContainers.copy(smallRec = measurement.massGrams), currentContainers.smallRec - measurement.massGrams)
                 case KibbleModel.RectangularL => ???
               }
           }
 
-          r(updatedContainers, eventsToRecursOn)
+          r(updatedContainers, eventsToRecursOn, justDispensed :: dispensed)
       }
     }
 
@@ -90,7 +96,7 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
       case event: KibbleManagerActor.Event => event
     }
 
-    r(containers, simplifiedEvents)
+    r(containers, simplifiedEvents, Nil)
   }
 
   //
