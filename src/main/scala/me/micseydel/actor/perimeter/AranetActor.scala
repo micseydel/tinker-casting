@@ -6,9 +6,12 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, Respons
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.Common.ZonedDateTimeJsonFormat
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.prototyping.ObsidianCharts
+import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.vault.Note
 import spray.json._
 
@@ -37,7 +40,15 @@ object AranetActor {
 
   private def behavior(config: Config, lastSeenElevated: Boolean)(implicit Tinker: Tinker): Ability[Message] = {
     AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated.apply) { (context, noteRef) =>
+      implicit val tc: TinkerContext[_] = context
       import AranetJsonProtocol.payloadFormat
+
+      val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]] = context.cast(DailyNotesRouter(
+        NoteName,
+        "aranet",
+        AranetJsonProtocol.payloadFormat,
+        DailyMarkdown.apply
+      ), "DailyNotesRouter")
 
       val httpRequest = HttpRequest(
         method = HttpMethods.GET,
@@ -50,7 +61,8 @@ object AranetActor {
         case ReceiveResult(result) =>
           result match {
             case AranetFailure(throwable) => context.actorContext.log.error("Aranet fetching failed", throwable)
-            case AranetResults(aras, Meta(elapsed, captureTime)) =>
+            case result@AranetResults(aras, Meta(elapsed, captureTime)) =>
+              dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(result), captureTime)
               context.actorContext.log.info(s"Setting Markdown...")
               noteRef.setMarkdown {
                 "- [ ] Click to refresh\n" +
@@ -58,7 +70,10 @@ object AranetActor {
                   aras.map {
                     case Aranet(_, co2, humidity, name, _, _, temperature) =>
                       s"- $name -> **CO2 $co2**  temp $temperature°C  humidity $humidity"
-                  }.mkString("\n") + "\n"
+                  }.mkString("\n") + "\n" +
+                s"""# Today
+                  |![[$NoteName (${context.system.clock.today()})]]
+                  |""".stripMargin
               }
           }
 
@@ -91,6 +106,40 @@ object AranetActor {
 
           Tinker.steadily
 
+      }
+    }
+  }
+
+  private object DailyMarkdown {
+    def apply(items: List[AranetResults], clock: TinkerClock): String = {
+      val (a29655results, a29686results, a24DBEresults) = split(items)
+
+      val a29655resultsSeries = IntSeries("a29655", a29655results)
+      val a29686resultsSeries = IntSeries("a29686", a29686results)
+      val a24DBEresultsSeries = IntSeries("a24DBE", a24DBEresults)
+
+      val superimposed = ObsidianCharts.chart(List.fill(items.size)(""), List(
+        a29655resultsSeries,
+        a29686resultsSeries,
+        a24DBEresultsSeries
+      ))
+
+      s"""# Superimposed
+         |
+         |$superimposed
+         |""".stripMargin
+    }
+
+    def split(items: List[AranetResults]): (List[Int], List[Int], List[Int]) = {
+      items.foldRight[(List[Int], List[Int], List[Int])]((Nil, Nil, Nil)) {
+        case (AranetResults(results, _), (a29655results, a29686results, a24DBEresults)) =>
+          val resultsMap = results.map(r => r.name -> r).toMap
+
+          (
+            resultsMap.get("Aranet4 29655").map(_.co2).orElse(a29655results.headOption).getOrElse(0) :: a29655results,
+            resultsMap.get("Aranet4 29686").map(_.co2).orElse(a29686results.headOption).getOrElse(0) :: a29686results,
+            resultsMap.get("Aranet4 24DBE").map(_.co2).orElse(a24DBEresults.headOption).getOrElse(0) :: a24DBEresults
+          )
       }
     }
   }
