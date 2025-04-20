@@ -7,19 +7,18 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AirGradientPollingActor.AlterPolling
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl._
+import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.util.TimeUtil
+import me.micseydel.prototyping.ObsidianCharts
+import me.micseydel.prototyping.ObsidianCharts.Series
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json._
 
 import java.io.FileNotFoundException
-import java.time.{ZoneId, ZonedDateTime}
-import java.time.format.DateTimeFormatter
 import scala.concurrent.Future
-import scala.concurrent.duration.{DurationInt, DurationLong, FiniteDuration, SECONDS}
+import scala.concurrent.duration.{DurationInt, DurationLong, FiniteDuration}
 import scala.util.{Failure, Success}
 
 object AirGradientActor {
@@ -32,13 +31,14 @@ object AirGradientActor {
 
   private case class ReceiveAirGradientSensorData(data: AirGradientSensorData) extends Message
 
-  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Air Gradient measurements", TinkerColor(145, 96, 220), "😮‍💨", ReceivePing) { (context, noteRef) =>
-//    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]] = context.cast(DailyNotesRouter(
-//      "PurpleAir AQI measurements",
-//      "purpleair",
-//      PurpleAirJsonFormat.rawSensorDataJsonFormat,
-//      PurpleAirMarkdown.apply
-//    ), "DailyNotesRouter")
+  private val BaseNoteName = "Air Gradient measurements"
+  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](BaseNoteName, TinkerColor(145, 96, 220), "😮‍💨", ReceivePing) { (context, noteRef) =>
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]] = context.cast(DailyNotesRouter(
+      BaseNoteName,
+      "airgradient",
+      AirGradientJsonFormat.airGradientSensorDataJsonFormat,
+      DailyMarkdown.apply
+    ), "DailyNotesRouter")
 
     val initialPollingInterval = noteRef.read() match {
       case Failure(_: FileNotFoundException) =>
@@ -62,7 +62,7 @@ object AirGradientActor {
     behavior(initialPollingInterval.toMinutes
 //      , Nil
     )(Tinker, noteRef,
-//      dailyNotesAssistant,
+      dailyNotesAssistant,
       apiPoller)
   }
 
@@ -70,7 +70,7 @@ object AirGradientActor {
                         pollingIntervalMinutes: Long
 //                        , subscribers: List[SpiritRef[RawSensorData]]
                       )(implicit Tinker: Tinker, noteRef: NoteRef,
-//                                                                     dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[RawSensorData]]],
+                                                                     dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
                                                                      apiPoller: SpiritRef[AirGradientPollingActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
@@ -135,11 +135,11 @@ object AirGradientActor {
             }
         }
 
-      case ReceiveAirGradientSensorData(AirGradientSensorData(pm02Compensated, rco2, tvocIndex)) =>
-//        dailyNotesAssistant !! DailyNotesRouter.Envelope(
-//          DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(data),
-//          data.zonedDatetime
-//        )
+      case ReceiveAirGradientSensorData(data@AirGradientSensorData(pm02Count, pm10Count, pm02Compensated, rco2, tvocIndex)) =>
+        dailyNotesAssistant !! DailyNotesRouter.Envelope(
+          DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(data),
+          context.system.clock.now() // FIXME: hacky, prevents downstream from de-duping properly
+        )
 
 //        for (subscriber <- subscribers) {
 //          subscriber !! data
@@ -156,9 +156,13 @@ object AirGradientActor {
         val markdown =
           s"""- [ ] Click to refresh now
              |- generated ${context.system.clock.now().toString.take(19)}
-             |- pm02Compensated **$pm02Compensated**
+             |- pm02Compensated **$pm02Compensated** ($pm02Count)
+             |- pm10Count $pm10Count
              |- CO2 **$rco2**
              |- tvocIndex $tvocIndex
+             |
+             |# Today
+             |![[$BaseNoteName (${context.system.clock.today()})]]
              |""".stripMargin
 
         val note = Note(markdown, frontmatter)
@@ -173,26 +177,58 @@ object AirGradientActor {
     }
   }
 
-//  private object Markdown {
-//    def apply(items: List[RawSensorData], clock: TinkerClock): String = {
-//      items match {
-//        case Nil =>
-//          "No measurements\n"
-//        case _ =>
-//          val measurements = items.sortBy(_.zonedDatetime).map(_.pm2_5_aqi)
-//          val chart = ObsidianCharts.chart(List.fill(measurements.size)(""), List(Series("aqi", measurements)))
-//
-//          val latest = items.last
-//
-//          s"""# Chart
-//             |
-//             |$chart
-//             |- Latest value: **${latest.pm2_5_aqi}** at ${latest.zonedDatetime.toString.take(19)}
-//             |- Markdown generated ${clock.now().toString.take(19)}
-//             |""".stripMargin
-//      }
-//    }
-//  }
+  private object DailyMarkdown {
+    def apply(items: List[AirGradientSensorData], clock: TinkerClock): String = {
+      val (pm02Counts, pm10Counts, pm02Compensateds, rco2s, tvocIndexs) = split(items)
+
+      // FIXME: .toInt hacks
+      val pm02CountsSeries = Series("pm02Counts", pm02Counts.map(_.toInt))
+      val pm10CountsSeries = Series("pm10Counts", pm10Counts.map(_.toInt))
+      val pm02CompensatedsSeries = Series("pm02Compensateds", pm02Compensateds.map(_.toInt))
+      val rco2sSeries = Series("rco2s", rco2s.map(_.toInt))
+      val tvocIndexsSeries = Series("tvocIndexs", tvocIndexs.map(_.toInt))
+
+      val superimposed = ObsidianCharts.chart(List.fill(items.size)(""), List(
+        pm02CountsSeries,
+        pm10CountsSeries,
+        pm02CompensatedsSeries,
+        rco2sSeries,
+        tvocIndexsSeries
+      ))
+
+      s"""# Superimposed
+         |
+         |$superimposed
+         |
+         |# pm02Counts
+         |
+         |${ObsidianCharts.chart(pm02CountsSeries)}
+         |
+         |# pm10CountsSeries
+         |
+         |${ObsidianCharts.chart(pm10CountsSeries)}
+         |
+         |# pm02CompensatedsSeries
+         |
+         |${ObsidianCharts.chart(pm02CompensatedsSeries)}
+         |
+         |# rco2sSeries
+         |
+         |${ObsidianCharts.chart(rco2sSeries)}
+         |
+         |# tvocIndexsSeries
+         |
+         |${ObsidianCharts.chart(tvocIndexsSeries)}
+         |""".stripMargin
+    }
+
+    def split(items: List[AirGradientSensorData]): (List[Double], List[Double], List[Double], List[Double], List[Double]) = {
+      items.foldRight[(List[Double], List[Double], List[Double], List[Double], List[Double])]((Nil, Nil, Nil, Nil, Nil)) {
+        case (AirGradientSensorData(pm02Count, pm10Count, pm02Compensated, rco2, tvocIndex), (pm02Counts, pm10Counts, pm02Compensateds, rco2s, tvocIndexs)) =>
+          (pm02Count :: pm02Counts, pm10Count :: pm10Counts, pm02Compensated :: pm02Compensateds, rco2 :: rco2s, tvocIndex :: tvocIndexs)
+      }
+    }
+  }
 }
 
 
@@ -304,7 +340,7 @@ private object AirGradientPollingActor {
 }
 
 object AirGradientJsonFormat extends DefaultJsonProtocol {
-  implicit val airGradientSensorDataJsonFormat: RootJsonFormat[AirGradientSensorData] = jsonFormat3(AirGradientSensorData)
+  implicit val airGradientSensorDataJsonFormat: RootJsonFormat[AirGradientSensorData] = jsonFormat5(AirGradientSensorData)
 }
 
 /*
@@ -351,9 +387,9 @@ case class AirGradientSensorData(
 //"pm003Count": 135.5,
 //"pm005Count": 95.33,
 //"pm01Count": 16.83,
-//"pm02Count": 2.17,
+  pm02Count: Double,
 //"pm50Count": 0.67,
-//"pm10Count": 0.5,
+  pm10Count: Double,
 //"atmp": 19.3,
 //"atmpCompensated": 19.3,
 //"rhum": 65.01,
