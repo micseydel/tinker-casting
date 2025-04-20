@@ -7,7 +7,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.Series
+import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success}
@@ -43,7 +43,7 @@ object HeartRateMonitorActor {
                |    - Total measurements ${measurements.size}
                |
                |# Chart
-               |${ObsidianCharts.chart(Series("Heart Rate", measurements.reverse))}
+               |${ObsidianCharts.chart(IntSeries("Heart Rate", measurements.reverse))}
                |""".stripMargin)
         } else {
           context.actorContext.log.debug("Received note ping but checkbox was not checked")

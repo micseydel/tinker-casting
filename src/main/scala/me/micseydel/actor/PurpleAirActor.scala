@@ -12,7 +12,7 @@ import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.Series
+import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
@@ -177,7 +177,7 @@ object PurpleAirActor {
           "No measurements\n"
         case _ =>
           val measurements = items.sortBy(_.zonedDatetime).map(_.pm2_5_aqi)
-          val chart = ObsidianCharts.chart(List.fill(measurements.size)(""), List(Series("aqi", measurements)))
+          val chart = ObsidianCharts.chart(List.fill(measurements.size)(""), List(IntSeries("aqi", measurements)))
 
           val latest = items.last
 

@@ -9,7 +9,7 @@ import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.Series
+import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
 import spray.json._
@@ -175,25 +175,25 @@ object SleepReportMarkdown {
       val last7DaysChart = ObsidianCharts.chart(
         List("6 days ago", "-5", "-4", "-3", "-2", "-1", "Today"),
         List(
-          Series("Suggested minimum", List.fill(7)(360)),
-          Series("Total minutes of sleep", last7Days.reverse)
+          IntSeries("Suggested minimum", List.fill(7)(360)),
+          IntSeries("Total minutes of sleep", last7Days.reverse)
         )
       )
 
       val last14DaysChart = ObsidianCharts.chart(
         List("A couple weeks ago", "-12", "-11", "-10", "-9", "-8", "A week ago", "-6", "-5", "-4", "-3", "-2", "-1", "Today"),
         List(
-          Series("Suggested minimum", List.fill(14)(360)),
-          Series("Total minutes of sleep", last14Days.reverse)
+          IntSeries("Suggested minimum", List.fill(14)(360)),
+          IntSeries("Total minutes of sleep", last14Days.reverse)
         )
       )
 
       val last30DaysChart = ObsidianCharts.chart(
         last30daysLabels,
         List(
-          Series("Suggested minimum", List.fill(30)(360)),
-          Series("Total minutes of sleep", last30Days.reverse),
-          Series("Average sleep last 7 days", runningAverage(last37Days, 7).reverse)
+          IntSeries("Suggested minimum", List.fill(30)(360)),
+          IntSeries("Total minutes of sleep", last30Days.reverse),
+          IntSeries("Average sleep last 7 days", runningAverage(last37Days, 7).reverse)
         )
       )
 

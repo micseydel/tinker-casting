@@ -11,7 +11,7 @@ import me.micseydel.dsl._
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.Series
+import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries, Series}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json._
@@ -182,11 +182,11 @@ object AirGradientActor {
       val (pm02Counts, pm10Counts, pm02Compensateds, rco2s, tvocIndexs) = split(items)
 
       // FIXME: .toInt hacks
-      val pm02CountsSeries = Series("pm02Counts", pm02Counts.map(_.toInt))
-      val pm10CountsSeries = Series("pm10Counts", pm10Counts.map(_.toInt))
-      val pm02CompensatedsSeries = Series("pm02Compensateds", pm02Compensateds.map(_.toInt))
-      val rco2sSeries = Series("rco2s", rco2s.map(_.toInt))
-      val tvocIndexsSeries = Series("tvocIndexs", tvocIndexs.map(_.toInt))
+      val pm02CountsSeries = IntSeries("pm02Counts", pm02Counts.map(_.toInt))
+      val pm10CountsSeries = DoubleSeries("pm10Counts", pm10Counts)
+      val pm02CompensatedsSeries = IntSeries("pm02Compensateds", pm02Compensateds.map(_.toInt))
+      val rco2sSeries = IntSeries("rco2s", rco2s.map(_.toInt))
+      val tvocIndexsSeries = DoubleSeries("tvocIndexs", tvocIndexs)
 
       val superimposed = ObsidianCharts.chart(List.fill(items.size)(""), List(
         pm02CountsSeries,
@@ -200,10 +200,6 @@ object AirGradientActor {
          |
          |$superimposed
          |
-         |# pm02Counts
-         |
-         |${ObsidianCharts.chart(pm02CountsSeries)}
-         |
          |# pm10CountsSeries
          |
          |${ObsidianCharts.chart(pm10CountsSeries)}
@@ -212,13 +208,17 @@ object AirGradientActor {
          |
          |${ObsidianCharts.chart(pm02CompensatedsSeries)}
          |
+         |# tvocIndexsSeries
+         |
+         |${ObsidianCharts.chart(tvocIndexsSeries)}
+         |
          |# rco2sSeries
          |
          |${ObsidianCharts.chart(rco2sSeries)}
          |
-         |# tvocIndexsSeries
+         |# pm02Counts
          |
-         |${ObsidianCharts.chart(tvocIndexsSeries)}
+         |${ObsidianCharts.chart(pm02CountsSeries)}
          |""".stripMargin
     }
 

@@ -1,13 +1,16 @@
 package me.micseydel.prototyping
 
-import me.micseydel.prototyping.ObsidianCharts.Series
 import spray.json.DefaultJsonProtocol._
-import spray.json.enrichAny
+import spray.json.{DeserializationException, JsNumber, JsValue, RootJsonFormat, enrichAny}
 
 object ObsidianCharts {
-  def chart(labels: List[String], series: List[Series]): String = {
+  def chart(labels: List[String], series: List[Series[_]]): String = {
     val formattedSeries = series.map {
-      case Series(title, data) =>
+      case DoubleSeries(title, data) =>
+        s"""    - title: "$title"
+           |      data: ${data.toJson.compactPrint}
+           |""".stripMargin
+      case IntSeries(title, data) =>
         s"""    - title: "$title"
            |      data: ${data.toJson.compactPrint}
            |""".stripMargin
@@ -21,11 +24,17 @@ object ObsidianCharts {
        |```""".stripMargin
   }
 
-  def chart(series: Series): String = {
+  def chart(series: Series[_]): String = {
     chart(series.data.map(_ => ""), List(series))
   }
 
   // model
 
-  case class Series(title: String, data: List[Int])
+  sealed trait Series[T] {
+    def title: String
+    def data: List[T]
+  }
+
+  case class IntSeries(title: String, data: List[Int]) extends Series[Int]
+  case class DoubleSeries(title: String, data: List[Double]) extends Series[Double]
 }
