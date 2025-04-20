@@ -89,7 +89,7 @@ object KibbleManagerActor {
             s"Measured $container at ${mass}g"
           case Some(cachedMass) =>
             if (cachedMass > mass) {
-              s"Measured $container at ${mass}g, previously ${cachedMass}g therefor dispensed ${cachedMass - mass}g"
+              s"Measured $container at ${mass}g, previously ${cachedMass}g therefore dispensed ${cachedMass - mass}g"
             } else {
               s"Measured $container at ${mass}g, previously ${cachedMass}g"
             }
