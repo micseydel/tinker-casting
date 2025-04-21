@@ -32,4 +32,23 @@ object MacOS {
 
     UnderlyingCommandResult(exitCode, output.toString, error.toString)
   }
+
+  def main(args: Array[String]): Unit = {
+    val result = runCommand(Seq("say", "--voice=?"))
+    val filtered = result.output.split("\n").filter(_.contains("en_US")).toList
+
+    val pairs: List[(String, String)] = filtered.map { line =>
+      line.split("en_US {4}#").map(_.strip).toList match {
+        case List(name, sampleSentence) =>
+          (name, sampleSentence)
+        case other => throw new RuntimeException(s"Unexpected: $other")
+      }
+    }
+
+    for ((name, sampleSentence) <- pairs) {
+      val command = Seq("say", "-v", name, sampleSentence)
+      println(s"Trying $command")
+      runCommand(command)
+    }
+  }
 }
