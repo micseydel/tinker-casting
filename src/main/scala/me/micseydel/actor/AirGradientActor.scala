@@ -185,7 +185,7 @@ object AirGradientActor {
       val pm02CountsSeries = IntSeries("pm02Counts", pm02Counts.map(_.toInt))
       val pm10CountsSeries = DoubleSeries("pm10Counts", pm10Counts)
       val pm02CompensatedsSeries = IntSeries("pm02Compensateds", pm02Compensateds.map(_.toInt))
-      val rco2sSeries = IntSeries("rco2s", rco2s.map(_.toInt))
+      val rco2sSeries = IntSeries("rco2s-350", rco2s.map(_.toInt-350))
       val tvocIndexsSeries = DoubleSeries("tvocIndexs", tvocIndexs)
 
       val superimposed = ObsidianCharts.chart(List.fill(items.size)(""), List(
@@ -200,19 +200,19 @@ object AirGradientActor {
          |
          |$superimposed
          |
-         |# pm10CountsSeries
+         |# pm10Counts
          |
          |${ObsidianCharts.chart(pm10CountsSeries)}
          |
-         |# pm02CompensatedsSeries
+         |# pm02Compensateds
          |
          |${ObsidianCharts.chart(pm02CompensatedsSeries)}
          |
-         |# tvocIndexsSeries
+         |# tvocIndexs
          |
          |${ObsidianCharts.chart(tvocIndexsSeries)}
          |
-         |# rco2sSeries
+         |# rco2s-350
          |
          |${ObsidianCharts.chart(rco2sSeries)}
          |
