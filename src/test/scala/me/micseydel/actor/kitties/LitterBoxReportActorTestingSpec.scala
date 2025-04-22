@@ -11,7 +11,7 @@ import java.time.{LocalDate, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 
 class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
-  val now: ZonedDateTime = ZonedDateTime.now()
+  val now: ZonedDateTime = ZonedDateTime.parse("2025-04-21T18:49:25.398941-07:00[America/Los_Angeles]")
   val forDay: LocalDate = now.toLocalDate
   val isoDate: String = TimeUtil.localDateTimeToISO8601Date(forDay)
 
@@ -24,14 +24,14 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
       helper(
         generateEvents(List("17:33:40" -> SiftedContents(1, 1))),
         """# Summary
-                                 |
-                                 |- Total pee: 1
-                                 |- Total poo: 1
-                                 |
-                                 |# Events
-                                 |
-                                 |- \[5:33:40PM\] 💦💩 ([[Transcription for mobile_audio_capture_20250421-173340.wav|ref]])
-                                 |""".stripMargin
+          |
+          |- Total pee: 1
+          |- Total poo: 1
+          |
+          |# Events
+          |
+          |- \[5:33:40PM\] 💦💩 ([[Transcription for mobile_audio_capture_20250421-173340.wav|ref]])
+          |""".stripMargin
       )
     }
 
