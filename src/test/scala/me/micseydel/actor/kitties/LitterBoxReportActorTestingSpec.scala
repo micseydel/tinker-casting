@@ -15,6 +15,10 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
   val forDay: LocalDate = now.toLocalDate
   val isoDate: String = TimeUtil.localDateTimeToISO8601Date(forDay)
 
+  val NoteName = s"Litter boxes sifting ($isoDate)"
+  val YesterdaysNoteName = s"Litter boxes sifting (${TimeUtil.localDateTimeToISO8601Date(forDay.minusDays(1))})"
+  val TheDayBeforeYesterdaysNoteName = s"Litter boxes sifting (${TimeUtil.localDateTimeToISO8601Date(forDay.minusDays(2))})"
+
   "LitterBoxReportActor" must {
     "FIXME" in {
       helper(
@@ -26,17 +30,39 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
                                  |
                                  |# Events
                                  |
-                                 |- \[5:33:40PM\] 💦💩 ([[test0|ref]])
+                                 |- \[5:33:40PM\] 💦💩 ([[Transcription for mobile_audio_capture_20250421-173340.wav|ref]])
                                  |""".stripMargin
+      )
+    }
+
+    "FIXME2" in {
+      helper(
+        generateEvents(List(
+          "17:33:41" -> SiftedContents(0, 1),
+          "19:52:16" -> SiftedContents(1, 0),
+          "20:40:52" -> SiftedContents(1, 1)
+        )),
+        """# Summary
+          |
+          |- Total pee: 2
+          |- Total poo: 2
+          |
+          |# Events
+          |
+          |- \[5:33:41PM\] 💩 ([[Transcription for mobile_audio_capture_20250421-173341.wav|ref]])
+          |- \[7:52:16PM\] 💦 ([[Transcription for mobile_audio_capture_20250421-195216.wav|ref]])
+          |- \[8:40:52PM\] 💦💩 ([[Transcription for mobile_audio_capture_20250421-204052.wav|ref]])
+          |""".stripMargin
       )
     }
   }
 
   private def generateEvents(list: List[(String, SiftedContents)]): List[LitterBoxReportActor.LitterSiftedObservation] = {
-    list.zipWithIndex.map {
-      case ((time, contents), index) =>
+    list.map {
+      case (time, contents) =>
+        val timestamp = ZonedDateTime.parse(s"${isoDate}T$time-07:00[America/Los_Angeles]")
         LitterBoxReportActor.LitterSiftedObservation(LitterBoxesHelper.LitterSifted(
-          LitterSiftedEvent(ZonedDateTime.parse(s"${isoDate}T$time-07:00[America/Los_Angeles]"), BackLitter, contents), NoteId("test" + index)
+          LitterSiftedEvent(timestamp, BackLitter, contents), NoteId(generateFileName(timestamp))
         ))
     }
   }
@@ -45,9 +71,8 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
     val testKit: SpiritTestKit = new SpiritTestKit()
     val helper: ActorRef[NoteRefWatcherHelper.Message] = testKit.spawn(NoteRefWatcherHelper(), "NoteRefWatcherHelper")
 
-    val NoteName = s"Litter boxes sifting ($isoDate)"
     val noteRef: VirtualNoteRef = new VirtualNoteRef(NoteName, helper = Some(helper))
-    val NoteRefs = Map(NoteName -> noteRef)
+    val NoteRefs = Map(NoteName -> noteRef, YesterdaysNoteName -> new VirtualNoteRef(YesterdaysNoteName), TheDayBeforeYesterdaysNoteName -> new VirtualNoteRef(TheDayBeforeYesterdaysNoteName))
 
     new TinkerTest(NoteRefs, Map.empty, testKit) {
       val litterBoxReportActor: ActorRef[LitterBoxReportActor.Message] = testKit.spawn(LitterBoxReportActor(), "LitterBoxReportActor")
@@ -64,5 +89,13 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
 
       shutdown() // FIXME: necessary
     }
+  }
+
+  private def generateFileName(timestamp: ZonedDateTime): String = {
+    // Define a formatter for the desired date pattern
+    val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+
+    // Format the ZonedDateTime and construct the file name
+    s"Transcription for mobile_audio_capture_${timestamp.format(formatter)}.wav"
   }
 }
