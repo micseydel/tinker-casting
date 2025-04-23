@@ -65,13 +65,19 @@ private[wyze] object WyzeAPIActor {
 
 
 object WyzePlugModel {
-  sealed trait WyzePlugAPIResponse
+  sealed trait WyzePlugAPIResponse {
+    def getPlugsOrThrow: List[WyzePlug]
+  }
 
-  final case class WyzePlugAPIResponseFailed(throwable: Throwable) extends WyzePlugAPIResponse
+  final case class WyzePlugAPIResponseFailed(throwable: Throwable) extends WyzePlugAPIResponse {
+    override def getPlugsOrThrow: List[WyzePlug] = throw throwable
+  }
 
   final case class WyzePlug(ip: String, mac: String, nickname: String, is_on: Option[Boolean])
 
-  final case class WyzePlugAPIResult(wyze_plug_list: List[WyzePlug]) extends WyzePlugAPIResponse
+  final case class WyzePlugAPIResult(wyze_plug_list: List[WyzePlug]) extends WyzePlugAPIResponse {
+    override def getPlugsOrThrow: List[WyzePlug] = wyze_plug_list
+  }
 
   object WyzeAPIJsonProtocol extends DefaultJsonProtocol {
     implicit val wyzePlugJsonFormat: RootJsonFormat[WyzePlug] = jsonFormat4(WyzePlug)

@@ -94,11 +94,9 @@ private[kitties] object DailyAbility {
             case List(justone) if justone.contains("(No such file or directory)") =>
               noteRef.setMarkdown(Document(Report(List(datapoint)), Nil).toMarkdown)
               log.debug("HACK seems like the first file of the day, creating")
-            case Nil =>
+            case _ =>
               log.warn(s"Failed to generate the markdown report because: $e")
           }
-
-
       }
     }
 
