@@ -12,7 +12,7 @@ object CentralNervousSystemMaintenance {
 
   def apply(config: Config)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(100, 100, 200), "😵‍💫").setup { context =>
     val fitbitActor: SpiritRef[FitbitActor.Message] = context.cast(FitbitActor(config.fitbitAuthorizationBasic), "FitbitActor")
-    context.castAnonymous(FitbitTesterActor(fitbitActor))
+//    context.castAnonymous(FitbitTesterActor(fitbitActor))
 
     context.actorContext.log.info("Started FitbitActor, starting Halto")
 
