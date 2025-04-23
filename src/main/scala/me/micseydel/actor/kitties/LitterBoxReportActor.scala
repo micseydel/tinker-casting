@@ -81,15 +81,24 @@ private[kitties] object DailyAbility {
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): Unit = {
+      val datapoint = observation.capture match {
+        case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
+          DataPoint(when, contents, ref)
+      }
       getDocument(observation.capture.when.toLocalDate) match {
         case Validated.Valid(document: Document) =>
-          val updatedDocument = document.append(observation.capture match {
-            case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
-              DataPoint(when, contents, ref)
-          })
+          val updatedDocument = document.append(datapoint)
           noteRef.setMarkdown(updatedDocument.toMarkdown)
         case Validated.Invalid(e) =>
-          log.warn(s"Failed to generate the markdown report because: $e")
+          e.toList match {
+            case List(justone) if justone.contains("(No such file or directory)") =>
+              noteRef.setMarkdown(Document(Report(List(datapoint)), Nil).toMarkdown)
+              log.debug("HACK seems like the first file of the day, creating")
+            case Nil =>
+              log.warn(s"Failed to generate the markdown report because: $e")
+          }
+
+
       }
     }
 
