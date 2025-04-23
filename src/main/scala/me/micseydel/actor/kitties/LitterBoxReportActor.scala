@@ -72,7 +72,7 @@ private[kitties] object DailyAbility {
           Tinker.steadily
 
         case a@AddToInbox(_, _) =>
-          context.actorContext.log.warn(s"Adding $a!")
+          context.actorContext.log.debug(s"Adding $a!")
           noteRef.addToInbox(a)(context.actorContext.log)
           Tinker.steadily
       }
