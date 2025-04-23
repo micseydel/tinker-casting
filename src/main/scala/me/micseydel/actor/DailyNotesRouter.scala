@@ -10,7 +10,7 @@ import spray.json.JsonFormat
 import java.time.{LocalDate, ZonedDateTime}
 
 object DailyNotesRouter {
-  case class Envelope[M](message: M, localDate: LocalDate)
+  case class Envelope[+M](message: M, localDate: LocalDate)
 
   object Envelope {
     def apply[M](message: M, zonedDateTime: ZonedDateTime): Envelope[M] = Envelope(message, zonedDateTime.toLocalDate)

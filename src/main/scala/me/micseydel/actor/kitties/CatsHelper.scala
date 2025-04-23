@@ -148,11 +148,15 @@ object CatsHelper {
         catNotificationsManager !! CatNotificationsManager.LitterClean(litterBoxChoice, ref)
         Tinker.steadily
 
-      case PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(notedTranscription, maybeRasaResult))) =>
+      case pm@PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(notedTranscription, maybeRasaResult))) =>
         maybeRasaResult match {
           case Some(rasaResult) =>
             context.actorContext.log.info(s"Forwarding ${notedTranscription.noteId} to the litter dashboard as a partial match")
-            litterTrackingDashboardActor !! LitterTrackingDashboardActor.PartialMatch(notedTranscription, rasaResult)
+            if (rasaResult.intent.name == "observe_sifted_contents") {
+              litterBoxesHelper !! LitterBoxesHelper.ReceivePartialMatch(pm)
+            } else {
+              litterTrackingDashboardActor !! LitterTrackingDashboardActor.PartialMatch(notedTranscription, rasaResult)
+            }
           case None =>
             context.actorContext.log.info(s"Ignoring ${notedTranscription.noteId} because there was no Rasa for partial matching")
         }

@@ -1,11 +1,13 @@
 package me.micseydel.actor.kitties
 
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.{RegenerateMarkdown, StoreAndRegenerateMarkdown}
-import me.micseydel.actor.kitties.CatsHelper.Message
+import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
+import me.micseydel.actor.kitties.CatsHelper.{Message, PartialMatch}
 import me.micseydel.actor.kitties.LitterBoxesHelper.{EventCapture, LitterSifted, ObservedCatUsingLitter, PostHocLitterObservation}
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
+import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext, Tinkerer}
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
@@ -19,6 +21,8 @@ object LitterBoxesHelper {
   // mailbox
 
   sealed trait Message
+
+  final case class ReceivePartialMatch(pm: PartialMatch) extends Message
 
   sealed trait EventCapture extends Message {
     def event: CatObservationEvent
@@ -79,6 +83,12 @@ object LitterBoxesHelper {
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(nonSiftEventCapture), nonSiftEventCapture.when.toLocalDate)
         // FIXME: use `when` in case transcription was not instant
         timeKeeper !! TimeKeeper.RemindMeIn((if (maybeCat.contains(Butter)) 15 else 20).minutes, context.self, TimeHasPassed(), None)
+        Tinker.steadily
+
+      case ReceivePartialMatch(PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId), maybeRasaResult)))) =>
+        justSiftingReport !! LitterBoxReportActor.AddToInbox(MarkdownUtil.listLineWithTimestampAndRef(captureTime,
+          whisperResult.whisperResultContent.text,  // siftedContents.toEmojis,
+          noteId), captureTime)
         Tinker.steadily
 
       case TimeHasPassed() =>

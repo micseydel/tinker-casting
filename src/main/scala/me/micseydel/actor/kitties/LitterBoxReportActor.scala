@@ -1,8 +1,10 @@
 package me.micseydel.actor.kitties
 
+import cats.data.Validated.Invalid
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import me.micseydel.Common
 import me.micseydel.actor.DailyNotesRouter
-import me.micseydel.actor.kitties.LitterBoxReportActor.{EventCapture, LitterSiftedObservation}
+import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation}
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
 import me.micseydel.dsl._
@@ -12,7 +14,9 @@ import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
+import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.{LinkIdJsonProtocol, Note, NoteId}
+import org.slf4j.Logger
 import spray.json._
 
 import java.io.FileNotFoundException
@@ -22,16 +26,17 @@ import scala.util.{Failure, Success}
 
 
 object LitterBoxReportActor {
-  // mailbox
   sealed trait Message
 
   sealed trait EventCapture extends Message {
-    def event: CatObservationEvent
+    def when: ZonedDateTime
   }
 
   case class LitterSiftedObservation(capture: LitterBoxesHelper.LitterSifted) extends EventCapture {
-    override def event: CatObservationEvent = capture.event
+    def when: ZonedDateTime = capture.event.when
   }
+
+  case class AddToInbox(string: String, when: ZonedDateTime) extends EventCapture
 
   // behavior
 
@@ -45,7 +50,11 @@ object LitterBoxReportActor {
 
     Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
-        dailyNotesAssistant !! DailyNotesRouter.Envelope(ec, ec.event.when)
+        dailyNotesAssistant !! DailyNotesRouter.Envelope(ec, ec.when)
+        Tinker.steadily
+
+      case ati@AddToInbox(_, when) =>
+        dailyNotesAssistant !! DailyNotesRouter.Envelope(ati, when)
         Tinker.steadily
     }
   }
@@ -58,34 +67,79 @@ private[kitties] object DailyAbility {
 
     noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
       Tinker.receiveMessage {
-        case observation@LitterSiftedObservation(capture: LitterSifted) =>
-          noteRef.read() match {
-            case Success(Note(markdown, frontmatter)) =>
-              MarkdownWithoutJsonExperiment(markdown, capture.when.toLocalDate) match {
-                case Validated.Valid(reportFromMarkdownParsing: Report) =>
-                  val newNote = Note(reportFromMarkdownParsing.append {
-                    capture match {
-                      case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
-                        DataPoint(when, contents, ref)
-                    }
-                  }.toMarkdown, frontmatter)
-                  noteRef.setTo(newNote)
-                case Validated.Invalid(e) =>
-                  context.actorContext.log.warn(s"Failed to generate the markdown report because: $e")
-              }
+        case observation@LitterSiftedObservation(_) =>
+          noteRef.addObservation(observation)(context.actorContext.log)
+          Tinker.steadily
 
-            case Failure(_: FileNotFoundException) =>
-              noteRef.setRaw(Report(List(DataPoint(observation.event.when, observation.capture.event.contents, observation.capture.ref))).toMarkdown)
-              context.actorContext.log.info(s"File not found, started new report with $observation")
-
-            case Failure(exception) =>
-              context.actorContext.log.warn(s"Unexpected failure fetching the note", exception)
-          }
-
+        case a@AddToInbox(_, _) =>
+          context.actorContext.log.warn(s"Adding $a!")
+          noteRef.addToInbox(a)(context.actorContext.log)
           Tinker.steadily
       }
     }
   }
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): Unit = {
+      getDocument(observation.capture.when.toLocalDate) match {
+        case Validated.Valid(document: Document) =>
+          val updatedDocument = document.append(observation.capture match {
+            case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
+              DataPoint(when, contents, ref)
+          })
+          noteRef.setMarkdown(updatedDocument.toMarkdown)
+        case Validated.Invalid(e) =>
+          log.warn(s"Failed to generate the markdown report because: $e")
+      }
+    }
+
+    def addToInbox(toAdd: AddToInbox)(implicit log: Logger): Unit = {
+      getDocument(toAdd.when.toLocalDate) match {
+        case Validated.Valid(document: Document) =>
+          noteRef.setMarkdown(document.appendToInbox(toAdd.string).toMarkdown)
+
+        case Validated.Invalid(e) =>
+          log.warn(s"Failed to generate the markdown report because: $e")
+      }
+    }
+
+    private def getDocument(forDay: LocalDate): ValidatedNel[String, Document] = {
+      noteRef.readMarkdown() match {
+        case Success(markdown) =>
+          MarkdownWithoutJsonExperiment(markdown, forDay)
+
+        case Failure(exception) =>
+          Invalid(Common.getStackTraceString(exception)).toValidatedNel
+      }
+    }
+  }
+}
+
+// FIXME: the inbox should be composed of these instead of just strings
+case class InboxItem(text: String, when: ZonedDateTime, noteId: NoteId)
+
+case class Document(report: Report, inbox: List[String]) {
+  def toMarkdown: String = this match {
+    case Document(Report(Nil), Nil) =>
+      ""
+    case Document(report: Report, Nil) =>
+      report.toMarkdown
+    case Document(Report(Nil), _) =>
+      inboxMd
+    case Document(report: Report, _) =>
+      s"""${report.summary}
+         |
+         |$inboxMd
+         |
+         |${report.events}
+         |""".stripMargin
+  }
+
+  def append(dataPoint: DataPoint): Document = this.copy(report = report.append(dataPoint))
+
+  def appendToInbox(string: String): Document = this.copy(inbox = string :: inbox)
+
+  private def inboxMd: String = ("# Inbox" :: "" :: inbox.reverse.map("- " + _)).mkString("\n")
 }
 
 
@@ -97,8 +151,10 @@ case object LitterBoxEventCaptureListJsonProtocol extends DefaultJsonProtocol {
   //    implicit val observedCatUsingLitterFormat: RootJsonFormat[ObservedCatUsingLitter] = jsonFormat2(ObservedCatUsingLitter)
 
   import LitterBoxesEventCaptureListJsonProtocol.litterSiftedFormat
+  import me.micseydel.Common.ZonedDateTimeJsonFormat
 
   implicit val litterSiftedObservationFormat: RootJsonFormat[LitterSiftedObservation] = jsonFormat1(LitterSiftedObservation)
+  implicit val addToInboxFormat: RootJsonFormat[AddToInbox] = jsonFormat2(AddToInbox)
 
   // copy from CatsHelper.scala
   implicit object ReportEventCaptureJsonFormat extends RootJsonFormat[EventCapture] {
@@ -107,6 +163,7 @@ case object LitterBoxEventCaptureListJsonProtocol extends DefaultJsonProtocol {
         //          case p: PostHocLitterObservation => (p.toJson.asJsObject, "PostHocLitterObservation")
         //          case o: ObservedCatUsingLitter => (o.toJson.asJsObject, "ObservedCatUsingLitter")
         case l: LitterSiftedObservation => (l.toJson.asJsObject, "LitterSiftedObservation")
+        case ati: AddToInbox => (ati.toJson.asJsObject, "AddToInbox")
       }
       JsObject(jsObj.fields + ("type" -> JsString(typ)))
     }
@@ -125,8 +182,10 @@ case object LitterBoxEventCaptureListJsonProtocol extends DefaultJsonProtocol {
   val messageListFormat: RootJsonFormat[List[EventCapture]] = listFormat(ReportEventCaptureJsonFormat)
 }
 
-private object MarkdownWithoutJsonExperiment {
-  def apply(markdown: String, day: LocalDate): ValidatedNel[String, Report] = {
+object MarkdownWithoutJsonExperiment {
+  def apply(markdown: String, day: LocalDate): ValidatedNel[String, Document] = {
+    val inboxLines = markdown.split("\n").toList.dropWhile(_ != "# Inbox").drop(1).takeWhile(!_.startsWith("#")).filter(_.nonEmpty).map(_.drop(2))
+
     val linesToParse: List[String] = getLinesAfterHeader(markdown, "Events")
 
     @tailrec
@@ -165,7 +224,7 @@ private object MarkdownWithoutJsonExperiment {
       Validated.Invalid(NonEmptyList("Not all lines were successfully parsed", failures))
     } else {
       val report = Report(successes.sortBy(_.zonedDateTime))
-      Validated.Valid(report)
+      Validated.Valid(Document(report, inboxLines))
     }
   }
 
@@ -181,29 +240,38 @@ private object MarkdownWithoutJsonExperiment {
   case class DataPoint(zonedDateTime: ZonedDateTime, siftedContents: SiftedContents, noteId: NoteId, comments: List[String] = Nil)
 
   case class Report(datapoints: List[DataPoint]) {
+    def nonEmpty: Boolean = datapoints.nonEmpty
+
     def toMarkdown: String = {
-      val distinctDatapoints = datapoints.distinct
+      s"""$summary
+         |
+         |$events
+         |""".stripMargin
+    }
+
+    private[kitties] def summary: String = {
+      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
+
+      val totalPee = total(Urination)
+      val totalPoo = total(Defecation)
+      s"""# Summary
+         |
+         |- Total pee: $totalPee
+         |- Total poo: $totalPoo""".stripMargin
+    }
+
+    private[kitties] def events: String = {
       val eventsList: String = distinctDatapoints.distinct.map {
         case DataPoint(zonedDateTime, siftedContents, noteId, maybeComments) =>
           MarkdownUtil.listLineWithTimestampAndRef(zonedDateTime, siftedContents.toEmojis, noteId) +
             Some(maybeComments).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
       }.mkString("\n")
-
-      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
-
-      val totalPee = total(Urination)
-      val totalPoo = total(Defecation)
-
-      s"""# Summary
+      s"""# Events
          |
-         |- Total pee: $totalPee
-         |- Total poo: $totalPoo
-         |
-         |# Events
-         |
-         |$eventsList
-         |""".stripMargin
+         |$eventsList""".stripMargin
     }
+
+    private def distinctDatapoints: List[DataPoint] = datapoints.distinct
 
     def append(datapoint: DataPoint): Report = {
       this.copy(datapoints = (datapoint :: datapoints).distinct.sortBy(_.zonedDateTime))

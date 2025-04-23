@@ -2,6 +2,7 @@ package me.micseydel.actor.kitties
 
 import akka.actor.typed.ActorRef
 import akka.event.slf4j.Logger
+import me.micseydel.actor.kitties.LitterBoxReportActor.AddToInbox
 import me.micseydel.model._
 import me.micseydel.testsupport._
 import me.micseydel.util.TimeUtil
@@ -11,9 +12,10 @@ import java.time.{LocalDate, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 
 class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
-  val now: ZonedDateTime = ZonedDateTime.parse("2025-04-21T18:49:25.398941-07:00[America/Los_Angeles]")
+  val now: ZonedDateTime = ZonedDateTime.now() // parse("2025-04-21T18:49:25.398941-07:00[America/Los_Angeles]")
   val forDay: LocalDate = now.toLocalDate
   val isoDate: String = TimeUtil.localDateTimeToISO8601Date(forDay)
+  val isoDateDigits: String = isoDate.filter(_.isDigit)
 
   val NoteName = s"Litter boxes sifting ($isoDate)"
   val YesterdaysNoteName = s"Litter boxes sifting (${TimeUtil.localDateTimeToISO8601Date(forDay.minusDays(1))})"
@@ -23,14 +25,14 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
     "FIXME" in {
       helper(
         generateEvents(List("17:33:40" -> SiftedContents(1, 1))),
-        """# Summary
+        s"""# Summary
           |
           |- Total pee: 1
           |- Total poo: 1
           |
           |# Events
           |
-          |- \[5:33:40PM\] 💦💩 ([[Transcription for mobile_audio_capture_20250421-173340.wav|ref]])
+          |- \\[5:33:40PM\\] 💦💩 ([[Transcription for mobile_audio_capture_$isoDateDigits-173340.wav|ref]])
           |""".stripMargin
       )
     }
@@ -42,22 +44,49 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
           "19:52:16" -> SiftedContents(1, 0),
           "20:40:52" -> SiftedContents(1, 1)
         )),
-        """# Summary
+        s"""# Summary
           |
           |- Total pee: 2
           |- Total poo: 2
           |
           |# Events
           |
-          |- \[5:33:41PM\] 💩 ([[Transcription for mobile_audio_capture_20250421-173341.wav|ref]])
-          |- \[7:52:16PM\] 💦 ([[Transcription for mobile_audio_capture_20250421-195216.wav|ref]])
-          |- \[8:40:52PM\] 💦💩 ([[Transcription for mobile_audio_capture_20250421-204052.wav|ref]])
+          |- \\[5:33:41PM\\] 💩 ([[Transcription for mobile_audio_capture_$isoDateDigits-173341.wav|ref]])
+          |- \\[7:52:16PM\\] 💦 ([[Transcription for mobile_audio_capture_$isoDateDigits-195216.wav|ref]])
+          |- \\[8:40:52PM\\] 💦💩 ([[Transcription for mobile_audio_capture_$isoDateDigits-204052.wav|ref]])
+          |""".stripMargin
+      )
+    }
+
+    "FIXME3" in {
+      helper(
+        AddToInbox("test", ZonedDateTime.parse(s"${isoDate}T11:33:41-07:00[America/Los_Angeles]")) :: generateEvents(List(
+          "17:33:41" -> SiftedContents(0, 1),
+          "19:52:16" -> SiftedContents(1, 0),
+          "20:40:52" -> SiftedContents(1, 1)
+        )) ::: List(AddToInbox("test2", ZonedDateTime.parse(s"${isoDate}T21:39:21-07:00[America/Los_Angeles]"))),
+
+        s"""# Summary
+          |
+          |- Total pee: 2
+          |- Total poo: 2
+          |
+          |# Inbox
+          |
+          |- test
+          |- test2
+          |
+          |# Events
+          |
+          |- \\[5:33:41PM\\] 💩 ([[Transcription for mobile_audio_capture_$isoDateDigits-173341.wav|ref]])
+          |- \\[7:52:16PM\\] 💦 ([[Transcription for mobile_audio_capture_$isoDateDigits-195216.wav|ref]])
+          |- \\[8:40:52PM\\] 💦💩 ([[Transcription for mobile_audio_capture_$isoDateDigits-204052.wav|ref]])
           |""".stripMargin
       )
     }
   }
 
-  private def generateEvents(list: List[(String, SiftedContents)]): List[LitterBoxReportActor.LitterSiftedObservation] = {
+  private def generateEvents(list: List[(String, SiftedContents)]): List[LitterBoxReportActor.EventCapture] = {
     list.map {
       case (time, contents) =>
         val timestamp = ZonedDateTime.parse(s"${isoDate}T$time-07:00[America/Los_Angeles]")
@@ -67,7 +96,7 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
     }
   }
 
-  private def helper(events: List[LitterBoxReportActor.LitterSiftedObservation], expected: String): Unit = {
+  private def helper(events: List[LitterBoxReportActor.EventCapture], expected: String): Unit = {
     val testKit: SpiritTestKit = new SpiritTestKit()
     val helper: ActorRef[NoteRefWatcherHelper.Message] = testKit.spawn(NoteRefWatcherHelper(), "NoteRefWatcherHelper")
 
