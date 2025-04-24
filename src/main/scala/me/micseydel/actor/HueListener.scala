@@ -8,7 +8,7 @@ import me.micseydel.actor.notifications.{ChimeActor, NotificationCenterManager}
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
 import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
@@ -25,48 +25,40 @@ import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
 
 import scala.annotation.unused
+import scala.concurrent.duration.DurationInt
 
 object HueListener {
+  private type Key = (NoteId, WhisperModel)
+
+  //
+
   sealed trait Message
 
   final case class TranscriptionEvent(rasaAnnotatedNotedTranscription: RasaAnnotatedNotedTranscription) extends Message
 
   final case class ReceiveVotes(votes: NonEmptyList[Vote]) extends Message
 
+  private case class TriggerDeferral(key: Key) extends Message
+
   //
 
   def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("HueListener Experiment", rgb(230, 230, 230), "👂") { (context, noteRef) =>
-      @unused // subscribes to Gossiper on our behalf
-      val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent), Some("lights_test")), "RasaListener")
+    @unused // subscribes to Gossiper on our behalf
+    val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent), Some("lights_test")), "RasaListener")
 
-      context.actorContext.log.info("HueListener initialized")
+    context.actorContext.log.info("HueListener initialized")
 
-      implicit val h: SpiritRef[HueControl.Message] = hueControl
-      implicit val adapter: SpiritRef[NonEmptyList[Vote]] = context.messageAdapter(ReceiveVotes)
-      implicit val nr: NoteRef = noteRef
+    implicit val h: SpiritRef[HueControl.Message] = hueControl
+    implicit val adapter: SpiritRef[NonEmptyList[Vote]] = context.messageAdapter(ReceiveVotes)
+    implicit val nr: NoteRef = noteRef
+    implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-      behavior(State(Set.empty, Map.empty))
+    behavior(State())
   }
 
-  private val IgnoredMinutesAgo = 3
-
-  private case class State(alreadySeenSet: Set[(NoteId, WhisperModel)], trackedVotes: Map[(NoteId, WhisperModel), Vote]) {
-    def alreadySeen(key: (NoteId, WhisperModel)): Boolean = alreadySeenSet.contains(key)
-    def isThisJustAReminder(key: (NoteId, WhisperModel), confidence: Double): Boolean = {
-      trackedVotes.get(key).map(_.confidence).exists {
-        case Left(justAReminderConfidence) =>
-          justAReminderConfidence > confidence
-        case Right(None) => false
-        case Right(Some(certainty)) => certainty
-      }
-    }
-
-    def integrate(votes: Map[(NoteId, WhisperModel), Vote]): State = this.copy(trackedVotes = trackedVotes ++ votes)
-    def integrate(key: (NoteId, WhisperModel)): State = this.copy(alreadySeenSet = alreadySeenSet ++ key)
-  }
   private def behavior(state: State)
                       (implicit Tinker: Tinker,
-                       noteRef: NoteRef, hueControl: SpiritRef[HueControl.Message], receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]]): Ability[Message] = Tinker.setup { context =>
+                       noteRef: NoteRef, hueControl: SpiritRef[HueControl.Message], receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]], timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     implicit val log: Logger = context.actorContext.log
@@ -76,7 +68,7 @@ object HueListener {
         context.actorContext.log.debug(s"Already processed $noteId,${capture.whisperResult.whisperResultMetadata.model}, ignoring")
         Tinker.steadily
 
-        // Rasa match
+      // Rasa match
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, WhisperResultMetadata(model, _, _, _)), capturedTime), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
 
         validated match {
@@ -96,18 +88,21 @@ object HueListener {
               context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Success(Material)))
               Tinker.steadily
             } else {
-              context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
+              // depending on how integrating the key into the state goes, the second block will execute right away
+              // or be put into a map to be triggered by the timer
+              behavior(state.integrate(key)(timeKeeper !! TimeKeeper.RemindMeIn(250.milliseconds, context.self, TriggerDeferral(key), Some(key))) { () =>
+                context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
 
-              val finalLightState = genLightState(maybeColor, maybeBrightness)
-              for (light <- AllList) {
-                hueControl !! HueControl.SetLight(light, finalLightState)
-              }
+                val finalLightState = genLightState(maybeColor, maybeBrightness)
+                for (light <- AllList) {
+                  hueControl !! HueControl.SetLight(light, finalLightState)
+                }
 
-              context.system.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
-              context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
+                context.system.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
+                context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
 
-              context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
-              behavior(state.integrate(key))
+                context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
+              })
             }
 
           case Invalid(e) =>
@@ -116,7 +111,7 @@ object HueListener {
             Tinker.steadily
         }
 
-        // not a light change
+      // not a light change
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(_, noteId), Some(RasaResult(entities, Intent(_, unrecognizedIntent), _, _, _)))) =>
         if (unrecognizedIntent != no_intent.IntentName) {
           context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent (rasaResult.intent.confidence) with entities $entities")
@@ -124,7 +119,7 @@ object HueListener {
         context.system.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some(s"unrecognized intent: $unrecognizedIntent"))
         Tinker.steadily
 
-        // no Rasa, maybe an exact-match
+      // no Rasa, maybe an exact-match
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), noteId), None)) =>
         val flashCommands = List("please flash the lights", "please do a light show")
         if (flashCommands.contains(text.trim.toLowerCase)) {
@@ -137,12 +132,12 @@ object HueListener {
 
         Tinker.steadily
 
-        // non-light changing
+      // non-light changing
       case ReceiveVotes(votes) =>
         val (matched, discard) = votes.toList.partition(v => Gossiper.toNormalizedUri(v.voter.path.toSerializationFormat).endsWith("RemindMeListenerActor"))
 
         if (discard.nonEmpty && context.actorContext.log.isDebugEnabled) {
-          context.actorContext.log.debug(s"Discarded votes $discard")
+          context.actorContext.log.debug("Discarded votes {}", discard)
         }
 
         val newVotesToTrack = matched.flatMap { vote =>
@@ -168,11 +163,17 @@ object HueListener {
         }
 
         if (newVotesToTrack.nonEmpty) {
-          val toAdd: Map[(NoteId, WhisperModel), Vote] = newVotesToTrack.toMap
+          val toAdd: Map[Key, Vote] = newVotesToTrack.toMap
           behavior(state.integrate(toAdd))
         } else {
           Tinker.steadily
         }
+
+      case TriggerDeferral(key) =>
+        for (deferral <- state.deferrals.get(key)){
+          deferral()
+        }
+        behavior(state.copy(deferrals = state.deferrals - key))
     }
   }
 
@@ -221,6 +222,58 @@ object HueListener {
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def appendConfidently(line: String)(implicit clock: TinkerClock): Unit = {
       noteRef.appendOrThrow(MarkdownUtil.listLineWithTimestamp(clock.now(), line, dateTimeFormatter = TimeUtil.MonthDayTimeSecondFormatter))
+    }
+  }
+
+  //
+
+  private val IgnoredMinutesAgo = 3
+
+  private case class State(alreadySeenSet: Set[Key] = Set.empty, trackedVotes: Map[Key, Vote] = Map.empty, deferrals: Map[Key, () => Unit] = Map.empty) {
+    def alreadySeen(key: Key): Boolean = alreadySeenSet.contains(key)
+
+    def isThisJustAReminder(key: Key, confidence: Double): Boolean = {
+      trackedVotes.get(key).map(_.confidence).exists {
+        case Left(justAReminderConfidence) =>
+          justAReminderConfidence > confidence
+        case Right(None) => false
+        case Right(Some(certainty)) => certainty
+      }
+    }
+
+    def integrate(votesMap: Map[Key, Vote]): State = {
+      val votesToProcess = votesMap.toList.collect {
+        case (key@(_, BaseModel), vote) => (vote, deferrals.get(key))
+      }
+
+      val latestDeferrals = votesToProcess.foldLeft(deferrals) { case (updatedDeferrals, (vote, maybeDeferral)) =>
+        (vote.confidence, maybeDeferral) match {
+          case (Right(Some(false)), Some(deferral)) =>
+            deferral()
+          case other =>
+            // FIXME document
+        }
+
+        updatedDeferrals - ((vote.noteId, BaseModel))
+      }
+
+      this.copy(trackedVotes = trackedVotes ++ votesMap, deferrals = latestDeferrals)
+    }
+
+    def integrate(key: Key)(maybeScheduleForLater: => Unit)(maybeDeferred: () => Unit): State = {
+      val latestDeferrals: Map[Key, () => Unit] = trackedVotes.get(key) match {
+        case Some(Vote(_, Right(Some(true)), _, _, _)) =>
+          // do nothing - FIXME in the future should log, record/document
+          deferrals
+        case Some(Vote(_, _, _, _, _)) =>
+          maybeDeferred()
+          deferrals
+        case None =>
+          maybeScheduleForLater
+          deferrals.updated(key, maybeDeferred)
+      }
+
+      this.copy(alreadySeenSet = alreadySeenSet + key, deferrals = latestDeferrals)
     }
   }
 }
