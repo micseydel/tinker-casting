@@ -12,20 +12,18 @@ import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
-import me.micseydel.dsl.tinkerer.{NoteMakingTinkerer, RasaAnnotatingListener}
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
+import me.micseydel.dsl.tinkerer.{NoteMakingTinkerer, RasaAnnotatingListener}
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
 import me.micseydel.model.KnownIntent.no_intent
 import me.micseydel.model.Light.AllList
 import me.micseydel.model.LightStates.RelaxedLight
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
-import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
-import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
+import me.micseydel.vault.NoteId
+import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
-import spray.json.{DefaultJsonProtocol, JsonFormat, RootJsonFormat}
 
-import java.time.ZonedDateTime
 import scala.annotation.unused
 
 object HueListener {
@@ -215,15 +213,6 @@ object HueListener {
     maybeBrightness match {
       case None => pending
       case Some(rawBrightness) => pending.copy(bri = normalizeBrightness(rawBrightness))
-    }
-  }
-
-  private def justAReminder(maybeVote: Option[Vote], rasaConfidence: Double): Boolean = {
-    maybeVote.map(_.confidence).exists {
-      case Left(justAReminderConfidence) =>
-        justAReminderConfidence > rasaConfidence
-      case Right(None) => false
-      case Right(Some(certainty)) => certainty
     }
   }
 
