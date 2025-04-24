@@ -89,6 +89,11 @@ object HueListener {
               context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Success(Material)))
               Tinker.steadily
             } else {
+
+              // FIXME: I want to create an in-memory cache that flushes to Markdown, guard the current code with it, and add its use in the voting space
+              // full history of events in daily notes, top level note with inbox
+              // only Base transcriptions for now
+
               context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
 
               val finalLightState = genLightState(maybeColor, maybeBrightness)
@@ -171,14 +176,16 @@ object HueListener {
 
   //
 
-  def normalizeBrightness(brightness: Int)(implicit log: Logger): Int = if (brightness >= 0 && brightness <= 100) {
-    brightness
-  } else {
-    if (brightness > 200 && brightness < 300) {
-      brightness - 200
+  private def normalizeBrightness(brightness: Int)(implicit log: Logger): Int = {
+    if (brightness >= 0 && brightness <= 100) {
+      brightness
     } else {
-      log.warn(s"Weird $brightness, falling back to default 10")
-      10
+      if (brightness > 200 && brightness < 300) {
+        brightness - 200
+      } else {
+        log.warn(s"Weird $brightness, falling back to default 10")
+        10
+      }
     }
   }
 
