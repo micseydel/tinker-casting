@@ -21,7 +21,7 @@ class LitterTrackingDashboardActorTestingSpec extends TestTinkerContainer {
       val testKit: SpiritTestKit = new SpiritTestKit()
       val helper: ActorRef[NoteRefWatcherHelper.Message] = testKit.spawn(NoteRefWatcherHelper(), "NoteRefWatcherHelper")
 
-      val NoteName = "Litter Tracking Dashboard"
+      val NoteName = LitterTrackingDashboardActor.NoteName
       val noteRef: VirtualNoteRef = new VirtualNoteRef(NoteName, helper = Some(helper))
       val NoteRefs = Map(NoteName -> noteRef)
 
