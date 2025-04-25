@@ -122,6 +122,9 @@ object HttpFetchAndUnmarshallEXPeriment {
               case e: DeserializationException =>
                 // FIXME: this capture should be opt-in via config due to risk of leaking sensitive data
                 ReceiveFailedHttpResponse(new RuntimeException(s"failed to parse: $models", e))
+
+              case e: ParsingException =>
+                ReceiveFailedHttpResponse(new RuntimeException(s"failed to parse (${e.info}): $models", e))
             }
         }
 

@@ -61,7 +61,7 @@ object WyzeActor {
           case Success(md) => md
         }
 
-        if (markdown.contains("[ ] Refresh now")) {
+        if (markdown.contains("[x] Refresh now")) {
           api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
           Tinker.steadily
         } else {
