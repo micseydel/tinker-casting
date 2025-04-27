@@ -102,7 +102,7 @@ object HueListener {
                 context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
 
                 context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
-              })
+              }(() => noteRef.appendConfidently(s"NoteId $noteId was a reminder, so took no action")))
             }
 
           case Invalid(e) =>
@@ -192,7 +192,7 @@ object HueListener {
     }
   }
 
-  def genAckMessage(noteId: NoteId, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
+  private def genAckMessage(noteId: NoteId, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
     val ackText = model match {
       case BaseModel =>
         s"Updated the lights (fast): $text"
@@ -260,10 +260,10 @@ object HueListener {
       this.copy(trackedVotes = trackedVotes ++ votesMap, deferrals = latestDeferrals)
     }
 
-    def integrate(key: Key)(maybeScheduleForLater: => Unit)(maybeDeferred: () => Unit): State = {
+    def integrate(key: Key)(maybeScheduleForLater: => Unit)(maybeDeferred: () => Unit)(onVoteIsAMatch: () => Unit): State = {
       val latestDeferrals: Map[Key, () => Unit] = trackedVotes.get(key) match {
         case Some(Vote(_, Right(Some(true)), _, _, _)) =>
-          // do nothing - FIXME in the future should log, record/document
+          onVoteIsAMatch()
           deferrals
         case Some(Vote(_, _, _, _, _)) =>
           maybeDeferred()
