@@ -106,6 +106,9 @@ private[kitties] object DailyAbility {
           noteRef.setMarkdown(document.appendToInbox(toAdd.string).toMarkdown)
 
         case Validated.Invalid(e) =>
+          if (e.exists(_.contains("FileNotFoundException"))) {
+            noteRef.setMarkdown(Document(Report(Nil), List(toAdd.string)).toMarkdown)
+          }
           log.warn(s"Failed to generate the markdown report because: $e")
       }
     }
