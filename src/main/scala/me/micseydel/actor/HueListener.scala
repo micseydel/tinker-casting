@@ -150,21 +150,17 @@ object HueListener {
               None
           }
 
-          maybeModel.map { model =>
-            val key = vote.noteId -> model
-            if (state.alreadySeen(key)) {
-              noteRef.appendConfidently(s"Too late for $vote")
-            } else {
-              noteRef.appendConfidently(s"Storing vote for later: $vote")
-            }
-
-            key -> vote
-          }
+          maybeModel.map(model => vote.noteId -> model -> vote)
         }
 
         if (newVotesToTrack.nonEmpty) {
           val toAdd: Map[Key, Vote] = newVotesToTrack.toMap
-          behavior(state.integrate(toAdd))
+          behavior(state.integrate(toAdd) {
+            case (noteId, Some(_)) =>
+              noteRef.appendConfidently(s"$noteId completed, dropping deferral")
+            case (noteId, None) =>
+              noteRef.appendConfidently(s"$noteId completed (no deferral)")
+          })
         } else {
           Tinker.steadily
         }
@@ -241,17 +237,21 @@ object HueListener {
       }
     }
 
-    def integrate(votesMap: Map[Key, Vote]): State = {
-      val votesToProcess = votesMap.toList.collect {
+    def integrate(votesMap: Map[Key, Vote])(onAbortDeferral: (NoteId, Option[() => Unit]) => Unit): State = {
+      val votesToProcess: List[(Vote, Option[() => Unit])] = votesMap.toList.collect {
         case (key@(_, BaseModel), vote) => (vote, deferrals.get(key))
       }
 
       val latestDeferrals = votesToProcess.foldLeft(deferrals) { case (updatedDeferrals, (vote, maybeDeferral)) =>
-        (vote.confidence, maybeDeferral) match {
-          case (Right(Some(false)), Some(deferral)) =>
-            deferral()
+        vote.confidence match {
+          case Right(Some(true)) =>
+            // if the vote is confident, we defer to it
+            onAbortDeferral(vote.noteId, maybeDeferral)
           case other =>
-            // FIXME document
+            // ...otherwise, we execute our deferral
+            for (deferral <- maybeDeferral) {
+              deferral()
+            }
         }
 
         updatedDeferrals - ((vote.noteId, BaseModel))
