@@ -28,7 +28,7 @@ object Light {
     FrontTableName -> FrontTable,
     FrontLitterName -> FrontLitter,
     ByTheLitterRobotName -> ByTheLitterRobot,
-    //      BedroomName -> Bedroom,
+          BedroomName -> Bedroom,
     BackToiletLowName -> BackToiletLow,
     BackToiletHighName -> BackToiletHigh
   )
