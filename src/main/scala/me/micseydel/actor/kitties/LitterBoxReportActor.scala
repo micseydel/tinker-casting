@@ -149,7 +149,7 @@ case class Document(report: Report, inbox: List[String]) {
 
   def appendToInbox(string: String): Document = this.copy(inbox = string :: inbox)
 
-  private def inboxMd: String = ("# Inbox" :: "" :: inbox.reverse).mkString("\n")
+  private def inboxMd: String = ("# Inbox" :: "" :: inbox.reverse.map("- " + _)).mkString("\n")
 }
 
 
