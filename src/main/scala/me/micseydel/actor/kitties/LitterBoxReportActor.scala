@@ -91,7 +91,7 @@ private[kitties] object DailyAbility {
           noteRef.setMarkdown(updatedDocument.toMarkdown)
         case Validated.Invalid(e) =>
           e.toList match {
-            case List(justone) if justone.contains("(No such file or directory)") =>
+            case List(justone) if justone.contains("FileNotFoundException") =>
               noteRef.setMarkdown(Document(Report(List(datapoint)), Nil).toMarkdown)
               log.debug("HACK seems like the first file of the day, creating")
             case _ =>
