@@ -108,8 +108,9 @@ private[kitties] object DailyAbility {
         case Validated.Invalid(e) =>
           if (e.exists(_.contains("FileNotFoundException"))) {
             noteRef.setMarkdown(Document(Report(Nil), List(toAdd.string)).toMarkdown)
+          } else {
+            log.warn(s"Failed to generate the markdown report because: $e")
           }
-          log.warn(s"Failed to generate the markdown report because: $e")
       }
     }
 
