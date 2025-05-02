@@ -24,8 +24,9 @@ object LLMTinkeringActor {
         event match {
           case VaultPathAdapter.PathCreatedEvent(path) =>
             val notename = path.path.getFileName.toString
-            context.actorContext.log.info(s"Path $path created, spawning WhiteSpaceAddingExperimentActor for [[$notename]]")
-            context.castAnonymous(WhiteSpaceAddingExperimentActor(notename))
+//            context.actorContext.log.info(s"Path $path created, spawning WhiteSpaceAddingExperimentActor for [[$notename]]")
+//            context.castAnonymous(WhiteSpaceAddingExperimentActor(notename))
+            context.actorContext.log.warn(s"ignoring $path")
             Tinker.steadily
           case VaultPathAdapter.PathModifiedEvent(_) | VaultPathAdapter.PathDeletedEvent(_) =>
             context.actorContext.log.debug(s"Ignoring $event")

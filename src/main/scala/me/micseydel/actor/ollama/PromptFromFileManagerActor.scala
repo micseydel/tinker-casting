@@ -19,7 +19,7 @@ object PromptFromFileManagerActor {
 
   private case class ReceivePromptResponse(response: ChatResponse) extends Message
 
-  def apply(filename: String)(implicit Tinker: Tinker): Ability[Message] = {
+  def apply(hostAndPort:String, filename: String)(implicit Tinker: Tinker): Ability[Message] = {
     val noteName = dropDotMdFromEndOfFileNameIfPresent(filename) // FIXME: hack for .md suffix becoming duplicated
     NoteMakingTinkerer[Message](noteName, TinkerColor.random(), "🥼", Some(OllamaActor.OllamaPromptsSubdirectory)) { (context, noteRef) =>
       context.actorContext.log.info(s"Initialized prompt manager for $filename, doing an async file read...")
@@ -30,11 +30,11 @@ object PromptFromFileManagerActor {
         case Success(note) => ReceiveNoteContents(note)
       }
 
-      initializing(noteRef)
+      initializing(hostAndPort, noteRef)
     }
   }
 
-  private def initializing(noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def initializing(hostAndPort: String, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
       case ReceiveNoteContents(note) =>
         val model = note.yamlFrontMatter.map(_.get("model")) match {
@@ -46,7 +46,7 @@ object PromptFromFileManagerActor {
         }
 
         context.actorContext.log.info("Spawning an anonymous FetchChatResponse actor")
-        context.castAnonymous(FetchChatResponseActor(note.markdown, model, context.messageAdapter(ReceivePromptResponse)))
+        context.castAnonymous(FetchChatResponseActor(hostAndPort, note.markdown, model, context.messageAdapter(ReceivePromptResponse)))
 
         initialized(noteRef, model)
 

@@ -21,11 +21,11 @@ object FetchModelsActor {
 
   private case class ReceiveUnmarshalling(models: Models) extends Message
 
-  def apply(replyTo: SpiritRef[Models])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(hostAndPort:String, replyTo: SpiritRef[Models])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val s: ActorSystem[_] = context.system.actorSystem
     implicit val c: TinkerContext[_] = context
 
-    val uri = "http://localhost:11434/api/tags"
+    val uri = s"http://$hostAndPort/api/tags"
     context.actorContext.log.info(s"Making request... to $uri")
 
     context.pipeToSelf(Http().singleRequest(HttpRequest(

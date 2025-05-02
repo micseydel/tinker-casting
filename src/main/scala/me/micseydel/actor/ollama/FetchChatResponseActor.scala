@@ -2,8 +2,8 @@ package me.micseydel.actor.ollama
 
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSettings}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure}
 import me.micseydel.dsl.Tinker.Ability
@@ -12,9 +12,9 @@ import me.micseydel.vault.VaultKeeper
 import spray.json._
 
 import java.util.Base64
-import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 import scala.util.matching.Regex
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object FetchChatResponseActor {
 
@@ -26,12 +26,14 @@ object FetchChatResponseActor {
 
   private val WikiLinkPattern: Regex = """\[\[([\w-]+\.(png|jpg|jpeg|gif|bmp))\|?.*?\]\]""".r
 
-  def apply(prompt: String, model: String, replyTo: SpiritRef[ChatResponse])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(hostAndPort: String, prompt: String, model: String, replyTo: SpiritRef[ChatResponse])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    val uri = s"http://$hostAndPort/api/generate"
+
     // check if we need to collect and b64-encode attachments
     val maybeSpecialization: Option[Ability[ImageFetchChatResponseActor.Message]] = if (model == "llava") {
       val imageAttachments = WikiLinkPattern.findAllMatchIn(prompt).map(_.group(1)).toList
       if (imageAttachments.nonEmpty) {
-        Some(ImageFetchChatResponseActor(prompt, model, imageAttachments, replyTo))
+        Some(ImageFetchChatResponseActor(uri, prompt, model, imageAttachments, replyTo))
       } else {
         None
       }
@@ -49,7 +51,6 @@ object FetchChatResponseActor {
       case None =>
         context.actorContext.log.info("Starting HTTP request...")
 
-        val uri = OllamaActor.GenerateUri
         val payload = JsObject(
           "model" -> JsString(model),
           "prompt" -> JsString(prompt),
@@ -71,7 +72,7 @@ private object ImageFetchChatResponseActor {
 
   private case class Receive(response: Either[String, List[Array[Byte]]]) extends Message
 
-  def apply(prompt: String, model: String, attachmentNames: List[String], replyTo: SpiritRef[ChatResponse])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(uri: String, prompt: String, model: String, attachmentNames: List[String], replyTo: SpiritRef[ChatResponse])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
 
     implicit val c: TinkerContext[_] = context
 
@@ -90,7 +91,7 @@ private object ImageFetchChatResponseActor {
 
         import me.micseydel.actor.ollama.OllamaJsonFormat.chatResponseResultFormat
         context.castAnonymous(EXPERIMENTHttpFetchAndUnmarshall(
-          OllamaActor.GenerateUri,
+          uri,
           payload,
           replyTo,
           ChatResponseFailure.apply
@@ -99,9 +100,9 @@ private object ImageFetchChatResponseActor {
         Tinker.steadily
 
       case Receive(Left(msg)) =>
-        val msg = "Fetch from disk failed"
-        context.actorContext.log.error("Fetch from disk failed")
-        replyTo !! ChatResponseFailure(msg)
+        val message = s"Fetch from disk failed: $msg"
+        context.actorContext.log.error(message)
+        replyTo !! ChatResponseFailure(message)
         Tinker.steadily // FIXME
     }
   }
@@ -126,11 +127,19 @@ private object EXPERIMENTHttpFetchAndUnmarshall {
     implicit val c: TinkerContext[_] = context
     implicit val s: ActorSystem[_] = context.system.actorSystem
 
+    // this is essential for 70b models on interesting prompts, but may be a poor default
+    val connectionSettings = ClientConnectionSettings(context.system.actorSystem)
+      .withIdleTimeout(10.minutes)
+
+    val poolSettings = ConnectionPoolSettings(context.system.actorSystem)
+      .withConnectionSettings(connectionSettings)
+      .withResponseEntitySubscriptionTimeout(10.minutes)
+
     context.pipeToSelf(Http().singleRequest(HttpRequest(
       method = HttpMethods.POST,
       uri = uri,
       entity = HttpEntity(ContentTypes.`application/json`, payload.toString)
-    ))) {
+    ), settings = poolSettings)) {
       case Failure(exception) => ReceiveFailedHttpResponse(exception)
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
     }
@@ -138,9 +147,14 @@ private object EXPERIMENTHttpFetchAndUnmarshall {
     Tinker.receiveMessage {
       case ReceiveHttpResponse(httpResponse) =>
         context.actorContext.log.info("Received HttpResponse, beginning unmarshalling process")
-        context.pipeToSelf(Unmarshal(httpResponse.entity).to[R]) {
-          case Failure(exception) => ReceiveFailedHttpResponse(exception)
-          case Success(chatResponse) => ReceiveUnmarshalling(chatResponse)
+        context.pipeToSelf(Unmarshal(httpResponse.entity).to[String]) {
+          case Failure(exception) =>
+            ReceiveFailedHttpResponse(new RuntimeException("Unmarshalling to string failed", exception))
+          case Success(chatResponse) =>
+            Try(chatResponse.parseJson.convertTo[R]) match {
+              case Failure(exception) => ReceiveFailedHttpResponse(new RuntimeException(s"Unexpected chat response: $chatResponse", exception))
+              case Success(value) => ReceiveUnmarshalling(value)
+            }
         }
         Tinker.steadily
 

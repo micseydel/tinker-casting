@@ -48,9 +48,12 @@ object WhiteSpaceAddingExperimentActor {
         context.actorContext.log.debug("Spawning an anonymous FetchChatResponse actor")
 
         val prompt = PromptPrefix + "\n\n" + normalizedMarkdown
-        context.castAnonymous(FetchChatResponseActor(prompt, "llama3", context.messageAdapter(ReceivePromptResponse)))
+//        context.castAnonymous(FetchChatResponseActor(prompt, "llama3", context.messageAdapter(ReceivePromptResponse)))
 
-        initialized(noteRef, normalizedMarkdown)
+      // FIXME:
+      throw new RuntimeException()
+
+//        initialized(noteRef, normalizedMarkdown)
 
       case ReceiveException(exception) =>
         context.actorContext.log.error("Failed to access disk", exception)

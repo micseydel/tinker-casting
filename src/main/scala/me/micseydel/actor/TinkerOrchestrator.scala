@@ -33,8 +33,8 @@ object TinkerOrchestrator {
 
     // !! specializations
 
-    @unused // driven internally
-    val llmTinkeringActor = context.cast(LLMTinkeringActor(), "LLMTinkeringActor")
+//    @unused // driven internally
+//    val llmTinkeringActor = context.cast(LLMTinkeringActor(), "LLMTinkeringActor")
 
     @unused // uses an internal folder watcher
     val ollamaActor = context.cast(OllamaActor(), "OllamaActor")

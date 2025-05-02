@@ -67,18 +67,18 @@ object TranscriptionNoteWrapper {
         // FIXME
         regenerateMarkdown(priorMessages, capture, noteRef)
 
-        maybeOllamaTranscriptionSummarizer match {
-          case Some(ollamaModel) =>
-            if (model == LargeModel && rawText.wordCount > 100) {
-              context.castAnonymous(FetchChatResponseActor(
-                s"Please politely summarize the following transcribed voice note for a speaker with they/them pronouns, using 3-5 top level Markdown bullet points with sub bullets for elaboration:\n\n$rawText",
-                ollamaModel,
-                context.messageAdapter(ReceiveResponseOllama))
-              )
-            }
-          case None =>
-        }
-
+        // FIXME: delete the function parameter
+//        maybeOllamaTranscriptionSummarizer match {
+//          case Some(ollamaModel) =>
+//            if (model == LargeModel && rawText.wordCount > 100) {
+//              context.castAnonymous(FetchChatResponseActor(
+//                s"Please politely summarize the following transcribed voice note for a speaker with they/them pronouns, using 3-5 top level Markdown bullet points with sub bullets for elaboration:\n\n$rawText",
+//                ollamaModel,
+//                context.messageAdapter(ReceiveResponseOllama))
+//              )
+//            }
+//          case None =>
+//        }
 
         Tinker.steadily
 

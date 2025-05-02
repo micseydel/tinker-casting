@@ -9,6 +9,7 @@ import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import spray.json._
 
 import java.time.ZonedDateTime
+import scala.util.{Failure, Success}
 
 // FIXME https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion
 object OllamaActor {
@@ -22,11 +23,27 @@ object OllamaActor {
 
   private case class ReceivePathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Ollama Testing", TinkerColor(7, 164, 223), "🦙") { (context, noteRef) =>
+  val NoteName = "Ollama Testing"
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(NoteName, TinkerColor(7, 164, 223), "🦙") { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
 
+    val hostAndPort = noteRef.readNote().flatMap(_.yamlFrontMatter) match {
+      case Failure(exception) => throw exception
+      case Success(frontmatter) =>
+        frontmatter.get("server") match {
+          case Some(value: String) =>
+            context.actorContext.log.info(s"Found $value in [[$NoteName]] for server")
+            value
+          case None =>
+            val default = "localhost:11434"
+            context.actorContext.log.info(s"No server key in [[$NoteName]], defaulting to $default")
+            default
+          case other => throw new RuntimeException(s"Expected a string under the key `server` but got $other")
+        }
+    }
+
     context.actorContext.log.info("Requesting Ollama models....")
-    context.castAnonymous(FetchModelsActor(context.messageAdapter(ReceiveModels)))
+    context.castAnonymous(FetchModelsActor(hostAndPort, context.messageAdapter(ReceiveModels)))
 
     context.actorContext.log.info(s"Subscribing to updates to $OllamaPrompts")
     context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(OllamaPrompts, context.messageAdapter(ReceivePathUpdatedEvent))
@@ -46,7 +63,7 @@ object OllamaActor {
           case VaultPathAdapter.PathCreatedEvent(path) =>
             val notename = path.path.getFileName.toString
             context.actorContext.log.info(s"Path $path created, spawning prompt manager for [[$notename]]")
-            context.castAnonymous(PromptFromFileManagerActor(notename))
+            context.castAnonymous(PromptFromFileManagerActor(hostAndPort, notename))
             Tinker.steadily
           case VaultPathAdapter.PathModifiedEvent(_) | VaultPathAdapter.PathDeletedEvent(_) =>
             context.actorContext.log.debug(s"Ignoring $event")
@@ -54,10 +71,6 @@ object OllamaActor {
         }
     }
   }
-
-  // constants
-
-  val GenerateUri: String = "http://localhost:11434/api/generate"
 }
 
 object OllamaModel {
