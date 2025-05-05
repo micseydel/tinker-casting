@@ -24,20 +24,24 @@ object FetchChatResponseActor {
 
   // behavior and regex
 
-  private val WikiLinkPattern: Regex = """\[\[([\w-]+\.(png|jpg|jpeg|gif|bmp))\|?.*?\]\]""".r
+  private val WikiLinkPattern: Regex = """\[\[(.+\.(png|jpg|jpeg|gif|bmp))\|?.*?\]\]""".r
 
   def apply(hostAndPort: String, prompt: String, model: String, replyTo: SpiritRef[ChatResponse])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     val uri = s"http://$hostAndPort/api/generate"
 
     // check if we need to collect and b64-encode attachments
-    val maybeSpecialization: Option[Ability[ImageFetchChatResponseActor.Message]] = if (model == "llava") {
+    // FIXME: should support more than llava
+    val maybeSpecialization: Option[Ability[ImageFetchChatResponseActor.Message]] = if (model.contains("llava")) {
       val imageAttachments = WikiLinkPattern.findAllMatchIn(prompt).map(_.group(1)).toList
       if (imageAttachments.nonEmpty) {
+        context.actorContext.log.info(s"Detected multimodel (image) model with ${imageAttachments.size} attachments")
         Some(ImageFetchChatResponseActor(uri, prompt, model, imageAttachments, replyTo))
       } else {
+        context.actorContext.log.info("Detected multimodel (image) model but no images detected")
         None
       }
     } else {
+      context.actorContext.log.info("Using a regular text-based model")
       None
     }
 
