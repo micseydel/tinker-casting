@@ -16,3 +16,5 @@ scripts/models/
 **.pyc
 sbt-dist/
 scripts/wakewordtesting.bash
+playground
+

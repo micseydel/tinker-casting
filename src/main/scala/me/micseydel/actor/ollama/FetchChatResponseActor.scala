@@ -86,12 +86,20 @@ private object ImageFetchChatResponseActor {
     Tinker.receiveMessage {
       case Receive(Right(contents)) =>
         context.actorContext.log.info(s"Received ${contents.size} attachments, making Ollama request...")
-        val payload = JsObject(
+
+        val encodedImages: List[String] = contents.map(b64encode)
+
+        val payload: JsObject = JsObject(
           "model" -> JsString(model),
           "prompt" -> JsString(prompt),
           "stream" -> JsBoolean(false),
-          "images" -> JsArray(contents.map(attachment => JsString(b64encode(attachment))).toVector)
+          "images" -> JsArray(encodedImages.map(JsString(_)).toVector)
         )
+
+        if (context.actorContext.log.isDebugEnabled) {
+          val curl = s"""curl $uri -d '${payload.toString}'""".stripMargin
+          context.actorContext.log.debug(s"Making equivalent of $curl")
+        }
 
         import me.micseydel.actor.ollama.OllamaJsonFormat.chatResponseResultFormat
         context.castAnonymous(EXPERIMENTHttpFetchAndUnmarshall(
