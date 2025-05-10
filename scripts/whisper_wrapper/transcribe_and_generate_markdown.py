@@ -123,6 +123,12 @@ def get_length(filename):
 
 def main():
     audio_file_dir = sys.argv[1]
+
+    if len(sys.argv) > 2:
+        model_to_load = sys.argv[2]
+    else:
+        model_to_load = "large"
+
     log(f"Using dir {audio_file_dir}")
 
     files = list(files_to_transcribe(audio_file_dir))
@@ -130,7 +136,7 @@ def main():
     model = None
     if files:
         log("Loading the Whisper model...")
-        model = whisper.load_model("large")
+        model = whisper.load_model(model_to_load)
         log(f"\nThere are {len(files)} files to transcribe\n")
 
     for path_no, path in enumerate(files, 1):
