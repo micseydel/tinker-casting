@@ -85,7 +85,7 @@ private object ImageFetchChatResponseActor {
 
     Tinker.receiveMessage {
       case Receive(Right(contents)) =>
-        context.actorContext.log.info(s"Received ${contents.size} attachments, making Ollama request...")
+        context.actorContext.log.info(s"Received ${contents.size} attachments with respective sizes ${contents.map(_.length)}, making Ollama request...")
 
         val encodedImages: List[String] = contents.map(b64encode)
 
