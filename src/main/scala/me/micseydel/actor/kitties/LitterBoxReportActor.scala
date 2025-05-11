@@ -150,7 +150,7 @@ case class Document(report: Report, inbox: List[String]) {
 
   def appendToInbox(string: String): Document = this.copy(inbox = string :: inbox)
 
-  private def inboxMd: String = ("# Inbox" :: "" :: inbox.reverse.map("- " + _)).mkString("\n")
+  private def inboxMd: String = ("# Inbox" :: "" :: inbox.map("- " + _).reverse).mkString("\n")
 }
 
 
@@ -235,7 +235,7 @@ object MarkdownWithoutJsonExperiment {
       Validated.Invalid(NonEmptyList("Not all lines were successfully parsed", failures))
     } else {
       val report = Report(successes.sortBy(_.zonedDateTime))
-      Validated.Valid(Document(report, inboxLines))
+      Validated.Valid(Document(report, inboxLines.reverse))
     }
   }
 

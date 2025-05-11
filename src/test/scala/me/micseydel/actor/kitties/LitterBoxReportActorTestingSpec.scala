@@ -64,7 +64,11 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
           "17:33:41" -> SiftedContents(0, 1),
           "19:52:16" -> SiftedContents(1, 0),
           "20:40:52" -> SiftedContents(1, 1)
-        )) ::: List(AddToInbox("test2", ZonedDateTime.parse(s"${isoDate}T21:39:21-07:00[America/Los_Angeles]"))),
+        )) ::: List(
+          AddToInbox("test2", ZonedDateTime.parse(s"${isoDate}T21:39:21-07:00[America/Los_Angeles]")),
+          AddToInbox("test3", ZonedDateTime.parse(s"${isoDate}T22:39:21-07:00[America/Los_Angeles]")),
+          AddToInbox("test4", ZonedDateTime.parse(s"${isoDate}T23:39:21-07:00[America/Los_Angeles]"))
+        ),
 
         s"""# Summary
           |
@@ -75,6 +79,8 @@ class LitterBoxReportActorTestingSpec extends TestTinkerContainer {
           |
           |- test
           |- test2
+          |- test3
+          |- test4
           |
           |# Events
           |
