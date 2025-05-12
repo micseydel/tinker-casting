@@ -88,7 +88,8 @@ object LitterBoxesHelper {
       case ReceivePartialMatch(PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId), maybeRasaResult)))) =>
         justSiftingReport !! LitterBoxReportActor.AddToInbox(MarkdownUtil.listLineWithTimestampAndRef(captureTime,
           whisperResult.whisperResultContent.text,  // siftedContents.toEmojis,
-          noteId), captureTime)
+          noteId).drop(2), // FIXME: hack
+          captureTime)
         Tinker.steadily
 
       case TimeHasPassed() =>
