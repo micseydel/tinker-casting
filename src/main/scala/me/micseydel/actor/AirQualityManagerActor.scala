@@ -44,12 +44,17 @@ object AirQualityManagerActor {
 
       context.actorContext.log.info("Subscribed to Purple Air and did a fetch for Aranet4")
 
-      val airPurifier: SpiritRef[AirPurifierActor.Message] = context.cast(AirPurifierActor(wyzeActor), "AirPurifierActor")
+      // FIXME: this'll be back for fire season, any day now...
+//      val airPurifier: SpiritRef[AirPurifierActor.Message] = context.cast(AirPurifierActor(wyzeActor), "AirPurifierActor")
 
-      initializing(None, None)(Tinker, new AirQualityNoteRef(noteRef), purpleAirActor, airPurifier, aranetActor)
+      initializing(None, None)(Tinker, new AirQualityNoteRef(noteRef), purpleAirActor,
+//        airPurifier,
+        aranetActor)
     }
 
-  private def initializing(latestAqi: Option[Measurement], latestCO2: Option[Measurement])(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], airPurifier: SpiritRef[AirPurifierActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
+  private def initializing(latestAqi: Option[Measurement], latestCO2: Option[Measurement])(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message],
+//                                                                                           airPurifier: SpiritRef[AirPurifierActor.Message],
+                                                                                           aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
     noteRef.initializing(context.system.clock.now(), latestAqi, latestCO2) match {
       case Failure(exception) => throw exception
       case Success(_) =>
@@ -104,7 +109,9 @@ object AirQualityManagerActor {
     }
   }
 
-  private def behavior(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message], airPurifier: SpiritRef[AirPurifierActor.Message], aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(latestAqi: Measurement, latestCO2: Measurement)(implicit Tinker: Tinker, noteRef: AirQualityNoteRef, purpleAirActor: SpiritRef[PurpleAirActor.Message],
+//                                                                       airPurifier: SpiritRef[AirPurifierActor.Message],
+                                                                       aranetActor: SpiritRef[AranetActor.Message]): Ability[Message] = Tinker.setup { context =>
     noteRef.withLatest(context.system.clock.now(), latestAqi, latestCO2)
 
     Tinker.receiveMessage {
