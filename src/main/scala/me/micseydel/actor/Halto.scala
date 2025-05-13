@@ -67,6 +67,8 @@ object Halto {
 
     c.actorContext.log.info("Starting hunger tracker, frustration listener, sleep report actor and subscribing to CO2")
 
+    // HALT - Hungry, Angry (frustrated), (Lonely), Tired
+
     @unused // internally driven
     val hungerTrackerActor: SpiritRef[HungerTracker.Message] = context.cast(HungerTracker(context.messageAdapter(ReceiveHungerState), ntfyKeys.foodTime), "HungerTracker")
 
@@ -75,8 +77,8 @@ object Halto {
 
     // FIXME: lonely could integrate Google Calendar to estimate?
 
-    @unused // sleep report actor is driven by an internal timer
-    val sleepReportActor: SpiritRef[SleepReportActor.Message] = context.cast(SleepReportActor(fitbitActor, context.messageAdapter(ReceiveSleepReport)), "SleepReportActor")
+//    @unused // sleep report actor is driven by an internal timer
+//    val sleepReportActor: SpiritRef[SleepReportActor.Message] = context.cast(SleepReportActor(fitbitActor, context.messageAdapter(ReceiveSleepReport)), "SleepReportActor")
 
     context.system.operator !! Operator.SubscribeAranet4(context.messageAdapter(ReceiveAranetResult))
 
