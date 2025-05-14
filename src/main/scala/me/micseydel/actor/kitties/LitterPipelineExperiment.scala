@@ -25,7 +25,24 @@ object LitterPipelineExperiment {
     //
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
-        context.actorContext.log.warn(s"checkBoxIsChecked? ${noteRef.checkBoxIsChecked()}")
+        if (noteRef.checkBoxIsChecked()) {
+          noteRef.getState()
+            .flatMap {
+              case State(map) =>
+                val newMarkdown = map.toList.sortBy(_._1).map {
+                  case (date, markdown) =>
+                    s"[[Litter boxes sifting ($date)]] " + (if (markdown.contains("# Inbox")) {
+                      "yes"
+                    } else {
+                       "no"
+                    })
+                }.mkString("- [ ] \n\n# Plan\n\n- [[Litter boxes sifting (2025-05)]]\n    - ", "\n    - ", "\n")
+                noteRef.setMarkdown(newMarkdown)
+            }
+        } else {
+          context.actorContext.log.warn(s"checkBoxIsChecked? false")
+        }
+
         Tinker.steadily
 
       case ReceiveNote(forDay, markdown) =>
@@ -62,13 +79,12 @@ object LitterPipelineExperiment {
     def saveState(forDay: LocalDate, markdownForDay: String): Try[Note] = {
       noteRef.readNote().recoverWith {
         case _: FileNotFoundException =>
-          Success(Note("", None))
+          Success(Note("- [ ] \n", None))
         case other => Failure(other)
       }.flatMap {
         case Note(pipelineMarkdown, maybeFrontmatter) =>
           val updatedFrontmatter = maybeFrontmatter
-            .map(_.parseJson.convertTo[State])
-            .map(_.map)
+            .map(_.parseJson.convertTo[State].map)
             .orElse(Some(Map.empty[LocalDate, String]))
             .map(_.updated(forDay, markdownForDay))
             .map(State)
@@ -77,9 +93,17 @@ object LitterPipelineExperiment {
       }
     }
 
+    def getState(): Try[State] = {
+      noteRef.readNote().map {
+        case Note(_, None) => State(Map.empty)
+        case Note(_, Some(frontmatter)) =>
+          frontmatter.parseJson.convertTo[State]
+      }
+    }
+
     def checkBoxIsChecked(): Boolean =
       noteRef.readMarkdown()
-        .map(markdown => markdown.startsWith("- [x] ")) match {
+        .map(markdown => markdown.startsWith("- [x]")) match {
         case Failure(exception) => throw exception
         case Success(result) => result
       }
