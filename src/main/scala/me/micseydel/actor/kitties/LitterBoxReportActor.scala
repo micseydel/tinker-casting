@@ -1,25 +1,23 @@
 package me.micseydel.actor.kitties
 
-import cats.data.Validated.Invalid
+import cats.data.Validated.{Invalid, catchOnly}
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import me.micseydel.Common
 import me.micseydel.actor.DailyNotesRouter
 import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation}
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
-import me.micseydel.dsl._
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.TinkerColor.CatBrown
+import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.model._
-import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
+import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.vault.{LinkIdJsonProtocol, Note, NoteId}
+import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
 import org.slf4j.Logger
 import spray.json._
 
-import java.io.FileNotFoundException
 import java.time.{LocalDate, ZonedDateTime}
 import scala.annotation.tailrec
 import scala.util.{Failure, Success}
@@ -46,6 +44,8 @@ object LitterBoxReportActor {
   private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
 
+    implicit val litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message] =
+      context.cast(LitterPipelineExperiment(), "LitterPipelineExperiment")
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _)), "DailyNotesRouter")
 
     Tinker.receiveMessage {
@@ -61,55 +61,85 @@ object LitterBoxReportActor {
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String)(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String)(implicit Tinker: Tinker, litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message]): (String, Ability[EventCapture]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
     noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
-      Tinker.receiveMessage {
-        case observation@LitterSiftedObservation(_) =>
-          noteRef.addObservation(observation)(context.actorContext.log)
-          Tinker.steadily
+      implicit val tc: TinkerContext[_] = context
 
-        case a@AddToInbox(_, _) =>
-          context.actorContext.log.debug(s"Adding $a!")
-          noteRef.addToInbox(a)(context.actorContext.log)
-          Tinker.steadily
+      noteRef.readMarkdown() match {
+        case Success(markdown) =>
+          litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, markdown)
+
+        case Failure(exception) =>
+          context.actorContext.log.warn(s"Something went wrong reading [[$noteName]]", exception)
+      }
+
+      Tinker.receiveMessage { observation =>
+        val validatedUpdatedDocument: ValidatedNel[String, Document] = noteRef.addEventCapture(observation)(context.actorContext.log)
+
+        validatedUpdatedDocument match {
+          case Validated.Valid(document: Document) =>
+            litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, document.toMarkdown)
+          case Invalid(e) =>
+            context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
+        }
+
+        Tinker.steadily
       }
     }
   }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): Unit = {
+    def addEventCapture(eventCapture: EventCapture)(implicit log: Logger): ValidatedNel[String, Document] = {
+      eventCapture match {
+        case obs@LitterSiftedObservation(_) => addObservation(obs)
+        case ati@AddToInbox(_, _) => addToInbox(ati)
+      }
+    }
+
+    private def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): ValidatedNel[String, Document] = {
       val datapoint = observation.capture match {
         case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
           DataPoint(when, contents, ref)
       }
       getDocument(observation.capture.when.toLocalDate) match {
-        case Validated.Valid(document: Document) =>
+        case v@Validated.Valid(document: Document) =>
           val updatedDocument = document.append(datapoint)
-          noteRef.setMarkdown(updatedDocument.toMarkdown)
-        case Validated.Invalid(e) =>
+          val updatedMarkdown = updatedDocument.toMarkdown
+          noteRef.setMarkdown(updatedMarkdown)
+          v
+        case iv@Validated.Invalid(e) =>
           e.toList match {
             case List(justone) if justone.contains("FileNotFoundException") =>
-              noteRef.setMarkdown(Document(Report(List(datapoint)), Nil).toMarkdown)
+              val document = Document(Report(List(datapoint)), Nil)
+              noteRef.setMarkdown(document.toMarkdown)
               log.debug("HACK seems like the first file of the day, creating")
+              Validated.Valid(document)
+
             case _ =>
               log.warn(s"Failed to generate the markdown report because: $e")
+              iv
           }
       }
     }
 
-    def addToInbox(toAdd: AddToInbox)(implicit log: Logger): Unit = {
+    private def addToInbox(toAdd: AddToInbox)(implicit log: Logger): ValidatedNel[String, Document] = {
       getDocument(toAdd.when.toLocalDate) match {
         case Validated.Valid(document: Document) =>
-          noteRef.setMarkdown(document.appendToInbox(toAdd.string).toMarkdown)
+          val updatedDocument = document.appendToInbox(toAdd.string)
+          noteRef.setMarkdown(updatedDocument.toMarkdown)
+          Validated.Valid(updatedDocument)
 
-        case Validated.Invalid(e) =>
+        case iv@Validated.Invalid(e) =>
           if (e.exists(_.contains("FileNotFoundException"))) {
-            noteRef.setMarkdown(Document(Report(Nil), List(toAdd.string)).toMarkdown)
+            val document = Document(Report(Nil), List(toAdd.string))
+            noteRef.setMarkdown(document.toMarkdown)
+            Validated.Valid(document)
           } else {
             log.warn(s"Failed to generate the markdown report because: $e")
+            iv
           }
       }
     }
