@@ -56,7 +56,7 @@ abstract class TinkerSystem {
   // FIXME: not sure how to abstract this away without silliness, it seems to need to be part of the interface
   // and tests can just ignore it
   implicit val httpExecutionContext: ExecutionContextExecutorService =
-    ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(10))
+    ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(30))
 
   // FIXME: testing, shift this into impl instead of interface, etc
   //  def getRandomElement[T](list: List[T]): Option[T] = list match {
