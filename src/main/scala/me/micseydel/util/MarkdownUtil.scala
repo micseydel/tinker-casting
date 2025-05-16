@@ -1,5 +1,7 @@
 package me.micseydel.util
 
+import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.vault.LinkId
 
 import java.time.{LocalDate, ZonedDateTime}
@@ -39,5 +41,35 @@ object MarkdownUtil {
       .dropWhile(!_.startsWith("- ")) // ignore whitespace
       .takeWhile(_.startsWith("- ")) // ignore anything after
       .map(line => line.slice(2, line.length))
+  }
+
+  def readListOfWikiLinks(markdown: String): ValidatedNel[String, NonEmptyList[String]] = {
+    val lines = markdown.split("\n")
+
+    val (toClean, problems) = lines.toList
+      .zipWithIndex
+      .filter(_._1.nonEmpty)
+      .partition { case (line, _) =>
+        line.startsWith("- [[") && line.endsWith("]]")
+      }
+
+    // may still be empty, written this way for the statically typed non-empty list
+    val formattedProblemLines = problems.map {
+      case (line, index) =>
+        s"""Line $index was not a wikilink list line (starting with "- [[" and ending with ("]]"): $line"""
+    }
+
+    formattedProblemLines match {
+      case head :: tail =>
+        Validated.Invalid(NonEmptyList(head, tail))
+      case Nil =>
+        val cleanedLines = toClean.map(_._1.drop(4)).dropRight(2)
+        cleanedLines match {
+          case head :: tail =>
+            NonEmptyList(head, tail).validNel
+          case Nil =>
+            "there were no items".invalidNel
+        }
+    }
   }
 }

@@ -11,6 +11,13 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.store.FileDataStoreFactory
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.{MessagePart, MessagePartHeader}
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.GmailActor.Email
+import me.micseydel.dsl.{Operator, SpiritRef, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.TimeKeeper
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.vault.persistence.NoteRef
 
 import java.io.{File, FileInputStream, InputStreamReader}
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
@@ -25,58 +32,111 @@ import scala.util.{Failure, Success, Try}
 object GmailActor {
   sealed trait Message
 
-  case class Subscribe(subscriber: ActorRef[Seq[Email]]) extends Message
+  case class Subscribe(subscriber: SpiritRef[Seq[Email]]) extends Message
 
-  private case object CheckInbox extends Message
+  private case object HeartBeat extends Message
   private case class ReceiveInbox(emails: Try[Seq[Email]]) extends Message
+
+  final case class ReceivePing(ping: Ping) extends Message
 
   //
 
   case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]])
 
-  def apply(config: GmailConfig): Behavior[Message] = Behaviors.setup { context =>
-    context.log.info("Starting gmail service")
-    val gmailService = createGmailService(config)
-    context.log.info("Started gmail service")
-    context.system.scheduler.scheduleAtFixedRate(0.minute, 5.minutes)(() =>
-      context.self ! CheckInbox
-    )(context.executionContext)
+  def apply(config: GmailConfig)(implicit Tinker: Tinker): Ability[Message] = {
+    AttentiveNoteMakingTinkerer[Message, ReceivePing]("Gmail Configuration", TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
+      implicit val tc: TinkerContext[_] = context
+      implicit val nr: NoteRef = noteRef
+      implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-    active(gmailService, Set.empty)
+      context.system.operator !! Operator.RegisterGmail(context.self)
+
+      context.actorContext.log.info("Starting gmail service")
+      implicit val gmailService: Gmail = TinkerGmailService.createGmailService(config)
+      context.actorContext.log.info("Started gmail service")
+
+      val pollingMinutes = noteRef.getConfigOrDefault()
+      timeKeeper !! TimeKeeper.RemindMeEvery(pollingMinutes, context.self, HeartBeat, Some(this))
+
+      implicit val requestGmailAsync: () => Unit = () => {
+        implicit val ec: ExecutionContextExecutor = context.system.httpExecutionContext
+        context.pipeToSelf(TinkerGmailService.fetchEmails(gmailService))(ReceiveInbox)
+      }
+
+      active(Set.empty)
+    }
   }
 
-  private def active(gmailService: Gmail, subscribers: Set[ActorRef[Seq[Email]]]): Behavior[Message] = Behaviors.receive { (context, message) =>
+  private def active(subscribers: Set[SpiritRef[Seq[Email]]])(implicit Tinker: Tinker, gmailService: Gmail, requestGmailAsync: () => Unit, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val tc: TinkerContext[_] = context
+
     message match {
       case Subscribe(subscriber) =>
-        context.log.info("New subscriber added: {}", subscriber)
-        active(gmailService, subscribers + subscriber)
+        context.actorContext.log.info("New subscriber added: {}", subscriber)
+        active(subscribers + subscriber)
 
-      case CheckInbox =>
-        context.log.info(s"Fetching emails (async!)")
-        implicit val ec: ExecutionContextExecutor = context.system.executionContext
-        context.pipeToSelf(fetchEmails(gmailService))(ReceiveInbox)
+      case ReceivePing(_) =>
+        if (noteRef.checkBoxIsChecked()) {
+          context.actorContext.log.info("Note check box was check, requesting email async now")
+          requestGmailAsync()
+          // FIXME: only need to read from the NoteRef once
+          // reset the timer
+          timeKeeper !! TimeKeeper.RemindMeEvery(noteRef.getConfigOrDefault(), context.self, HeartBeat, Some(this))
+        } else {
+          context.actorContext.log.warn("ignoring note ping")
+        }
+
+        Tinker.steadily
+
+      case HeartBeat =>
+        context.actorContext.log.info(s"Heart beat, fetching emails async")
+        requestGmailAsync()
         Behaviors.same
 
       case ReceiveInbox(maybeEmails) =>
         maybeEmails match {
-          case Failure(exception) => context.log.error("Failed to fetch Gmail", exception)
+          case Failure(exception) => context.actorContext.log.error("Failed to fetch Gmail", exception)
           case Success(newEmails) =>
-            context.log.info(s"Fetched ${newEmails.size} emails; sending to subscribers $subscribers")
-            subscribers.foreach(_ ! newEmails.sortBy(_.sentAt))
+            context.actorContext.log.info(s"Fetched ${newEmails.size} emails; sending to subscribers $subscribers")
+            subscribers.foreach(_ !! newEmails.sortBy(_.sentAt))
         }
 
         Behaviors.same
     }
   }
 
-  private def createGmailService(config: GmailConfig): Gmail = {
+  //
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def checkBoxIsChecked(): Boolean =
+      noteRef.readMarkdown()
+        .map(markdown => markdown.startsWith("- [x] ")) match {
+        case Failure(exception) => throw exception
+        case Success(result) => result
+      }
+
+    def getConfigOrDefault(default: Int = 5): FiniteDuration = {
+      (noteRef.read()
+        .flatMap(_.yamlFrontMatter)
+        .map(_.get("polling_minutes")) match {
+        case Success(Some(value: Int)) => value
+        case _ => default
+      }).minutes
+    }
+  }
+}
+
+case class GmailConfig(credentialsPath: String, tokensPath: String)
+
+private object TinkerGmailService {
+  def createGmailService(config: GmailConfig): Gmail = {
     val credential = GmailAuth.authenticate(config.credentialsPath, config.tokensPath)
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
       .setApplicationName("Gmail Actor Service")
       .build()
   }
 
-  private def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor): Future[Seq[Email]] = Future {
+  def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor): Future[Seq[Email]] = Future {
     val messages: List[com.google.api.services.gmail.model.Message] = {
       val rawMessages = gmailService.users().messages().list("me")
         // FIXME
@@ -137,9 +197,6 @@ object GmailActor {
       .toString
   }
 }
-
-case class GmailConfig(credentialsPath: String, tokensPath: String)
-
 
 
 object GmailAuth {

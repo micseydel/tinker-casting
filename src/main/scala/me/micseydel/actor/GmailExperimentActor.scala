@@ -17,7 +17,7 @@ object GmailExperimentActor {
 
     val gmailFetcher = context.spawn(GmailActor(gmailConfig), "GmailActor")
 
-    gmailFetcher ! GmailActor.Subscribe(context.messageAdapter(ReceiveEmail).underlying)
+    gmailFetcher ! GmailActor.Subscribe(context.messageAdapter(ReceiveEmail))
     context.actorContext.log.debug("Subscribed to GmailActor")
 
     Tinker.receiveMessage {
