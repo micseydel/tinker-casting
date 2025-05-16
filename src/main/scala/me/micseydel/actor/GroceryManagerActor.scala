@@ -79,31 +79,33 @@ object GroceryListMOCActor {
   }
 
   private def behavior(senderEquals: String, subjectContains: String)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
-    def anEmailIndicatesTurnOver(emails: Seq[Email]): Boolean = {
-      val today = context.system.clock.today() // FIXME: this also depends on the latest note
+    def anEmailIndicatesTurnOver(emails: Seq[Email], lastSeenDate: LocalDate): Boolean = {
       emails.exists {
         case Email(sender, subject, _, sentAt, groupedHeaders) =>
           sender == senderEquals && subject.contains(subjectContains) &&
-          sentAt.endsWith("PDT") && sentAt.contains(today.toString)
+            sentAt.endsWith("PDT") && sentAt.contains(lastSeenDate.toString)
       }
     }
 
     Tinker.receiveMessage {
       case ReceiveEmails(emails) =>
-        val doTurnOver = anEmailIndicatesTurnOver(emails)
+        noteRef.readListOfWikiLinks() match {
+          case Validated.Valid(wikilinks: NonEmptyList[String]) =>
+            // assumes the first wikilink is the "active" [[Next ...]] link, and the second one is the last archival one
+            val latestDate = {
+              val dateStr = wikilinks.tail.head.dropRight(1).takeRight(10)
+              LocalDate.parse(dateStr)
+            }
 
-        if (doTurnOver) {
-          // FIXME: document any assumptions!
-          // FIXME: I was taking for granted that Obsidian renames links!
-          context.actorContext.log.warn(s"The [[Next...]] note needs to be renamed based on the email date, and a new one created; ideally the non-checked items are carried over")
-
-          noteRef.readListOfWikiLinks() match {
-            case Validated.Valid(wikilinks) => ???
-            case Validated.Invalid(problems) => ???
-          }
-
-        } else {
-          context.actorContext.log.info(s"Receive ${emails.size} but none were a match for groceries")
+            val doTurnOver = anEmailIndicatesTurnOver(emails, latestDate)
+            if (doTurnOver) {
+              // FIXME have the "next" note send its completed contents to a new note for today
+              // ...and notify the prior note of the new note; will have to cache it
+            } else {
+              context.actorContext.log.info(s"Receive ${emails.size} but none were a match for groceries")
+            }
+          case Validated.Invalid(problems) =>
+            context.actorContext.log.warn(s"Received email(s), expected ${noteRef.noteId} to contain a list of wikilinks but: $problems")
         }
 
         Tinker.steadily
@@ -140,4 +142,3 @@ object GroceryListMOCActor {
     }
   }
 }
-
