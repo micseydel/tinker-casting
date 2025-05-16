@@ -25,6 +25,37 @@ object Common {
     t.toString + "\n" + t.getStackTrace.map("  " + _).mkString("\n")
   }
 
+  private val SpecialCharactersAllowedInActorPaths = "-_.*$+:@&=,!~';.".toSet
+
+  /**
+   * Akka actor names are limited, and while a link to the details is hard to find, exceptions read:
+   *   Actor paths MUST: not start with `$`, include only ASCII letters and can only contain these special characters: -_.*$+:@&=,!~';.
+   *
+   * This implies digits are not allowed, but they are - e.g. notename20251020 is known to work.
+   *
+   * To follow these rules
+   * - an underscore prefix is added if it starts with a `$`
+   * - spaces are replaced with underscores
+   * - disallowed special characters are filtered out
+   */
+  def tryToCleanForActorName(s: String): String = {
+    (if (s.startsWith("$")) {
+      "_" + s
+    } else {
+      s
+    }).flatMap {
+      case ' ' => Some('_')
+      case char if SpecialCharactersAllowedInActorPaths.contains(char) || isAsciiLetterOrDigit(char) => Some(char)
+      case _ => None
+    }.mkString("")
+  }
+
+  private def isAsciiLetterOrDigit(char: Char): Boolean = {
+    char.isDigit ||
+      (char > 'a' && char < 'z') ||
+      (char > 'A' && char < 'Z')
+  }
+
   /**
    * @return e.g. 2011-12-03T10:15:30
    */

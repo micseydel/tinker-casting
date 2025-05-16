@@ -2,7 +2,7 @@ package me.micseydel.actor
 
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
@@ -14,10 +14,11 @@ object GmailExperimentActor {
   private case class ReceiveEmail(emails: Seq[GmailActor.Email]) extends Message
 
   def apply(gmailConfig: GmailConfig)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Gmail API Integration Testing", TinkerColor.random(), "📮") { (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
 
-    val gmailFetcher = context.spawn(GmailActor(gmailConfig), "GmailActor")
+    val gmailFetcher = context.cast(GmailActor(gmailConfig), "GmailActor")
 
-    gmailFetcher ! GmailActor.Subscribe(context.messageAdapter(ReceiveEmail).underlying)
+    gmailFetcher !! GmailActor.Subscribe(context.messageAdapter(ReceiveEmail))
     context.actorContext.log.debug("Subscribed to GmailActor")
 
     Tinker.receiveMessage {

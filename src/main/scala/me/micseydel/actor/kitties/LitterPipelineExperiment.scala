@@ -40,7 +40,7 @@ object LitterPipelineExperiment {
                 noteRef.setMarkdown(newMarkdown)
             }
         } else {
-          context.actorContext.log.warn(s"checkBoxIsChecked? false")
+          context.actorContext.log.info(s"checkBoxIsChecked? false") // FIXME: make debug?
         }
 
         Tinker.steadily

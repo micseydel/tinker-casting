@@ -21,7 +21,7 @@ object FetchModelsActor {
 
   private case class ReceiveUnmarshalling(models: Models) extends Message
 
-  def apply(hostAndPort:String, replyTo: SpiritRef[Models])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(hostAndPort: String, replyTo: SpiritRef[Models])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val s: ActorSystem[_] = context.system.actorSystem
     implicit val c: TinkerContext[_] = context
 
@@ -50,7 +50,7 @@ object FetchModelsActor {
 
       case ReceiveFailedHttpResponse(exception) =>
         context.actorContext.log.debug(s"Failed to connect to Ollama", exception)
-        context.actorContext.log.warn(s"Failed to connect to Ollama; if Ollama isn't installed and setup, this is normal and expected")
+        context.actorContext.log.warn(s"Failed to connect to Ollama at $hostAndPort; if Ollama isn't installed and setup, this is normal and expected")
         Tinker.steadily
 
       case ReceiveUnmarshalling(models) =>
