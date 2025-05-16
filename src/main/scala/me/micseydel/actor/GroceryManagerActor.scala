@@ -18,11 +18,9 @@ import scala.util.{Failure, Success}
 object GroceryManagerActor {
   sealed trait Message
 
-  final case class ReceivePing(ping: Ping) extends Message
-
   final case class ReceiveEmails(emails: Seq[Email]) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Grocery Lists", TinkerColor.random(), "🛒", ReceivePing) { case (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message]("Grocery Lists", TinkerColor.random(), "🛒") { case (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
 
     noteRef.readListOfWikiLinks() match {
@@ -43,11 +41,6 @@ object GroceryManagerActor {
   private def behavior(specificStores: List[SpiritRef[GroceryListMOCActor.Message]])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
-      case ReceivePing(_) =>
-        // FIXME: remove this
-        context.actorContext.log.warn("ignoring note ping")
-        Tinker.steadily
-
       case ReceiveEmails(emails) =>
         // FIXME: oof https://dkim.org/specs/rfc4871-dkimbase.html#dkim-sig-hdr
         //   maybe do this in GmailActor
