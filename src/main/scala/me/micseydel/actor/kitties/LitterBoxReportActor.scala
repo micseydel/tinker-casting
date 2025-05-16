@@ -18,6 +18,7 @@ import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
 import org.slf4j.Logger
 import spray.json._
 
+import java.io.FileNotFoundException
 import java.time.{LocalDate, ZonedDateTime}
 import scala.annotation.tailrec
 import scala.util.{Failure, Success}
@@ -71,6 +72,9 @@ private[kitties] object DailyAbility {
       noteRef.readMarkdown() match {
         case Success(markdown) =>
           litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, markdown)
+
+        case Failure(exception: FileNotFoundException) =>
+          context.actorContext.log.debug(s"Creating non-existing note [[$noteName]]", exception)
 
         case Failure(exception) =>
           context.actorContext.log.warn(s"Something went wrong reading [[$noteName]]", exception)
