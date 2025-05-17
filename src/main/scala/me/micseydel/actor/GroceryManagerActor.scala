@@ -10,8 +10,9 @@ import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 
-import java.time.LocalDate
-import scala.util.{Failure, Success}
+import java.time.{LocalDate, ZonedDateTime}
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
+import scala.util.{Failure, Success, Try}
 
 object GroceryManagerActor {
   sealed trait Message
@@ -75,7 +76,7 @@ object GroceryListMOCActor {
         noteRef.readListOfWikiLinks() match {
           case Validated.Valid(wikilinks: NonEmptyList[String]) =>
             implicit val currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message] = context.cast(CurrentGroceryNoteActor(wikilinks.head), wikilinks.head.replace(" ", "_").replace("'", ""))
-            implicit val doTurnOver: (Seq[Email], LocalDate) => Boolean = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
+            implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[LocalDate] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
             behavior(Map.empty)
           case Validated.Invalid(problems) =>
             context.actorContext.log.warn(s"Something(s) went wrong getting wikilinks: $problems")
@@ -88,7 +89,7 @@ object GroceryListMOCActor {
     }
   }
 
-  private def behavior(archivalSpiritRefs: Map[LocalDate, SpiritRef[ArchivalGroceryNoteActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message], doTurnOver: (Seq[Email], LocalDate) => Boolean): Ability[Message] = Tinker.setup { context =>
+  private def behavior(archivalSpiritRefs: Map[LocalDate, SpiritRef[ArchivalGroceryNoteActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message], doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[LocalDate]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ReceiveEmails(emails) =>
@@ -97,28 +98,31 @@ object GroceryListMOCActor {
           case Validated.Valid(wikilinks: NonEmptyList[String]) =>
             // assumes the first wikilink is the "active" [[Next ...]] link, and the second one is the last archival one
             val latestArchiveNote = wikilinks.tail.head
-            val latestDate = LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10)) // by convention 😬
-            if (doTurnOver(emails, latestDate)) {
-              context.actorContext.log.info(s"Turn over detected after $latestDate")
-              // FIXME: today is a hack, this should be re-worked so that it doesn't behave improperly if the email arrives after midnight
-              val today = context.system.clock.today()
-              archivalSpiritRefs.get(today) match {
-                case Some(existing) =>
-                  context.actorContext.log.warn(s"$today was already created, which is a little surprise")
-                  currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(existing)
-                  Tinker.steadily
-                case None =>
-                  val newNoteName = latestArchiveNote.replace(latestDate.toString, today.toString)
-                  val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), newNoteName.replace(" ", "_").replace("'", ""))
-                  context.actorContext.log.info(s"Creating $newNoteName")
-                  currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
-                  noteRef.setMarkdown((wikilinks.head :: newNoteName :: wikilinks.tail).mkString("\n"))
-                  behavior(archivalSpiritRefs.updated(today, newArchivalNote))
-              }
-            } else {
-              context.actorContext.log.info(s"Receive ${emails.size} but none were a match for groceries")
-              Tinker.steadily
+            val latestDate = ZonedDateTime.from(LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10))) // by convention 😬
+
+            doTurnOverFor(emails, latestDate) match {
+              case Some(day) =>
+                context.actorContext.log.info(s"Turn over detected after $latestDate")
+                archivalSpiritRefs.get(day) match {
+                  case Some(existing) =>
+                    context.actorContext.log.warn(s"$day was already created, which is a little surprise")
+                    currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(existing)
+                    Tinker.steadily
+                  case None =>
+                    // this is just to keep whatever the convention happened ot be
+                    val newNoteName = latestArchiveNote.replace(latestDate.toString, day.toString)
+                    val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), newNoteName.replace(" ", "_").replace("'", ""))
+                    context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
+                    currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
+                    noteRef.setMarkdown((wikilinks.head :: newNoteName :: wikilinks.tail).mkString("\n"))
+                    behavior(archivalSpiritRefs.updated(day, newArchivalNote))
+                }
+
+              case None =>
+                context.actorContext.log.info(s"Receive ${emails.size} but none were a match for groceries")
+                Tinker.steadily
             }
+
           case Validated.Invalid(problems) =>
             context.actorContext.log.warn(s"Received email(s), expected ${noteRef.noteId} to contain a list of wikilinks but: $problems")
             Tinker.steadily
@@ -128,13 +132,23 @@ object GroceryListMOCActor {
 
   //
 
-  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: String)(emails: Seq[Email], lastSeenDate: LocalDate): Boolean = {
-    emails.exists {
+  private val DateTimeFormat = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z '('zzz')'")
+
+  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: String)(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
+    emails.flatMap {
       case Email(sender, subject, _, sentAt, _) =>
-        sender == senderEquals && subject.contains(subjectContains) &&
-          sentAt.endsWith("PDT") && sentAt.contains(lastSeenDate.toString)
+        Try(ZonedDateTime.parse(sentAt, DateTimeFormat)) match {
+          case Success(value) =>
+            if (value.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)) {
+              Some(value.toLocalDate)
+            } else {
+              None
+            }
+          case Failure(_: DateTimeParseException) => None
+          case Failure(exception) => throw exception
+        }
     }
-  }
+  }.maxOption
 
   //
 
