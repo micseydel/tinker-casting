@@ -110,11 +110,16 @@ object GroceryListMOCActor {
                   case None =>
                     // this is just to keep whatever the convention happened ot be
                     val newNoteName = latestArchiveNote.replace(latestDate.toString, day.toString)
-                    val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
-                    context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
-                    currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
-                    noteRef.setMarkdown(document.withNewLatest(newNoteName).toMarkdown)
-                    behavior(archivalSpiritRefs.updated(day, newArchivalNote))
+                    if (document.latestArchive == newNoteName) {
+                      context.actorContext.log.warn(s"(make this info) Not turning over note because it was already done")
+                      Tinker.steadily
+                    } else {
+                      val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
+                      context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
+                      currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
+                      noteRef.setMarkdown(document.withNewLatest(newNoteName).toMarkdown)
+                      behavior(archivalSpiritRefs.updated(day, newArchivalNote))
+                    }
                 }
 
               case None =>
@@ -154,7 +159,7 @@ object GroceryListMOCActor {
   case class Document(nextNote: String, latestArchive: String, older: List[String]) {
     def withNewLatest(latest: String): Document = {
       if (latest == latestArchive) {
-        throw new RuntimeException(s"Received request to add $latest but that was already the latest")
+        throw new RuntimeException(s"Received request to add [[$latest]] but that was already the latest")
       }
       Document(nextNote, latest, latestArchive :: older)
     }
