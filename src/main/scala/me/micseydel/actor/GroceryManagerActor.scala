@@ -4,15 +4,14 @@ import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.GmailActor.Email
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl._
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
-import java.time.format.{DateTimeFormatter, DateTimeParseException}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object GroceryManagerActor {
   sealed trait Message
@@ -138,7 +137,7 @@ object GroceryListMOCActor {
 
   private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: String)(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
     emails.flatMap {
-      case email@Email(sender, subject, _, sentAt, _) =>
+      case email@Email(sender, subject, _, _, _) =>
         email.getTimeHacky match {
           case Success(dateFromEmail) =>
             if (dateFromEmail.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)) {
@@ -146,7 +145,6 @@ object GroceryListMOCActor {
             } else {
               None
             }
-          case Failure(_: DateTimeParseException) => None
           case Failure(exception) => throw exception
         }
     }
