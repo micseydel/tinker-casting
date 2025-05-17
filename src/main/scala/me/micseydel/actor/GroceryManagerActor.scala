@@ -74,8 +74,8 @@ object GroceryListMOCActor {
       case Validated.Valid(Config(senderEquals, subjectContains)) =>
         // FIXME: do a SINGLE read from the noteref
         noteRef.readListOfWikiLinks() match {
-          case Validated.Valid(wikilinks: NonEmptyList[String]) =>
-            implicit val currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message] = context.cast(CurrentGroceryNoteActor(wikilinks.head), wikilinks.head.replace(" ", "_").replace("'", ""))
+          case Validated.Valid(document: Document) =>
+            implicit val currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message] = context.cast(CurrentGroceryNoteActor(document.nextNote), Common.tryToCleanForActorName(document.nextNote))
             implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[LocalDate] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
             behavior(Map.empty)
           case Validated.Invalid(problems) =>
@@ -95,9 +95,8 @@ object GroceryListMOCActor {
       case ReceiveEmails(emails) =>
         context.actorContext.log.info(s"Received ${emails.size} emails, reading wikilinks list from ${noteRef.noteId}")
         noteRef.readListOfWikiLinks() match {
-          case Validated.Valid(wikilinks: NonEmptyList[String]) =>
-            // assumes the first wikilink is the "active" [[Next ...]] link, and the second one is the last archival one
-            val latestArchiveNote = wikilinks.tail.head
+          case Validated.Valid(document: Document) =>
+            val latestArchiveNote = document.latestArchive
             val latestDate = LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10)).atStartOfDay(ZoneId.systemDefault()) // by convention 😬
 
             doTurnOverFor(emails, latestDate) match {
@@ -114,8 +113,7 @@ object GroceryListMOCActor {
                     val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
                     context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
                     currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
-                    val newLines = (wikilinks.head :: newNoteName :: wikilinks.tail).map(link => s"- [[$link]]")
-                    noteRef.setMarkdown(newLines.mkString("\n"))
+                    noteRef.setMarkdown(document.withNewLatest(newNoteName).toMarkdown)
                     behavior(archivalSpiritRefs.updated(day, newArchivalNote))
                 }
 
@@ -153,6 +151,20 @@ object GroceryListMOCActor {
 
   private case class Config(senderEquals: String, subjectContains: String)
 
+  case class Document(nextNote: String, latestArchive: String, older: List[String]) {
+    def withNewLatest(latest: String): Document = {
+      if (latest == latestArchive) {
+        throw new RuntimeException(s"Received request to add $latest but that was already the latest")
+      }
+      Document(nextNote, latest, latestArchive :: older)
+    }
+
+    def toMarkdown: String = {
+      val newLines = (nextNote :: latestArchive :: older).map(link => s"- [[$link]]")
+      newLines.mkString("\n")
+    }
+  }
+
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def getConfig(): ValidatedNel[String, Config] = {
       noteRef.readNote().flatMap(_.yamlFrontMatter) match {
@@ -171,10 +183,19 @@ object GroceryListMOCActor {
       }
     }
 
-    def readListOfWikiLinks(): ValidatedNel[String, NonEmptyList[String]] = {
+    def readListOfWikiLinks(): ValidatedNel[String, Document] = {
       noteRef.readMarkdown().map(MarkdownUtil.readListOfWikiLinks) match {
         case Failure(exception) => s"Something went wrong reading from disk: ${Common.getStackTraceString(exception)}".invalidNel
-        case Success(result) => result
+        case Success(result) =>
+          result.andThen { items =>
+            items.toList match {
+              // assumes the first wikilink is the "active" [[Next ...]] link, and the second one is the latest archival one
+              case next :: latest :: older =>
+                Document(next, latest, older).validNel
+              case other =>
+                s"Expected at least two items but got $other".invalidNel
+            }
+          }
       }
     }
   }
