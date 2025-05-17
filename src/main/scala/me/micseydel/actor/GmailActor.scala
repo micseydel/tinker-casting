@@ -96,7 +96,7 @@ object GmailActor {
           // reset the timer
           timeKeeper !! TimeKeeper.RemindMeEvery(noteRef.getConfigOrDefault(), context.self, HeartBeat, Some(this))
         } else {
-          context.actorContext.log.warn("ignoring note ping")
+          context.actorContext.log.debug("ignoring note ping")
         }
 
         Tinker.steadily
