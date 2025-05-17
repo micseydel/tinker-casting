@@ -29,7 +29,8 @@ object TinkerOrchestrator {
       context.cast(GmailExperimentActor(gmailConfig), "GmailTestActor")
     }
 
-    val hypothesisListener = context.cast(HypothesisListener(), "HypothesisListener")
+    @unused // subscribes to gmail
+    val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
 
     // !! specializations
 
