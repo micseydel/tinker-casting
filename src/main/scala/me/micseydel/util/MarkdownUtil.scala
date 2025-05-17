@@ -63,12 +63,12 @@ object MarkdownUtil {
       case head :: tail =>
         Validated.Invalid(NonEmptyList(head, tail))
       case Nil =>
-        val cleanedLines = toClean.map(_._1.drop(4)).dropRight(2)
+        val cleanedLines = toClean.map(_._1.drop(4).dropRight(2))
         cleanedLines match {
           case head :: tail =>
             NonEmptyList(head, tail).validNel
           case Nil =>
-            "there were no items".invalidNel
+            s"there were no items in ${markdown.length} characters (problems=$problems)\n\n$markdown".invalidNel
         }
     }
   }

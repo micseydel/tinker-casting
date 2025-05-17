@@ -20,9 +20,9 @@ import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.{File, FileInputStream, InputStreamReader}
-import java.time.format.{DateTimeFormatter, DateTimeParseException}
+import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
-import java.util.{Base64, Collections}
+import java.util.{Base64, Collections, Locale}
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
@@ -41,7 +41,19 @@ object GmailActor {
 
   //
 
-  case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]])
+  case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]]) {
+    private def tryToGetWestCoastTime: Try[ZonedDateTime] =
+      Try(ZonedDateTime.parse(sentAt))
+        .map(_.withZoneSameInstant(ZoneId.of("America/Los_Angeles")))
+
+    def getTimeHacky: Try[ZonedDateTime] = {
+      val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss Z")
+      Try(ZonedDateTime.parse(sentAt.replace("PDT", "-0700").replace("PST", "-0800"), formatter)).recoverWith {
+        case _: DateTimeParseException =>
+          tryToGetWestCoastTime
+      }
+    }
+  }
 
   def apply(config: GmailConfig)(implicit Tinker: Tinker): Ability[Message] = {
     AttentiveNoteMakingTinkerer[Message, ReceivePing]("Gmail Configuration", TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
@@ -79,7 +91,8 @@ object GmailActor {
         if (noteRef.checkBoxIsChecked()) {
           context.actorContext.log.info("Note check box was check, requesting email async now")
           requestGmailAsync()
-          // FIXME: only need to read from the NoteRef once
+          // FIXME: only need to read from the NoteRef once, rather than for the checkbox above then config below
+          noteRef.setMarkdown("- [ ] Refresh now\n")
           // reset the timer
           timeKeeper !! TimeKeeper.RemindMeEvery(noteRef.getConfigOrDefault(), context.self, HeartBeat, Some(this))
         } else {

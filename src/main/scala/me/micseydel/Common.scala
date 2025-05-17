@@ -25,6 +25,10 @@ object Common {
     t.toString + "\n" + t.getStackTrace.map("  " + _).mkString("\n")
   }
 
+  def tryToCleanForActorName(s: String): String = {
+    s.replace(" ", "_").replace("'", "").replace(")", "").replace("(", "")
+  }
+
   /**
    * @return e.g. 2011-12-03T10:15:30
    */

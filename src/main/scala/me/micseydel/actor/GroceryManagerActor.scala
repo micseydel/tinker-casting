@@ -10,7 +10,7 @@ import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.{LocalDate, ZoneId, ZonedDateTime}
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import scala.util.{Failure, Success, Try}
 
@@ -26,7 +26,7 @@ object GroceryManagerActor {
       case Validated.Valid(groceryLists: NonEmptyList[String]) =>
         context.actorContext.log.info(s"Initializing with grocery lists $groceryLists, subscribing to Gmail")
         val specificStores: NonEmptyList[SpiritRef[GroceryListMOCActor.Message]] = groceryLists.map { noteName =>
-          context.cast(GroceryListMOCActor(noteName), noteName.replace(" ", "_").replace("'", ""))
+          context.cast(GroceryListMOCActor(noteName), Common.tryToCleanForActorName(noteName))
         }
 
         context.system.operator !! Operator.SubscribeGmail(context.messageAdapter(ReceiveEmails))
@@ -98,7 +98,7 @@ object GroceryListMOCActor {
           case Validated.Valid(wikilinks: NonEmptyList[String]) =>
             // assumes the first wikilink is the "active" [[Next ...]] link, and the second one is the last archival one
             val latestArchiveNote = wikilinks.tail.head
-            val latestDate = ZonedDateTime.from(LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10))) // by convention 😬
+            val latestDate = LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10)).atStartOfDay(ZoneId.systemDefault()) // by convention 😬
 
             doTurnOverFor(emails, latestDate) match {
               case Some(day) =>
@@ -111,10 +111,11 @@ object GroceryListMOCActor {
                   case None =>
                     // this is just to keep whatever the convention happened ot be
                     val newNoteName = latestArchiveNote.replace(latestDate.toString, day.toString)
-                    val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), newNoteName.replace(" ", "_").replace("'", ""))
+                    val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
                     context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
                     currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
-                    noteRef.setMarkdown((wikilinks.head :: newNoteName :: wikilinks.tail).mkString("\n"))
+                    val newLines = (wikilinks.head :: newNoteName :: wikilinks.tail).map(link => s"- [[$link]]")
+                    noteRef.setMarkdown(newLines.mkString("\n"))
                     behavior(archivalSpiritRefs.updated(day, newArchivalNote))
                 }
 
@@ -132,15 +133,13 @@ object GroceryListMOCActor {
 
   //
 
-  private val DateTimeFormat = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z '('zzz')'")
-
   private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: String)(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
     emails.flatMap {
-      case Email(sender, subject, _, sentAt, _) =>
-        Try(ZonedDateTime.parse(sentAt, DateTimeFormat)) match {
-          case Success(value) =>
-            if (value.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)) {
-              Some(value.toLocalDate)
+      case email@Email(sender, subject, _, sentAt, _) =>
+        email.getTimeHacky match {
+          case Success(dateFromEmail) =>
+            if (dateFromEmail.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)) {
+              Some(dateFromEmail.toLocalDate)
             } else {
               None
             }
