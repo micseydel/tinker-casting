@@ -10,6 +10,7 @@ import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 
+import java.io.FileNotFoundException
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
 import scala.util.{Failure, Success}
 
@@ -92,15 +93,16 @@ object GroceryListMOCActor {
     implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ReceiveEmails(emails) =>
-        context.actorContext.log.info(s"Received ${emails.size} emails, reading wikilinks list from ${noteRef.noteId}")
         noteRef.readListOfWikiLinks() match {
           case Validated.Valid(document: Document) =>
             val latestArchiveNote = document.latestArchive
             val latestDate = LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10)).atStartOfDay(ZoneId.systemDefault()) // by convention 😬
+            context.actorContext.log.info(s"Received ${emails.size} emails, read wikilinks list from [[${noteRef.noteId}]] with latestArchiveNote [[$latestArchiveNote]], latestDate $latestDate")
 
             doTurnOverFor(emails, latestDate) match {
               case Some(day) =>
-                context.actorContext.log.info(s"Turn over detected after $latestDate")
+                context.actorContext.log.info(s"Turn over detected after $latestDate, for $day")
+//                println(s"Turn over detected after $latestDate, for $day")
                 archivalSpiritRefs.get(day) match {
                   case Some(existing) =>
                     context.actorContext.log.warn(s"$day was already created, which is a little surprise")
@@ -108,13 +110,14 @@ object GroceryListMOCActor {
                     Tinker.steadily
                   case None =>
                     // this is just to keep whatever the convention happened ot be
-                    val newNoteName = latestArchiveNote.replace(latestDate.toString, day.toString)
+                    val newNoteName = latestArchiveNote.replace(latestDate.toString.take(10), day.toString)
+//                    println(s"$latestArchiveNote.replace(${latestDate.toString}, ${day.toString})")
                     if (document.latestArchive == newNoteName) {
-                      context.actorContext.log.warn(s"(make this info) Not turning over note because it was already done")
+                      context.actorContext.log.warn(s"(make this info) Not turning over note because it was already done [[${document.latestArchive}]]")
                       Tinker.steadily
                     } else {
-                      val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
                       context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
+                      val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
                       currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
                       noteRef.setMarkdown(document.withNewLatest(newNoteName).toMarkdown)
                       behavior(archivalSpiritRefs.updated(day, newArchivalNote))
@@ -135,12 +138,33 @@ object GroceryListMOCActor {
 
   //
 
+  def main(args: Array[String]): Unit = {
+
+    // (2025-05-12T20:48:47-07:00[America/Los_Angeles]).isAfter(2025-05-12T00:00-07:00[America/Los_Angeles])
+    println(
+      ZonedDateTime.parse("2025-05-13T19:52:29-07:00[America/Los_Angeles]")
+        .isAfter(ZonedDateTime.parse("2025-05-03T00:00-07:00[America/Los_Angeles]"))
+    )
+
+//    println(
+//      anEmailIndicatesTurnOver
+//      ("Chase <no.reply.alerts@chase.com>", "VONS #2011")
+//      (
+//        List(Email("Chase <no.reply.alerts@chase.com>", "VONS #2011", "body", "2025-05-13 19:52:29 PDT", Map.empty)),
+//        LocalDate.parse("2025-05-03").atStartOfDay(ZoneId.systemDefault())
+//      )
+//    )
+  }
+
   private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: String)(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
     emails.flatMap {
       case email@Email(sender, subject, _, _, _) =>
         email.getTimeHacky match {
           case Success(dateFromEmail) =>
-            if (dateFromEmail.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)) {
+//            println("dateFromEmail.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains) ->")
+            val matches = dateFromEmail.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)
+//            println(s"($matches) ($dateFromEmail).isAfter($lastSeenDate) && ($sender) == ($senderEquals) && ($subject).contains($subjectContains) -> ${dateFromEmail.isAfter(lastSeenDate)} && ${sender == senderEquals} && ${subject.contains(subjectContains)}")
+            if (matches) {
               Some(dateFromEmail.toLocalDate)
             } else {
               None
@@ -238,8 +262,8 @@ object ArchivalGroceryNoteActor {
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "✅️") { (context, noteRef) =>
     Tinker.receiveMessage {
       case AddContents(lines) =>
+        val toAppend = lines.mkString("\n")
         noteRef.readMarkdown().flatMap { markdown =>
-          val toAppend = lines.mkString("\n")
           if (markdown.contains(toAppend)) {
             context.actorContext.log.warn(s"Ignoring duplicate request to add ${lines.size} to [[$noteName]]")
             Success(NoOp)
@@ -247,6 +271,14 @@ object ArchivalGroceryNoteActor {
             context.actorContext.log.info(s"Adding ${lines.size} to [[$noteName]]")
             noteRef.append(toAppend)
           }
+        } match {
+          case Failure(_: FileNotFoundException) =>
+            noteRef.setMarkdown(toAppend) match {
+              case Failure(exception) => throw exception
+              case Success(_) =>
+            }
+          case Failure(exception) => throw exception
+          case Success(_) =>
         }
         Tinker.steadily
     }
