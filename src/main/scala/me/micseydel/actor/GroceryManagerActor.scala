@@ -244,8 +244,9 @@ object CurrentGroceryNoteActor {
             context.actorContext.log.warn(s"Got a turn over request for $archivalNote but no checkboxes were marked")
           } else {
             context.actorContext.log.info(s"Turning over ${turningOver.length} items")
-            archivalNote !! ArchivalGroceryNoteActor.AddContents(turningOver.toList)
+            // FIXME: this should be a transaction
             noteRef.setMarkdown(keeping.mkString("\n"))
+            archivalNote !! ArchivalGroceryNoteActor.AddContents(turningOver.toList)
           }
         }
 
