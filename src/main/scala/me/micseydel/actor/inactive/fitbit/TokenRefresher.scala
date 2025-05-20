@@ -1,11 +1,11 @@
-package me.micseydel.actor.perimeter.fitbit
+package me.micseydel.actor.inactive.fitbit
 
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.AuthJsonProtocol.authFormat
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.{Auth, AuthJsonProtocol}
+import FitbitModel.AuthJsonProtocol.authFormat
+import FitbitModel.{Auth, AuthJsonProtocol}
 import me.micseydel.dsl.Tinker
 import me.micseydel.dsl.Tinker.Ability
 import spray.json._

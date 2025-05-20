@@ -1,13 +1,13 @@
-package me.micseydel.actor.perimeter.fitbit
+package me.micseydel.actor.inactive.fitbit
 
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitHeartRate
-import me.micseydel.actor.perimeter.fitbit.FitbitActor.{Request, RequestActiveTimes, RequestActivities, RequestCalories, RequestHeartRate, RequestSleep, RequestSteps, TriggerAuthRefresh}
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.{Auth, AuthJsonProtocol, FitbitSteps, SleepReport}
+import FetcherUtil.FitbitHeartRate
+import FitbitActor.{Request, RequestActiveTimes, RequestActivities, RequestCalories, RequestHeartRate, RequestSleep, RequestSteps, TriggerAuthRefresh}
+import FitbitModel.{Auth, AuthJsonProtocol, FitbitSteps, SleepReport}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
@@ -238,7 +238,7 @@ object FitbitSleepFetcher {
   def apply(auth: Auth, replyTo: SpiritRef[SleepReport], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Fetching Fitbit sleep for $forDay")
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
-    import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
+    import FitbitModel.SleepJsonProtocol.sleepReportFormat
     // https://dev.fitbit.com/build/reference/web-api/sleep/get-sleep-log-by-date/
     FitbitFetcherHelper(s"/1.2/user/-/sleep/date/$day.json", auth, replyTo, supervisor, RequestSleep(replyTo, forDay))
   }
@@ -249,7 +249,7 @@ object FitbitStepsFetcher {
   def apply(auth: Auth, replyTo: SpiritRef[FitbitSteps], forDay: LocalDate, supervisor: SpiritRef[TriggerAuthRefresh])(implicit Tinker: Tinker): Ability[FitbitFetcherHelper.Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Fetching Fitbit steps for $forDay")
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
-    import me.micseydel.actor.perimeter.fitbit.FitbitModel.StepsJsonFormat.fitbitStepsFormat
+    import FitbitModel.StepsJsonFormat.fitbitStepsFormat
 
     // /1/user/-/activities/steps/date/[date]/[end-date]/[detail-level].json
 
@@ -274,7 +274,7 @@ object FitbitHeartRateFetcher {
     context.actorContext.log.info(s"Starting FitbitHeartRateFetcher for $forDay")
     val day = TimeUtil.localDateTimeToISO8601Date(forDay)
 
-    import me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitHeartRateJsonFormat.fitbitHeartRateJsonFormat
+    import FetcherUtil.FitbitHeartRateJsonFormat.fitbitHeartRateJsonFormat
 
     //https://dev.fitbit.com/build/reference/web-api/intraday/get-heartrate-intraday-by-date/
     FitbitFetcherHelper(s"/1/user/-/activities/heart/date/$day/$day/15min.json", auth, replyTo, supervisor, RequestHeartRate(replyTo, forDay))

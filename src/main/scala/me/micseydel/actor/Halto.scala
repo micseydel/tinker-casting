@@ -6,11 +6,11 @@ import me.micseydel.actor.FrustrationListener.{DistressDetected, DistressDetecti
 import me.micseydel.actor.Halto._
 import me.micseydel.actor.HungerTracker.HungerState
 import me.micseydel.actor.NutritionListener.LastAte
+import me.micseydel.actor.inactive.fitbit.FitbitActor
 import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffect, PushNotification}
 import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetFailure, AranetResults, Meta}
 import me.micseydel.actor.perimeter.{AranetActor, HueControl}
-import me.micseydel.actor.perimeter.fitbit.FitbitActor
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.{SleepReport, SleepSummary}
+import me.micseydel.actor.inactive.fitbit.FitbitModel.{SleepReport, SleepSummary}
 import me.micseydel.app.AppConfiguration.NtfyKeys
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.{Yellow, rgb}
@@ -304,7 +304,7 @@ object Halto {
     private implicit val distressDetectedFormat: RootJsonFormat[FrustrationListener.DistressDetected] = jsonFormat2(FrustrationListener.DistressDetected)
     implicit val receiveFrustrationDetectedFormat: RootJsonFormat[ReceiveFrustrationDetected] = jsonFormat1(ReceiveFrustrationDetected)
 
-    import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
+    import me.micseydel.actor.inactive.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
 
     implicit val receiveSleepReportFormat: RootJsonFormat[ReceiveSleepReport] = jsonFormat1(ReceiveSleepReport)
 

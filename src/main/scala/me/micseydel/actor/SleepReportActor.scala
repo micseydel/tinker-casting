@@ -1,8 +1,8 @@
 package me.micseydel.actor
 
 import me.micseydel.actor.SleepReportActor.SleepReportState
-import me.micseydel.actor.perimeter.fitbit.FitbitActor
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepReport
+import me.micseydel.actor.inactive.fitbit.FitbitActor
+import me.micseydel.actor.inactive.fitbit.FitbitModel.SleepReport
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
@@ -134,7 +134,7 @@ object SleepReportActor {
 
   object StateJsonProtocol extends DefaultJsonProtocol {
 
-    import me.micseydel.actor.perimeter.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
+    import me.micseydel.actor.inactive.fitbit.FitbitModel.SleepJsonProtocol.sleepReportFormat
 
     implicit val stateJsonFormat: RootJsonFormat[SleepReportState] = jsonFormat1(SleepReportState.apply)
   }

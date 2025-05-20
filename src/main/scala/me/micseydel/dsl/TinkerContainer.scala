@@ -31,7 +31,6 @@ object TinkerContainer {
         config.vaultRoot,
         config.aranetConfig,
         config.ntfyKeys,
-        config.fitbitAuthorizationBasic,
         config.wyzeUri,
         config.gmail
       ))(tinker), NtfyerActor()(_)
@@ -107,7 +106,7 @@ object RootTinkerBehavior {
 
     // magic
     val tinkerSystem = TinkerSystem(
-      rasaActor,
+      rasaActor, // FIXME
       context.system,
       tinkerBrain,
       vaultKeeper,

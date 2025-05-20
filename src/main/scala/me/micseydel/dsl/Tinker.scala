@@ -37,8 +37,9 @@ class Tinker(val tinkerSystem: TinkerSystem) {
   def unhandled[T]: Ability[T] = Behaviors.unhandled
 
   def ignore[T]: Ability[T] = Behaviors.ignore
-
 }
+
+class EnhancedTinker[UE](tinkerSystem: TinkerSystem, userExtension: UE) extends Tinker(tinkerSystem)
 
 object Tinker {
   type Ability[T] = Behavior[T]

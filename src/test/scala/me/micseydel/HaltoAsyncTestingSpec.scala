@@ -4,11 +4,11 @@ import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.{ActorRef, Scheduler}
 import me.micseydel.actor.FrustrationListener.DistressDetected
 import me.micseydel.actor.Halto
+import me.micseydel.actor.inactive.fitbit.FitbitActor
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.Chime
 import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetResults}
-import me.micseydel.actor.perimeter.fitbit.FitbitActor
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.{LevelsData, SleepEntry, SleepReport, SleepSummary}
+import me.micseydel.actor.inactive.fitbit.FitbitModel.{LevelsData, SleepEntry, SleepReport, SleepSummary}
 import me.micseydel.actor.perimeter.{AranetActor, HueControl}
 import me.micseydel.app.AppConfiguration.NtfyKeys
 import me.micseydel.dsl.TinkerSystem

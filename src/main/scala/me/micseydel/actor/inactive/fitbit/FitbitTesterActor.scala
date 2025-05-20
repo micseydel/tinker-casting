@@ -1,10 +1,11 @@
-package me.micseydel.actor.perimeter.fitbit
+package me.micseydel.actor.inactive.fitbit
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.Common
-import me.micseydel.actor.perimeter.fitbit.FetcherUtil.{ActivitiesHeartIntraday, ActivitiesHeartSummary, ActivitiesHeartValue, DataPoint, FitbitActiveTimes, FitbitActiveTimesIntraday, FitbitHeartRate, FitbitMinute, FitbitMinuteValue, HeartRateZone}
-import me.micseydel.actor.perimeter.fitbit.FitbitModel.{FitbitSteps, StepsAt, StepsDataSet, StepsSummary}
+import FetcherUtil.{ActivitiesHeartIntraday, ActivitiesHeartSummary, ActivitiesHeartValue, DataPoint, FitbitActiveTimes, FitbitActiveTimesIntraday, FitbitHeartRate, FitbitMinute, FitbitMinuteValue, HeartRateZone}
+import FitbitModel.{FitbitSteps, StepsAt, StepsDataSet, StepsSummary}
+import me.micseydel.actor.inactive.fitbit
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
@@ -92,7 +93,7 @@ object FitbitTesterActor {
         }.getOrElse("none")
 
         import spray.json._
-        implicit val jsonFormat: RootJsonFormat[FitbitActiveTimesIntraday] = me.micseydel.actor.perimeter.fitbit.FetcherUtil.FitbitActiveTimesJsonFormat.FitbitActiveTimesIntradayJsonFormat
+        implicit val jsonFormat: RootJsonFormat[FitbitActiveTimesIntraday] = fitbit.FetcherUtil.FitbitActiveTimesJsonFormat.FitbitActiveTimesIntradayJsonFormat
         val formattedActiveTimes = Try(activeTimesPayload.parseJson.convertTo[FitbitActiveTimesIntraday]) match {
           case Failure(exception) => s"""\n```\n${Common.getStackTraceString(exception)}\n```"""
           case Success(FitbitActiveTimesIntraday(List(FitbitActiveTimes(dateTime, minutes)))) =>

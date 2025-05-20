@@ -1,4 +1,4 @@
-package me.micseydel.actor.perimeter.fitbit
+package me.micseydel.actor.inactive.fitbit
 
 import akka.http.scaladsl.model.HttpHeader
 import akka.http.scaladsl.model.headers.RawHeader

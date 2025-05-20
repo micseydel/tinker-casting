@@ -15,6 +15,10 @@ import java.time.ZonedDateTime
 
 
 object TinkerCasterApp {
+  // FIXME: what should the userspace "app" be responsible for?
+  //   - minimally?
+  //       - Rasa
+  //   - ntfy implementation
   def main(args: Array[String]): Unit = {
     AppConfiguration.getConfig() match {
       case Validated.Invalid(errors) =>
