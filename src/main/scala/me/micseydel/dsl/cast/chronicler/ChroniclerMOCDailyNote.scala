@@ -43,7 +43,7 @@ object ChroniclerMOCDailyNote {
 
     Tinker.initializedWithNoteAndPersistedMessages(noteName, jsonFilename, TranscribedMobileNotesJsonProtocol.PostInitializationMessageJsonFormat) {
       case (context, noteRef, jsonlRef) =>
-        context.actorContext.log.info(s"Starting ")
+        context.actorContext.log.info(s"Starting")
         behavior(forDate, noteRef, jsonlRef)
     }
   }
