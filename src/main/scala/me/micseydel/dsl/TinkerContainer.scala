@@ -139,6 +139,11 @@ object RootTinkerBehavior {
     context.scheduleOnce(3.seconds, tinkerBrain, TinkerBrain.SystemStarted())
     context.scheduleOnce(10.seconds, tinkerBrain, TinkerBrain.WriteNote(tinker))
 
+    // FIXME: I can create a DIFFERENT Tinker object here, for user space
+    // ...ah, so the user's extension object will take the SystemTinker object, and the UserTinker one will have a second field with their goodies
+    // how to contextualize the context? different subclasses, or type parameterization?
+    // UserExtensions(various spiritref fields, e.g. Rasa and Ollama, maybe something that registers with the operator for push notifications (which only the notif center will use)
+
     // this should be internally-driven, doesn't need messages FROM here
     @unused
     val applicationsActor: typed.ActorRef[ReceiveMqttEvent] = context.spawn(applications(tinker), "Applications")

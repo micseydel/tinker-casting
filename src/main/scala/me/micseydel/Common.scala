@@ -7,10 +7,12 @@ import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, Path}
 import java.time.format.DateTimeFormatter
-import java.time.{DateTimeException, Duration, Instant, LocalDate, LocalDateTime, ZoneId, ZonedDateTime}
+import java.time._
 import javax.sound.sampled.AudioSystem
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{Await, Future}
 import scala.jdk.StreamConverters._
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 /**
  * @param filename path (non-full)
@@ -170,6 +172,18 @@ object Common {
         case JsNull => None
         case other => Some(itemFormat.read(other))
       }
+    }
+  }
+
+  def await[FutureResult, FinalResult](fut: Future[FutureResult], onSuccess: FutureResult => FinalResult)(implicit duration: FiniteDuration): FinalResult = {
+    Await.ready(fut, duration).value match {
+      case Some(Success(futureResult)) =>
+        onSuccess(futureResult)
+
+      case Some(Failure(throwable)) =>
+        throw throwable
+      case None =>
+        throw new RuntimeException(s"Expected ask to be non-empty")
     }
   }
 }
