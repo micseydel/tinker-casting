@@ -1,14 +1,18 @@
 package me.micseydel.actor.wyze
 
+import cats.data.{Validated, ValidatedNel}
+import cats.implicits.catsSyntaxValidatedId
+import me.micseydel.Common
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlug, WyzePlugAPIResponse, WyzePlugAPIResult}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.ZonedDateTime
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object WyzeActor {
   sealed trait Message
@@ -21,13 +25,25 @@ object WyzeActor {
 
   private val NoteName = "Wyze Plugs"
 
-  def apply(wyzeUri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdatedPing](NoteName, TinkerColor.rgb(0, 255, 255), "🔌", ReceiveNoteUpdatedPing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdatedPing](NoteName, TinkerColor.rgb(0, 255, 255), "🔌", ReceiveNoteUpdatedPing) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
 
-    val api = context.cast(WyzeAPIActor(wyzeUri), "WyzeAPIActor")
-    api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
+    noteRef.readNote() match {
+      case Failure(exception) =>
+        context.actorContext.log.warn(s"Failed to read note [[$noteRef]]", exception)
+        Tinker.ignore
+      case Success(note) =>
+        uriFromProperties(note) match {
+          case Validated.Invalid(problems) =>
+            context.actorContext.log.warn(s"Failed to read config for $noteRef: $problems")
+            Tinker.ignore
+          case Validated.Valid(uri) =>
+            val api = context.cast(WyzeAPIActor(uri), "WyzeAPIActor")
+            api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
 
-    initializing(noteRef, api)
+            initializing(noteRef, api)
+        }
+    }
   }
 
   private def initializing(noteRef: NoteRef, api: SpiritRef[WyzeAPIActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
@@ -63,6 +79,7 @@ object WyzeActor {
 
         if (markdown.contains("[x] Refresh now")) {
           api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
+          context.actorContext.log.warn("Refreshing devices, but FYI that the app must be restarted if the uri was changed")
           Tinker.steadily
         } else {
           val isOnMapFromDisk = markdown.split("\n")
@@ -111,6 +128,14 @@ object WyzeActor {
         val plugs = wyzePlugAPIResponse.getPlugsOrThrow
         noteRef.updateMarkdown(context.system.clock.now(), plugs)
         initialized(genIsOnMap(plugs))(Tinker, noteRef, api)
+    }
+  }
+
+  def uriFromProperties(note: Note): ValidatedNel[String, String] = {
+    note.yamlFrontMatter.map(t => t.get("uri")) match {
+      case Success(Some(uri: String)) => uri.validNel
+      case Success(other) => s"Expect key `uri` to map to a string but found $other".validNel
+      case Failure(exception) => Common.getStackTraceString(exception).invalidNel
     }
   }
 

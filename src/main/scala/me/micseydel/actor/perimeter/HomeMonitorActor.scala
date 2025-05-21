@@ -1,14 +1,12 @@
 package me.micseydel.actor.perimeter
 
-import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.actor.{AirQualityManagerActor, PurpleAirActor}
-import me.micseydel.actor.perimeter.AranetActor.AranetResults
 import me.micseydel.actor.wyze.WyzeActor
+import me.micseydel.actor.{AirQualityManagerActor, PurpleAirActor}
 import me.micseydel.app.AppConfiguration.AranetConfig
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl._
+import me.micseydel.dsl.cast.TimeKeeper
 
 import scala.annotation.unused
 import scala.concurrent.duration.DurationInt
@@ -24,7 +22,7 @@ object HomeMonitorActor {
 
   //
 
-  def apply(maybeAranetConfig: Option[AranetConfig], ntfyCO2Key: Option[String], wyzeUri: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
+  def apply(maybeAranetConfig: Option[AranetConfig], ntfyCO2Key: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
     implicit val t: TinkerContext[_] = context
 
     val maybeAranetActor = maybeAranetConfig match {
@@ -41,18 +39,11 @@ object HomeMonitorActor {
     @unused
     val purpleAirActor = context.cast(PurpleAirActor(), "PurpleAirActor")
 
-    val maybeWyzeActor: Option[SpiritRef[WyzeActor.Message]] = wyzeUri match {
-      case Some(wyzeUri) =>
-        context.actorContext.log.info(s"Starting WyzeActor for URI $wyzeUri")
-        Some(context.cast(WyzeActor(wyzeUri), "WyzeActor"))
-      case None =>
-        context.actorContext.log.warn("No Wyze URI, creating an inert actor")
-        None
-    }
+    context.actorContext.log.info(s"Starting WyzeActor")
+    val wyzeActor = context.cast(WyzeActor(), "WyzeActor")
 
     @unused // driven internally
     val airQualityManagerActor = for {
-      wyzeActor <- maybeWyzeActor
       aranetActor <- maybeAranetActor
     } yield {
       context.actorContext.log.info("Starting AirQualityManagerActor")
@@ -60,7 +51,7 @@ object HomeMonitorActor {
     }
 
     if (airQualityManagerActor.isEmpty) {
-      context.actorContext.log.warn(s"Failed to start AirQualityManagerActor: maybeWyzeActor=$maybeWyzeActor, maybeAranetActor=$maybeAranetActor")
+      context.actorContext.log.warn(s"Failed to start AirQualityManagerActor: maybeAranetActor=$maybeAranetActor")
     }
 
     context.actorContext.log.info("Started CO2_Monitor; RemindMeEvery(10.minutes) Heartbeat")

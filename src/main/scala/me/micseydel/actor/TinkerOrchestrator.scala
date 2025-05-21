@@ -16,7 +16,6 @@ object TinkerOrchestrator {
   case class Config(vaultRoot: VaultPath,
                     aranetConfig: Option[AranetConfig],
                     ntfyKeys: NtfyKeys,
-                    wyzeUri: Option[String],
                     gmail: Option[GmailConfig]
                    )
 

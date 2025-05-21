@@ -31,7 +31,6 @@ object TinkerContainer {
         config.vaultRoot,
         config.aranetConfig,
         config.ntfyKeys,
-        config.wyzeUri,
         config.gmail
       ))(tinker), NtfyerActor()(_)
     )
@@ -131,7 +130,7 @@ object RootTinkerBehavior {
     actorNotesFolderWatcherActor ! ActorNotesFolderWatcherActor.StartTinkering(tinker)
 
     @unused // driven internally
-    val homeMonitor = context.spawn(HomeMonitorActor(config.aranetConfig, config.ntfyKeys.highCO2, config.wyzeUri), "HomeMonitor")
+    val homeMonitor = context.spawn(HomeMonitorActor(config.aranetConfig, config.ntfyKeys.highCO2), "HomeMonitor")
 
 //    tinkerBrain ! TinkerBrain.SystemStarted()
     context.log.info("Waiting 3 seconds before announcing system started")
