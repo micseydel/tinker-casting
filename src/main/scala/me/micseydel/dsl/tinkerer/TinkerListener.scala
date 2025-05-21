@@ -1,5 +1,6 @@
 package me.micseydel.dsl.tinkerer
 
+import akka.actor.typed
 import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.util.Timeout
@@ -8,7 +9,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.model.{Entity, NotedTranscription, RasaResult}
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.util.{MarkdownUtil, StringUtil}
@@ -51,7 +52,7 @@ object RasaAnnotatingListener {
   sealed trait Message
   private case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
-  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription], replacementCandidate: Option[String] = None)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription], replacementCandidate: Option[String] = None)(implicit Tinker: EnhancedTinker[typed.ActorRef[RasaActor.Message]]): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     context.system.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
@@ -64,7 +65,7 @@ object RasaAnnotatingListener {
 //    }
 
     def getRasaResultFut(rawText: String, modelChoice: String): Future[RasaResult] = {
-      Await.ready[RasaResult](context.system.rasaActor.ask(RasaActor.GetRasaResult(rawText, modelChoice, _)), duration)
+      Await.ready[RasaResult](Tinker.userExtension.ask(RasaActor.GetRasaResult(rawText, modelChoice, _)), duration)
     }
 
     Tinker.receiveMessage {

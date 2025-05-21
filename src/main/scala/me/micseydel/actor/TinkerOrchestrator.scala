@@ -1,15 +1,14 @@
 package me.micseydel.actor
 
+import akka.actor.typed.ActorRef
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.ollama.OllamaActor
-import me.micseydel.actor.wyze.WyzeActor
-import me.micseydel.app.AppConfiguration.{AranetConfig, NtfyKeys}
+import me.micseydel.app.AppConfiguration.NtfyKeys
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.vault.VaultPath
 
-import java.nio.file.Path
 import scala.annotation.unused
 
 object TinkerOrchestrator {
@@ -20,7 +19,7 @@ object TinkerOrchestrator {
 
   // behavior
 
-  def apply(config: Config)(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
+  def apply(config: Config)(implicit Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
     config.gmail.foreach { gmailConfig =>
       context.actorContext.log.debug("Casting GmailTestActor")
       context.cast(GmailExperimentActor(gmailConfig), "GmailTestActor")

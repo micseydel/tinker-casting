@@ -54,7 +54,7 @@ object RootTinkerBehavior {
   case class ReceiveMqttEvent(topic: String, payload: Array[Byte])
 
   // FIXME: applications accepts mqtt events, but should probably/maybe also take voice notes...?
-  def apply(config: AppConfig, applications: Tinker => Ability[ReceiveMqttEvent], ntfyAbility: Tinker => Ability[NtfyerActor.Message])(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>
+  def apply(config: AppConfig, applications: EnhancedTinker[typed.ActorRef[RasaActor.Message]] => Ability[ReceiveMqttEvent], ntfyAbility: Tinker => Ability[NtfyerActor.Message])(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>
     val jsonPath = config.vaultRoot.resolve("json")
 
     // generally hidden, internal use only
@@ -123,7 +123,6 @@ object RootTinkerBehavior {
 
     // Cmd+F for "case class StartTinkering" and count
     chronicler ! Chronicler.StartTinkering(tinker)
-    hueControl ! HueControl.StartTinkering(tinker)
     notificationCenterManager ! NotificationCenterManager.StartTinkering(tinker)
     gossiper ! Gossiper.StartTinkering(tinker)
     actorNotesFolderWatcherActor ! ActorNotesFolderWatcherActor.StartTinkering(tinker)
@@ -141,9 +140,12 @@ object RootTinkerBehavior {
     // how to contextualize the context? different subclasses, or type parameterization?
     // UserExtensions(various spiritref fields, e.g. Rasa and Ollama, maybe something that registers with the operator for push notifications (which only the notif center will use)
 
+    val enhancedTinker = new EnhancedTinker(tinkerSystem, rasaActor)
+    hueControl ! HueControl.StartTinkering(enhancedTinker)
+
     // this should be internally-driven, doesn't need messages FROM here
     @unused
-    val applicationsActor: typed.ActorRef[ReceiveMqttEvent] = context.spawn(applications(tinker), "Applications")
+    val applicationsActor: typed.ActorRef[ReceiveMqttEvent] = context.spawn(applications(enhancedTinker), "Applications")
 
     config.mqttConfig match {
       case None =>

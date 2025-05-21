@@ -1,10 +1,10 @@
 package me.micseydel.actor.perimeter
 
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.util.Timeout
 import me.micseydel.NoOp
-import me.micseydel.actor.HueListener
+import me.micseydel.actor.{HueListener, RasaActor}
 import me.micseydel.actor.perimeter.HueControl._
 import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
@@ -21,11 +21,9 @@ import scala.concurrent.ExecutionContextExecutorService
 import scala.concurrent.duration.DurationInt
 
 object HueControl {
-  // mailbox
-
   sealed trait Message
 
-  case class StartTinkering(tinker: Tinker) extends Message
+  case class StartTinkering(tinker: EnhancedTinker[ActorRef[RasaActor.Message]]) extends Message
 
   case class NoteUpdated(noOp: NoOp.type) extends Message
 
@@ -91,7 +89,7 @@ object HueControl {
     }
   }
 
-  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
+  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
     // call this actor if needed
     @unused
     val hueListener = context.cast(HueListener(context.self), "HueListener")

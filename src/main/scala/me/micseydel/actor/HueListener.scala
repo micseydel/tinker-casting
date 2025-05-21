@@ -1,5 +1,6 @@
 package me.micseydel.actor
 
+import akka.actor.typed.ActorRef
 import cats.data.NonEmptyList
 import cats.data.Validated.{Invalid, Valid}
 import me.micseydel.actor.notifications.ChimeActor.Material
@@ -14,7 +15,7 @@ import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.dsl.tinkerer.{NoteMakingTinkerer, RasaAnnotatingListener}
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerClock, TinkerContext}
 import me.micseydel.model.KnownIntent.no_intent
 import me.micseydel.model.Light.AllList
 import me.micseydel.model.LightStates.RelaxedLight
@@ -42,7 +43,7 @@ object HueListener {
 
   //
 
-  def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("HueListener Experiment", rgb(230, 230, 230), "👂") { (context, noteRef) =>
+  def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = NoteMakingTinkerer("HueListener Experiment", rgb(230, 230, 230), "👂") { (context, noteRef) =>
     @unused // subscribes to Gossiper on our behalf
     val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent), Some("lights_test")), "RasaListener")
 

@@ -15,8 +15,6 @@ import java.util.concurrent.Executors
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 
 abstract class TinkerSystem {
-  def rasaActor: typed.ActorRef[RasaActor.Message] // FIXME: remove
-
   def newContext[T](actorContext: ActorContext[T]): TinkerContext[T]
 
   def actorSystem: ActorSystem[_]
@@ -96,12 +94,11 @@ object TinkerSystem {
             networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
             actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message], eventReceiver: ActorRef[EventReceiver.ClaimEventType]): TinkerSystem = {
-    new TinkerSystemImplementation(rasaActor, actorSystem, tinkerBrain, vaultKeeper, chronicler, gossiper, hueControlActor, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
+    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, chronicler, gossiper, hueControlActor, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
   }
 }
 
 class TinkerSystemImplementation(
-                                  val rasaActor: typed.ActorRef[RasaActor.Message],
                                   val actorSystem: ActorSystem[_],
                                   val tinkerBrain: ActorRef[TinkerBrain.Message],
                                   vaultKeeperActor: ActorRef[VaultKeeper.Message],

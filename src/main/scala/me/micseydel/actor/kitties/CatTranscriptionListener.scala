@@ -1,9 +1,10 @@
 package me.micseydel.actor.kitties
 
+import akka.actor.typed.ActorRef
 import cats.data.NonEmptyList
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
 import me.micseydel.actor.kitties.TranscriptionAboutCats.{NoIntentJustWordMatch, NotAboutCats, WithIntent, WithIntentFailedExtraction}
-import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
+import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter, RasaActor}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl._
@@ -33,7 +34,7 @@ object CatTranscriptionListener {
 
   //
 
-  def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
+  def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[TranscriptionEvent]]] = context.cast(DailyNotesRouter(
       "CatsTranscriptions notes",
