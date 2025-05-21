@@ -17,7 +17,6 @@ object AppConfiguration {
     ntfyKeys: NtfyKeys,
     hueConfig: Option[HueConfig],
     mqttConfig: Option[MqttConfig],
-    purpleAirUri: Option[String],
     wyzeUri: Option[String],
     rasaHost: String,
     gmail: Option[GmailConfig]
@@ -69,7 +68,6 @@ object AppConfiguration {
           ),
           hueConfig,
           maybeMqttConfig,
-          getOptionalString(config, "purpleair.uri"),
           getOptionalString(config, "wyze.uri"),
           config.getString("rasa.host"),
           for (credsPath <- getOptionalString(config, "gmail.creds"); tokensPath <- getOptionalString(config, "gmail.tokens"))

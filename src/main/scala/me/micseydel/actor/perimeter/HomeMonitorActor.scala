@@ -24,7 +24,7 @@ object HomeMonitorActor {
 
   //
 
-  def apply(maybeAranetConfig: Option[AranetConfig], ntfyCO2Key: Option[String], maybePurpleAirURI: Option[String], wyzeUri: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
+  def apply(maybeAranetConfig: Option[AranetConfig], ntfyCO2Key: Option[String], wyzeUri: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
     implicit val t: TinkerContext[_] = context
 
     val maybeAranetActor = maybeAranetConfig match {
@@ -37,14 +37,9 @@ object HomeMonitorActor {
         None
     }
 
-    val maybePurpleAirActor = maybePurpleAirURI match {
-      case Some(purpleAirURI) =>
-        context.actorContext.log.info("Starting PurpleAir actor")
-        Some(context.cast(PurpleAirActor(purpleAirURI), "PurpleAirActor"))
-      case None =>
-        context.actorContext.log.warn("No PurpleAir URI in config, will not measure AQI")
-        None
-    }
+    context.actorContext.log.info("Starting PurpleAir actor")
+    @unused
+    val purpleAirActor = context.cast(PurpleAirActor(), "PurpleAirActor")
 
     val maybeWyzeActor: Option[SpiritRef[WyzeActor.Message]] = wyzeUri match {
       case Some(wyzeUri) =>
@@ -57,7 +52,6 @@ object HomeMonitorActor {
 
     @unused // driven internally
     val airQualityManagerActor = for {
-      purpleAirActor <- maybePurpleAirActor
       wyzeActor <- maybeWyzeActor
       aranetActor <- maybeAranetActor
     } yield {
@@ -66,7 +60,7 @@ object HomeMonitorActor {
     }
 
     if (airQualityManagerActor.isEmpty) {
-      context.actorContext.log.warn(s"Failed to start AirQualityManagerActor: maybePurpleAirActor=$maybePurpleAirActor, maybeWyzeActor=$maybeWyzeActor, maybeAranetActor=$maybeAranetActor")
+      context.actorContext.log.warn(s"Failed to start AirQualityManagerActor: maybeWyzeActor=$maybeWyzeActor, maybeAranetActor=$maybeAranetActor")
     }
 
     context.actorContext.log.info("Started CO2_Monitor; RemindMeEvery(10.minutes) Heartbeat")
