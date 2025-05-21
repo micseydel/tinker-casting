@@ -2,7 +2,7 @@ package me.micseydel.actor.perimeter
 
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse, ResponseEntity}
+import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.Common.ZonedDateTimeJsonFormat
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
@@ -13,17 +13,14 @@ import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.vault.Note
+import me.micseydel.vault.persistence.NoteRef
 import spray.json._
 
 import java.time.ZonedDateTime
-import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 object AranetActor {
 
-  case class Config(aranetHost: String, aranetPort: Int, highCO2Key: Option[String])
-
-  // mailbox
   sealed trait Message
 
   case class Fetch(replyTo: SpiritRef[Result]) extends Message
@@ -32,81 +29,100 @@ object AranetActor {
 
   case class ReceiveNoteUpdated(ping: Ping) extends Message
 
-  def apply(config: Config)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    behavior(config, lastSeenElevated = false)
-  }
+  //
 
   private val NoteName = "Aranet Devices"
 
-  private def behavior(config: Config, lastSeenElevated: Boolean)(implicit Tinker: Tinker): Ability[Message] = {
-    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated.apply) { (context, noteRef) =>
-      implicit val tc: TinkerContext[_] = context
-      import AranetJsonProtocol.payloadFormat
+  def apply()(implicit Tinker: Tinker): Ability[Message] = setup(lastSeenElevated = false)
 
-      val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]] = context.cast(DailyNotesRouter(
-        NoteName,
-        "aranet",
-        AranetJsonProtocol.payloadFormat,
-        DailyMarkdown.apply
-      ), "DailyNotesRouter")
-
-      val httpRequest = HttpRequest(
-        method = HttpMethods.GET,
-        uri = s"http://${config.aranetHost}:${config.aranetPort}/ara4s"
-      )
-
-      noteRef.setMarkdown(s"[${ZonedDateTime.now()}] initializing...")
-
-      Tinker.receiveMessage {
-        case ReceiveResult(result) =>
-          result match {
-            case AranetFailure(throwable) => context.actorContext.log.error("Aranet fetching failed", throwable)
-            case result@AranetResults(aras, Meta(elapsed, captureTime)) =>
-              dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(result), captureTime)
-              context.actorContext.log.info(s"Setting Markdown...")
-              noteRef.setMarkdown {
-                "- [ ] Click to refresh\n" +
-                s"- Latest capture at ${captureTime.toString.take(19)} taking ${elapsed.toInt}s\n" +
-                  aras.map {
-                    case Aranet(_, co2, humidity, name, _, _, temperature) =>
-                      s"- $name -> **CO2 $co2**  temp $temperature°C  humidity $humidity"
-                  }.mkString("\n") + "\n" +
-                s"""# Today
-                  |![[$NoteName (${context.system.clock.today()})]]
-                  |""".stripMargin
-              }
-          }
-
-          Tinker.steadily
-
-        case Fetch(replyTo) =>
-          context.actorContext.log.info("Making HTTP request for Aranet")
-          context.castAnonymous(HttpFetchAndUnmarshall(httpRequest, replyTo, AranetFailure, context.messageAdapter(ReceiveResult)))
-
-          Tinker.steadily
-
-        case ReceiveNoteUpdated(_) =>
-          noteRef.readNote() match {
-            case Failure(exception) => throw exception
-            case Success(Note(markdown, _)) =>
-              markdown.split("\n", 2).toList match {
-                case "- [x] Click to refresh" :: _ =>
-                  context.actorContext.log.info("clicktorefresh triggered!")
-                  context.castAnonymous(HttpFetchAndUnmarshall(httpRequest, context.messageAdapter(ReceiveResult), AranetFailure))
-
-                case "- [ ] Click to refresh" :: _ =>
-                case firstLine :: _ if firstLine.contains("initializing") =>
-                case _ =>
-                  context.actorContext.log.warn(s"Weird Markdown: $markdown")
-              }
-
-            case Success(ignoring) =>
-              context.actorContext.log.info(s"ignoring $ignoring")
-          }
-
-          Tinker.steadily
-
+  private def setup(lastSeenElevated: Boolean)(implicit Tinker: Tinker): Ability[Message] = {
+    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated) { (context, noteRef) =>
+      val maybeUri = noteRef.readNote().flatMap(_.yamlFrontMatter).map(_.get("uri")) match {
+        case Success(Some(uri: String)) => Some(uri)
+        case Failure(exception) =>
+          context.actorContext.log.warn(s"Failed to read [[$NoteName]] from disk", exception)
+          None
+        case Success(other) =>
+          context.actorContext.log.warn(s"Expected key `uri` to map to a string but found $other")
+          None
       }
+
+      maybeUri match {
+        case Some(uri) =>
+          val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]] = context.cast(DailyNotesRouter(
+            NoteName,
+            "aranet",
+            AranetJsonProtocol.payloadFormat,
+            DailyMarkdown.apply
+          ), "DailyNotesRouter")
+
+          val httpRequest = HttpRequest(
+            method = HttpMethods.GET,
+            uri = s"http://$uri/ara4s"
+          )
+
+          noteRef.setMarkdown(s"[${ZonedDateTime.now()}] initializing...")
+
+          behavior(noteRef, httpRequest, dailyNotesAssistant)
+
+        case None =>
+          Tinker.ignore
+      }
+    }
+  }
+
+  private def behavior(noteRef: NoteRef, httpRequest: HttpRequest, dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val tc: TinkerContext[_] = context
+    import AranetJsonProtocol.payloadFormat
+
+    message match {
+      case ReceiveResult(result) =>
+        result match {
+          case AranetFailure(throwable) => context.actorContext.log.error("Aranet fetching failed", throwable)
+          case result@AranetResults(aras, Meta(elapsed, captureTime)) =>
+            dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(result), captureTime)
+            context.actorContext.log.info(s"Setting Markdown...")
+            noteRef.setMarkdown {
+              "- [ ] Click to refresh\n" +
+                s"- Latest capture at ${captureTime.toString.take(19)} taking ${elapsed.toInt}s\n" +
+                aras.map {
+                  case Aranet(_, co2, humidity, name, _, _, temperature) =>
+                    s"- $name -> **CO2 $co2**  temp $temperature°C  humidity $humidity"
+                }.mkString("\n") + "\n" +
+                s"""# Today
+                   |![[$NoteName (${context.system.clock.today()})]]
+                   |""".stripMargin
+            }
+        }
+
+        Tinker.steadily
+
+      case Fetch(replyTo) =>
+        context.actorContext.log.info("Making HTTP request for Aranet")
+        context.castAnonymous(HttpFetchAndUnmarshall(httpRequest, replyTo, AranetFailure, context.messageAdapter(ReceiveResult)))
+
+        Tinker.steadily
+
+      case ReceiveNoteUpdated(_) =>
+        noteRef.readNote() match {
+          case Failure(exception) => throw exception
+          case Success(Note(markdown, _)) =>
+            markdown.split("\n", 2).toList match {
+              case "- [x] Click to refresh" :: _ =>
+                context.actorContext.log.info("clicktorefresh triggered! fyi that updating the uri requires rebooting the app right now")
+                context.castAnonymous(HttpFetchAndUnmarshall(httpRequest, context.messageAdapter(ReceiveResult), AranetFailure))
+
+              case "- [ ] Click to refresh" :: _ =>
+              case firstLine :: _ if firstLine.contains("initializing") =>
+              case _ =>
+                context.actorContext.log.warn(s"Weird Markdown: $markdown")
+            }
+
+          case Success(ignoring) =>
+            context.actorContext.log.info(s"ignoring $ignoring")
+        }
+
+        Tinker.steadily
     }
   }
 

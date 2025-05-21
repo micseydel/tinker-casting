@@ -14,7 +14,6 @@ import scala.annotation.unused
 
 object TinkerOrchestrator {
   case class Config(vaultRoot: VaultPath,
-                    aranetConfig: Option[AranetConfig],
                     ntfyKeys: NtfyKeys,
                     gmail: Option[GmailConfig]
                    )

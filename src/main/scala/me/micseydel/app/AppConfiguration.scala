@@ -11,7 +11,6 @@ import scala.util.{Failure, Success, Try}
 object AppConfiguration {
   case class AppConfig(
     vaultRoot: VaultPath,
-    aranetConfig: Option[AranetConfig],
     eventReceiverHost: String,
     eventReceiverPort: Int,
     ntfyKeys: NtfyKeys,
@@ -44,12 +43,6 @@ object AppConfiguration {
           } yield MqttConfig(username, password, brokerUrl)
         }
 
-        val aranetConfig: Option[AranetConfig] = getOptionalString(config, "aranet.host").flatMap { host =>
-          getOptionalString(config, "aranet.port").map(_.toInt).map { port =>
-            AranetConfig(host, port)
-          }
-        }
-
         val hueConfig: Option[HueConfig] = for {
           ip <- getOptionalString(config, "hue_api.ip")
           username <- getOptionalString(config, "hue_api.username")
@@ -57,7 +50,6 @@ object AppConfiguration {
 
         Validated.Valid(AppConfig(
           vaultRoot,
-          aranetConfig,
           config.getString("transcription.whisper.event-receiver.host"),
           config.getInt("transcription.whisper.event-receiver.port"),
           NtfyKeys(
