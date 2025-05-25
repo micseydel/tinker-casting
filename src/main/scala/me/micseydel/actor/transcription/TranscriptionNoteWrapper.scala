@@ -1,14 +1,12 @@
 package me.micseydel.actor.transcription
 
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
-import me.micseydel.actor.ollama.FetchChatResponseActor
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.model._
-import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.{JsonlRefT, NoteRef}
 
@@ -25,14 +23,12 @@ object TranscriptionNoteWrapper {
 
   def apply(
              capture: NoticedAudioNote,
-             listener: SpiritRef[Chronicler.ActOnNoteRef],
-             maybeOllamaTranscriptionSummarizer: Option[String]
-           )(implicit Tinker: Tinker): Ability[Message] = setup(capture, listener, maybeOllamaTranscriptionSummarizer)
+             listener: SpiritRef[Chronicler.ActOnNoteRef]
+           )(implicit Tinker: Tinker): Ability[Message] = setup(capture, listener)
 
   private def setup(
                      capture: NoticedAudioNote,
-                     listener: SpiritRef[Chronicler.ActOnNoteRef],
-                     maybeOllamaTranscriptionSummarizer: Option[String]
+                     listener: SpiritRef[Chronicler.ActOnNoteRef]
                    )(implicit Tinker: Tinker): Ability[Message] = {
     val jsonFilenameWithoutExtension = capture.transcriptionNoteName.replace(" ", "_").toLowerCase
     Tinker.withPersistedMessages(jsonFilenameWithoutExtension, TranscriptionMessageListJsonProtocol.TranscriptionNoteWrapperMessageJsonFormat) { jsonlRef =>
@@ -45,12 +41,12 @@ object TranscriptionNoteWrapper {
           case Success(value) => context.actorContext.log.info(s"wrote $value")
         }
 
-        behavior(capture, noteRef, jsonlRef, maybeOllamaTranscriptionSummarizer)(Tinker, listener)
+        behavior(capture, noteRef, jsonlRef)(Tinker, listener)
       }
     }
   }
 
-  private def behavior(capture: NoticedAudioNote, noteRef: NoteRef, jsonlRef: JsonlRefT[Message], maybeOllamaTranscriptionSummarizer: Option[String])(implicit Tinker: Tinker, listener: SpiritRef[Chronicler.ActOnNoteRef]): Ability[Message] = Tinker.withPriorMessages(jsonlRef) { (context, message, priorMessages) =>
+  private def behavior(capture: NoticedAudioNote, noteRef: NoteRef, jsonlRef: JsonlRefT[Message])(implicit Tinker: Tinker, listener: SpiritRef[Chronicler.ActOnNoteRef]): Ability[Message] = Tinker.withPriorMessages(jsonlRef) { (context, message, priorMessages) =>
     implicit val c: TinkerContext[_] = context
 
     message match {

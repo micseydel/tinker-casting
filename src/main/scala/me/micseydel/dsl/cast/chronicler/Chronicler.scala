@@ -83,12 +83,8 @@ object Chronicler {
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
         noteRef.properties match {
-          case Success(Some((audioWatchPath, whisperLarge, whisperBase, ollamaTranscriptionSummarizer))) =>
-            finishInitializing(
-              vaultRoot, vaultKeeper, gossiper, tinkerBrain,
-              audioWatchPath, whisperLarge, whisperBase, ollamaTranscriptionSummarizer,
-              whisperEventReceiverHost, whisperEventReceiverPort
-            )
+          case Success(Some(config)) =>
+            finishInitializing(vaultRoot, vaultKeeper, gossiper, tinkerBrain, config, whisperEventReceiverHost, whisperEventReceiverPort)
 
           case Failure(exception) =>
             throw exception
@@ -109,25 +105,24 @@ object Chronicler {
                         vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
                         tinkerBrain: ActorRef[TinkerBrain.Message],
-                        audioWatchPath: Path, whisperLarge: String, whisperBase: String, ollamaTranscriptionSummarizer: Option[String],
+                        config: AudioNoteCaptureProperties,
                         whisperEventReceiverHost: String, whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
-      vaultRoot, context.self.underlying, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort
+      vaultRoot, context.self.underlying, config, whisperEventReceiverHost, whisperEventReceiverPort
     ), "AudioNoteCapturer")
 
     val moc: ActorRef[ChroniclerMOC.Message] = context.spawn(ChroniclerMOC(), "ChroniclerMOC")
 
-    behavior(Map.empty)(Tinker, vaultKeeper, gossiper, tinkerBrain, moc, ollamaTranscriptionSummarizer)
+    behavior(Map.empty)(Tinker, vaultKeeper, gossiper, tinkerBrain, moc)
   }
 
   private def behavior(wavNameToTranscriptionNoteOwner: Map[String, SpiritRef[TranscriptionNoteWrapper.Message]])
                       (implicit Tinker: Tinker, vaultKeeper: ActorRef[VaultKeeper.Message],
                        gossiper: SpiritRef[Gossiper.Message],
                        tinkerBrain: ActorRef[TinkerBrain.Message],
-                       moc: ActorRef[ChroniclerMOC.Message],
-                       ollamaTranscriptionSummarizer: Option[String]
+                       moc: ActorRef[ChroniclerMOC.Message]
                       ): Ability[Message] =  Tinker.setup { context =>
     context.actorContext.log.info(s"Behavior initialized with ${wavNameToTranscriptionNoteOwner.size} elements")
     Tinker.receiveMessage { message =>
@@ -145,7 +140,7 @@ object Chronicler {
               wavNameToTranscriptionNoteOwner
             case None =>
               val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
-              val behavior = TranscriptionNoteWrapper(capture, context.self, ollamaTranscriptionSummarizer)
+              val behavior = TranscriptionNoteWrapper(capture, context.self)
               context.actorContext.log.debug(
                 s"Creating note wrapper actor with name $name (wavPath $wavPath); " +
                   s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(wavName)}")
@@ -253,14 +248,16 @@ object Chronicler {
     }
   }
 
+  case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String)
+
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def properties: Try[Option[(Path, String, String, Option[String])]] = {
+    def properties: Try[Option[AudioNoteCaptureProperties]] = {
       noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
         for {
           audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
           whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
           whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
-        } yield (audioWatchPath, whisperLarge, whisperBase, properties.get("ollamaTranscriptionSummarizer").map(_.asInstanceOf[String]))
+        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase)
       }
     }
   }

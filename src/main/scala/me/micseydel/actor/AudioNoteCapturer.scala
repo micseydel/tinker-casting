@@ -8,6 +8,7 @@ import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEven
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.Chronicler.AudioNoteCaptureProperties
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResult
@@ -48,16 +49,16 @@ object AudioNoteCapturer {
   private val NoteName = "Audio Note Capture"
 
   // FIXME: Chronicler is passed here because it takes a broader message
-  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], audioWatchPath: Path, whisperLarge: String, whisperBase: String, whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
-    finishInitializing(vaultRoot, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
+  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], config: AudioNoteCaptureProperties, whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
+    finishInitializing(vaultRoot, config, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
   }
 
-  private def finishInitializing(vaultRoot: VaultPath, audioWatchPath: Path, whisperLarge: String, whisperBase: String, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
+  private def finishInitializing(vaultRoot: VaultPath, config: AudioNoteCaptureProperties, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
     val newFileCreationEventAdapter = context.messageAdapter(AudioPathUpdatedEvent).underlying
     @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
     val folderWatcherActor = context.spawn(
       FolderWatcherActor(
-        audioWatchPath, newFileCreationEventAdapter
+        config.audioWatchPath, newFileCreationEventAdapter
       ),
       "MobileAudioFolderWatcherActor"
     )
@@ -66,11 +67,13 @@ object AudioNoteCapturer {
     val transcriptionAdapter = context.messageAdapter(TranscriptionEvent).underlying
     context.system.eventReceiver ! EventReceiver.ClaimEventType(TranscriptionCompleted, transcriptionAdapter)
 
+    context.actorContext.log.info(s"Starting primaryWhisperFlaskAmbassador on ${config.whisperLarge} and secondaryWhisperFlaskAmbassador on ${config.whisperBase}")
+
     // FIXME: bad names, secondary means transfer the file over the network
     // maybe on_host, on_local_network?
     val primaryWhisperFlaskAmbassador: ActorRef[WhisperFlaskAmbassador.Message] = context.spawn(
       SecondaryWhisperFlaskAmbassador(SecondaryWhisperFlaskAmbassador.Config(
-        whisperLarge,
+        config.whisperLarge,
         whisperEventReceiverHost,
         whisperEventReceiverPort,
         vaultRoot
@@ -80,7 +83,7 @@ object AudioNoteCapturer {
 
     val secondaryWhisperFlaskAmbassador = context.spawn(
       SecondaryWhisperFlaskAmbassador(SecondaryWhisperFlaskAmbassador.Config(
-        whisperBase,
+        config.whisperBase,
         whisperEventReceiverHost,
         whisperEventReceiverPort,
         vaultRoot
