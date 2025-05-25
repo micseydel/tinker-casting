@@ -43,7 +43,7 @@ def http_call(callback_url, data):
             print("Callback completed normally")
 
 
-def long_running(q, model_choice, vault_root):
+def long_running(q, model_choice):
     print("Loading model")
     start = time.perf_counter()
     model = whisper.load_model(model_choice)
@@ -54,7 +54,7 @@ def long_running(q, model_choice, vault_root):
         incoming_data = q.get()
         vault_path = incoming_data["vault_path"]
 
-        full_path = incoming_data.get("$tempPath", os.path.join(vault_root, vault_path))
+        full_path = incoming_data.get("$tempPath")
         print(f"Transcribing {vault_path}... ", end='', flush=True)
 
         try:
