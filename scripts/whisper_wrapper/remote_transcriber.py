@@ -90,58 +90,6 @@ def long_running(q, model_choice, vault_root):
             os.remove(temp_path)
 
 
-def valid_vault_path(vault_root: str, vault_path: str) -> Optional[str]:
-    if not vault_path.endswith('.wav'):
-        return f"Bad path does not end with .wav: {vault_path}"
-
-    host_path = os.path.join(vault_root, vault_path)
-
-    # initial_check = time.perf_counter()
-    if not os.path.isfile(host_path):
-        return f"{host_path} did not exist"
-        # time.sleep(1)  # HACK
-        # if not os.path.isfile(host_path):
-        #     print("Path", host_path, "not found after sleeping, sleeping some more...")
-        #     time.sleep(3)
-        #     if not os.path.isfile(host_path):
-        #         time.sleep(10)
-        #         if not os.path.isfile(host_path):
-        #             msg = f"Bad path does not exist after {time.perf_counter()-initial_check:.1f}: {host_path} (root {vault_root})"
-        #             print(msg)
-        #             return msg
-
-    return None
-
-
-@app.route('/enqueue/vault_path', methods=['POST'])
-def enqueue_path():
-    vault_root = app.config['VAULT_ROOT']
-    data = request.get_json()
-
-    # FIXME: upon 400, return JSON differentiating between...
-
-    # FIXME: missing keys
-    for key in ("callback_url", "vault_path"):
-        if key not in data:
-            message = f"Data with keys {data.keys()} did not have `{key}`"
-            print(message, "but did find", data.keys())
-            return jsonify({'message': message}), 400
-
-    # FIXME: change this to a 400, return json error code, allow client to retry
-    path = data["vault_path"]
-    path_err = valid_vault_path(vault_root, path)
-    if path_err is not None:
-        log_message = f"Enqueued unknown path {path_err} with callback {data['callback_url']}"
-        response_message = f'Enqueued unknown path: {path_err}'
-    else:
-        log_message = f"Enqueueing path {path} with callback {data['callback_url']}"
-        response_message = 'Data enqueued'
-
-    print(log_message)
-    q.put(data)
-    return jsonify({'message': response_message}), 202
-
-
 @app.route('/enqueue/upload', methods=['POST'])
 def enqueue_with_upload():
     data = request.get_json()
@@ -165,19 +113,16 @@ def enqueue_with_upload():
 
 if __name__ == '__main__':
     try:
-        _, model, port, vault_root = sys.argv
+        _, model, port = sys.argv
 
         accepted_models = ("base", "large")
         if model not in accepted_models:
             raise ValueError(f"model {model} not in {accepted_models}")
-
-        if not os.path.isdir(vault_root):
-            raise ValueError(f"{vault_root} was not a directory")
     except ValueError as e:
         print("Something went wrong starting up the server")
         raise e
     else:
-        print("Using model", model, "port", port, "and vault root", vault_root, "and creating queued_temp_files directory if it doesn't exist")
+        print("Using model", model, "port", port, "and creating queued_temp_files directory if it doesn't exist")
 
         # FIXME: try disabling this, it might be causing the model to load twice
         # multiprocessing.set_start_method('fork')
