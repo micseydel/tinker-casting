@@ -131,10 +131,9 @@ if __name__ == '__main__':
 
         manager = Manager()
         q = manager.Queue()
-        worker = Process(target=long_running, args=(q, model, vault_root))
+        worker = Process(target=long_running, args=(q, model))
         worker.start()
 
-        app.config.from_mapping({"VAULT_ROOT": vault_root})
         app.run(
             host='0.0.0.0',  # listen on the network, not just localhost
             port=int(port),
