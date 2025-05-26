@@ -2,9 +2,8 @@ package me.micseydel.app
 
 import akka.actor
 import cats.data.Validated
-import me.micseydel.actor.TinkerOrchestrator.Config
 import me.micseydel.actor.kitties.CatsHelper
-import me.micseydel.actor.{CentralNervousSystemMaintenance, GmailExperimentActor, GroceryManagerActor, HueListener, PeriodicNotesCreatorActor, RasaActor, RemindMeListenerActor, TinkerOrchestrator, kitties}
+import me.micseydel.actor.{CentralNervousSystemMaintenance, GmailExperimentActor, GroceryManagerActor, HueListener, PeriodicNotesCreatorActor, RasaActor, RemindMeListenerActor, kitties}
 import me.micseydel.actor.notifications.ChimeActor
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
@@ -12,6 +11,7 @@ import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.app.TinkerCasterApp.AbilityFactory
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TinkerOrchestrator.ConfigToSimplifyAway
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
@@ -57,8 +57,7 @@ object TinkerCasterApp {
 
     val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
 
-    // FIXME: rename / move
-    val orchestratorConfig = TinkerOrchestrator.Config(
+    val orchestratorConfig = ConfigToSimplifyAway(
       config.vaultRoot,
       config.ntfyKeys,
       config.gmail
@@ -102,7 +101,7 @@ case class MyCentralCast(
 
 object UserTinkerCast {
 
-  def apply(config: Config)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply(config: ConfigToSimplifyAway)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused
     val hueListener = context.cast(HueListener(), "HueListener")
 

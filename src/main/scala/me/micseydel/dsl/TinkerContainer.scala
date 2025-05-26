@@ -5,17 +5,14 @@ import akka.actor.typed.{Behavior, DispatcherSelector}
 import akka.actor.{ActorRef, ActorSystem, Props, typed}
 import me.micseydel.actor.inactive.owntracks
 import me.micseydel.actor.notifications.NotificationCenterManager
-import me.micseydel.actor.perimeter.HueControl.HueConfig
-import me.micseydel.actor.perimeter.{HomeMonitorActor, HueControl, NtfyerActor}
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, RasaActor, TinkerOrchestrator}
+import me.micseydel.actor.perimeter.HomeMonitorActor
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, GmailConfig, PahoWrapperClassicActor}
+import me.micseydel.app.AppConfiguration.{AppConfig, NtfyKeys}
 import me.micseydel.app.{AppConfiguration, NotificationCenterAbilities}
-import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
-import me.micseydel.dsl.cast.{Gossiper, NetworkPerimeterActor, TinkerBrain}
-import me.micseydel.vault.VaultKeeper
+import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}
+import me.micseydel.vault.{VaultKeeper, VaultPath}
 
 import java.util.concurrent.Executors
 import scala.annotation.unused
@@ -27,7 +24,6 @@ object TinkerContainer {
     implicit val httpExecutionContext: ExecutionContextExecutorService =
       ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(20))
 
-    // FIXME: simplify this clusterfuck
     val rootBehavior: Ability[RootTinkerBehavior.Message] = RootTinkerBehavior(
       appConfig,
       TinkerOrchestrator(centralCastFactory, userCast)(_),
@@ -40,16 +36,15 @@ object TinkerContainer {
     // FIXME ...even though none are sourced from there right now, this is worth keeping to easily add later
     val actorSystem = ActorSystem("AkkaActor")
 
-    val tinkercast: typed.ActorRef[RootTinkerBehavior.Message] = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
+    val tinkercast: typed.ActorRef[_] = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
 
     actorSystem
   }
 }
 
-// FIXME: this needs to be refactored to figure out what is foundational and what sits on top
 object RootTinkerBehavior {
   sealed trait Message
-  // (no messages)
+  // no messages
 
   // this is what the `applications` must accept
   case class ReceiveMqttEvent(topic: String, payload: Array[Byte])
@@ -140,5 +135,17 @@ object RootTinkerBehavior {
         context.log.warn(s"$m")
         Behaviors.same
     }
+  }
+}
+
+
+object TinkerOrchestrator {
+  case class ConfigToSimplifyAway(vaultRoot: VaultPath,
+                                  ntfyKeys: NtfyKeys,
+                                  gmail: Option[GmailConfig]
+                                  )
+  def apply[CentralCast](centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent])(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
+    val enhancedTinker: EnhancedTinker[CentralCast] = new EnhancedTinker[CentralCast](context.system, centralCastFactory(Tinker, context))
+    userCast(enhancedTinker)
   }
 }
