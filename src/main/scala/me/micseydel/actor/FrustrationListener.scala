@@ -2,12 +2,13 @@ package me.micseydel.actor
 
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
 import me.micseydel.actor.FrustrationListener.{Event, TranscriptionEvent}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.NeedsAttention
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.dsl._
 import me.micseydel.model._
 import me.micseydel.util.{MarkdownUtil, StringUtil}
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
@@ -35,9 +36,9 @@ object FrustrationListener {
 
   // behavior
 
-  def apply(subscriber: SpiritRef[DistressDetected])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(255, 0, 0), "😬").setup { context =>
+  def apply(subscriber: SpiritRef[DistressDetected])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(rgb(255, 0, 0), "😬").setup { context =>
     implicit val c: TinkerContext[_] = context
-    context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+    Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Event]]] = context.cast(DailyNotesRouter(
       "Frustrated notes",
@@ -57,7 +58,7 @@ object FrustrationListener {
                         dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Event]]],
                         subscriber: SpiritRef[DistressDetected],
                         alreadySeenTranscriptions: Set[(WhisperModel, ZonedDateTime)]
-                      )(implicit Tinker: Tinker): Ability[Message] = Tinker.receive[Message] { (context, message) =>
+                      )(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive[Message] { (context, message) =>
     context.actorContext.log.debug(s"Received message of type ${message.getClass}")
     implicit val tinkerContext: TinkerContext[_] = context
 
@@ -75,9 +76,9 @@ object FrustrationListener {
             context.actorContext.log.info(s"Detected frustration in $vaultPath")
             model match {
               case BaseModel =>
-                context.system.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(fast) Detected frustration", Some(NeedsAttention))
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(fast) Detected frustration", Some(NeedsAttention))
               case LargeModel =>
-                context.system.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(accurate) Detected frustration", Some(NeedsAttention))
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(accurate) Detected frustration", Some(NeedsAttention))
             }
 
             context.actorContext.log.info("Sending to daily notes router")

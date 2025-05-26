@@ -2,9 +2,10 @@ package me.micseydel.actor
 
 import me.micseydel.actor.HungerTracker.HungerState
 import me.micseydel.actor.NutritionListener.LastAte
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.dsl._
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.annotation.unused
@@ -27,7 +28,7 @@ object HungerTracker {
    */
   final case class HungerState(lastAte: LastAte, isHungry: Boolean)
 
-  def apply(hungerSubscriber: SpiritRef[HungerState], foodTimeNtfyKey: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(135, 206, 235), "🫢").setup { context =>
+  def apply(hungerSubscriber: SpiritRef[HungerState], foodTimeNtfyKey: Option[String])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(rgb(135, 206, 235), "🫢").setup { context =>
     implicit val c: TinkerContext[_] = context
     implicit val tc: TinkerClock = context.system.clock
 

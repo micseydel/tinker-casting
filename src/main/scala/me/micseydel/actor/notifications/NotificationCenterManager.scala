@@ -4,6 +4,7 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.actor.notifications.NotificationCenterManager._
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
+import me.micseydel.app.NotificationCenterAbilities
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
@@ -80,7 +81,8 @@ object NotificationCenterManager {
     }
   }
 
-  def apply(ntfyAbility: Tinker => Ability[NtfyerActor.Message]): Behavior[Message] =
+  // FIXME: consider registering spiritrefs instead
+  def apply(abilities: NotificationCenterAbilities): Behavior[Message] =
     Behaviors.withStash(10) { stash =>
       Behaviors.receiveMessage {
         case message@(_: NotificationMessage) =>
@@ -88,7 +90,7 @@ object NotificationCenterManager {
           Behaviors.same
 
         case StartTinkering(tinker) =>
-          stash.unstashAll(finishInitializing(ntfyAbility(tinker))(tinker))
+          stash.unstashAll(finishInitializing(abilities)(tinker))
 
         case ExpireCooldown(_) =>
           // weird, but just ignore it
@@ -96,22 +98,24 @@ object NotificationCenterManager {
       }
     }
 
-  private def finishInitializing(ntfyAbility: Ability[NtfyerActor.Message])(implicit Tinker: Tinker): Ability[Message] =
+  private def finishInitializing(abilities: NotificationCenterAbilities)(implicit Tinker: Tinker): Ability[Message] =
     Tinkerer(rgb(205, 205, 0), "❗️").initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) {
       case (context, jsonRef) =>
         val notificationCenterActor: SpiritRef[NotificationCenterActor.Message] = context.cast(NotificationCenterActor(context.self), "NotificationCenterActor")
         val upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message] = context.cast(UpcomingNotificationsManager(context.self), "UpcomingNotificationsManager")
 
-        val ntfyer = context.cast(ntfyAbility, "Ntfyer")
+        val ntfyer: SpiritRef[NtfyerActor.Message] = context.cast(abilities.ntfy(Tinker), "Ntfyer")
 
-        val chime: SpiritRef[ChimeActor.Command] = context.cast(ChimeActor(), "Chime")
+        val chime: SpiritRef[ChimeActor.Command] = context.cast(abilities.chime(Tinker), "Chime")
+
+        val hueControl: SpiritRef[HueControl.Message] = context.cast(abilities.hue(Tinker), "HueControl")
 
         val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-        ability(Map.empty, Set.empty)(Tinker, upcomingNotificationsManager, notificationCenterActor, jsonRef, ntfyer, chime, timeKeeper)
+        ability(Map.empty, Set.empty)(Tinker, upcomingNotificationsManager, notificationCenterActor, jsonRef, ntfyer, chime, hueControl, timeKeeper)
     }
 
-  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]], cooldowns: Set[String])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Command], timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] =
+  private def ability(replyTos: Map[SpiritId, SpiritRef[NotificationId]], cooldowns: Set[String])(implicit Tinker: Tinker, upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message], notificationCenterActor: SpiritRef[NotificationCenterActor.Message], jsonRef: TypedJsonRef[NotificationCenterState], ntfyer: SpiritRef[NtfyerActor.Message], chime: SpiritRef[ChimeActor.Command], hueControl: SpiritRef[HueControl.Message], timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] =
     Tinker.receive { (context, message) =>
       implicit val c: TinkerContext[_] = context
       message match {
@@ -130,7 +134,7 @@ object NotificationCenterManager {
               case PushNotification(key, message) =>
                 ntfyer !! NtfyerActor.DoNotify(key, message)
               case HueCommand(command) =>
-                context.system.hueControl !! command
+                hueControl !! command
               case Chime(message) =>
                 chime !! message
             }
@@ -173,7 +177,7 @@ object NotificationCenterManager {
                 case PushNotification(key, message) =>
                   ntfyer !! NtfyerActor.DoNotify(key, message)
                 case HueCommand(command) =>
-                  context.system.hueControl !! command
+                  hueControl !! command
                 case Chime(message) =>
                   chime !! message
               }

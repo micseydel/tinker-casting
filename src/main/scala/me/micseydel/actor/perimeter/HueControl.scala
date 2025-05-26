@@ -1,12 +1,13 @@
 package me.micseydel.actor.perimeter
 
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.util.Timeout
 import me.micseydel.NoOp
-import me.micseydel.actor.{HueListener, RasaActor}
 import me.micseydel.actor.perimeter.HueControl._
 import me.micseydel.actor.perimeter.hue.HueNoteRef
+import me.micseydel.actor.{HueListener, RasaActor}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
@@ -61,39 +62,50 @@ object HueControl {
 
   case class HueConfig(ip: String, username: String)
 
-  def apply(hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = {
-    setup(hueConfig)
-  }
+  def apply(hueConfig: HueConfig)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    // FIXME: leverage the Tinker stuff to move config to a note instead of app config
+    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
 
-  private def setup(hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService): Ability[Message] = Behaviors.setup { context =>
-    implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
-
-    Behaviors.withStash(20) { stash =>
-      Behaviors.receiveMessage {
-        case StartTinkering(tinker) =>
-          implicit val t: Tinker = tinker
-          val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
-            // these are as good as first-class SpiritRefs
-            (lightName, light) -> tinker.tinkerSystem.wrap(context.spawn(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName"))
-          }
-
-          val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
-          val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
-
-          // it's always waiting for a command, or waiting to hear back from Hue
-          stash.unstashAll(finishSetup(lightKeepersByName, lightKeepersByLight)(httpExecutionContext, timeout, tinker))
-        case other =>
-          stash.stash(other)
-          Behaviors.same
-      }
+    val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
+      (lightName, light) -> context.cast(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName")
     }
+
+    val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
+    val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
+
+    implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
+      finishSetup(lightKeepersByName, lightKeepersByLight)//(httpExecutionContext, timeout, tinker)
+
+//    setup(hueConfig)
   }
 
-  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
-    // call this actor if needed
-    @unused
-    val hueListener = context.cast(HueListener(context.self), "HueListener")
+  // FIXME: need to split across spaces, add [[Hue API Config]]
 
+//  private def setup(hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService): Ability[Message] = Behaviors.setup { context =>
+//    implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
+//
+//    Behaviors.withStash(20) { stash =>
+//      Behaviors.receiveMessage {
+//        case StartTinkering(tinker) =>
+//          implicit val t: Tinker = tinker
+//          val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
+//            // these are as good as first-class SpiritRefs
+//            (lightName, light) -> tinker.tinkerSystem.wrap(context.spawn(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName"))
+//          }
+//
+//          val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
+//          val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
+//
+//          // it's always waiting for a command, or waiting to hear back from Hue
+//          stash.unstashAll(finishSetup(lightKeepersByName, lightKeepersByLight)(httpExecutionContext, timeout, tinker))
+//        case other =>
+//          stash.stash(other)
+//          Behaviors.same
+//      }
+//    }
+//  }
+
+  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
     implicit val hueNote: HueNoteRef = new HueNoteRef(noteRef)
     behavior(lightKeepersByName, lightKeepersByLight)
   }

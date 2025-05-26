@@ -4,9 +4,10 @@ import akka.actor.typed.ActorRef
 import cats.data.NonEmptyList
 import cats.data.Validated.{Invalid, Valid}
 import me.micseydel.actor.notifications.ChimeActor.Material
-import me.micseydel.actor.notifications.NotificationCenterManager.JustSideEffect
+import me.micseydel.actor.notifications.NotificationCenterManager.{HueCommand, JustSideEffect}
 import me.micseydel.actor.notifications.{ChimeActor, NotificationCenterManager}
 import me.micseydel.actor.perimeter.HueControl
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
@@ -43,13 +44,12 @@ object HueListener {
 
   //
 
-  def apply(hueControl: SpiritRef[HueControl.Message])(implicit Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = NoteMakingTinkerer("HueListener Experiment", rgb(230, 230, 230), "👂") { (context, noteRef) =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer("HueListener Experiment", rgb(230, 230, 230), "👂") { (context, noteRef) =>
     @unused // subscribes to Gossiper on our behalf
     val rasaAnnotatedListener = context.cast(RasaAnnotatingListener("lights", Gossiper.SubscribeHybrid(_), context.messageAdapter(TranscriptionEvent), Some("lights_test")), "RasaListener")
 
     context.actorContext.log.info("HueListener initialized")
 
-    implicit val h: SpiritRef[HueControl.Message] = hueControl
     implicit val adapter: SpiritRef[NonEmptyList[Vote]] = context.messageAdapter(ReceiveVotes)
     implicit val nr: NoteRef = noteRef
     implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
@@ -58,8 +58,8 @@ object HueListener {
   }
 
   private def behavior(state: State)
-                      (implicit Tinker: Tinker,
-                       noteRef: NoteRef, hueControl: SpiritRef[HueControl.Message], receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]], timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.setup { context =>
+                      (implicit Tinker: EnhancedTinker[MyCentralCast],
+                       noteRef: NoteRef, receiveVotesAdapter: SpiritRef[NonEmptyList[Vote]], timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     implicit val log: Logger = context.actorContext.log
@@ -96,18 +96,18 @@ object HueListener {
 
                 val finalLightState = genLightState(maybeColor, maybeBrightness)
                 for (light <- AllList) {
-                  hueControl !! HueControl.SetLight(light, finalLightState)
+                  context.system.notifier !! NotificationCenterManager.JustSideEffect(HueCommand(HueControl.SetLight(light, finalLightState)))
                 }
 
-                context.system.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
-                context.system.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
+                Tinker.userExtension.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
+                Tinker.userExtension.gossiper !! noteId.voteMeasuredly(rasaResult.intent.confidence, receiveVotesAdapter, Some(s"$model"))
 
                 context.actorContext.log.debug(s"Adding $noteId to already seen (will not process a second time)")
               }(() => noteRef.appendConfidently(s"NoteId $noteId was a reminder, so took no action")))
             }
 
           case Invalid(e) =>
-            context.system.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some("failed to extract entities"))
+            Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some("failed to extract entities"))
             context.actorContext.log.warn(s"Could not extract entities for set_the_lights ${rasaResult.entities}; $e")
             Tinker.steadily
         }
@@ -117,19 +117,19 @@ object HueListener {
         if (unrecognizedIntent != no_intent.IntentName) {
           context.actorContext.log.info(s"unrecognizedIntent $unrecognizedIntent (rasaResult.intent.confidence) with entities $entities")
         }
-        context.system.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some(s"unrecognized intent: $unrecognizedIntent"))
+        Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(false), receiveVotesAdapter, Some(s"unrecognized intent: $unrecognizedIntent"))
         Tinker.steadily
 
       // no Rasa, maybe an exact-match
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), noteId), None)) =>
         val flashCommands = List("please flash the lights", "please do a light show")
         if (flashCommands.contains(text.trim.toLowerCase)) {
-          hueControl !! HueControl.FlashTheLights()
+          context.system.notifier !! NotificationCenterManager.JustSideEffect(HueCommand(HueControl.FlashTheLights()))
         } else {
           context.actorContext.log.debug(s"Ignoring <$text>, no Rasa data")
         }
 
-        context.system.gossiper !! noteId.voteConfidently(Some(true), receiveVotesAdapter, Some("exact match"))
+        Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), receiveVotesAdapter, Some("exact match"))
 
         Tinker.steadily
 

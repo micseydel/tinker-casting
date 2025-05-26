@@ -5,6 +5,7 @@ import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.util.Timeout
 import me.micseydel.actor.RasaActor
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
@@ -30,17 +31,17 @@ object TinkerListener {
 
   case class Acknowledged(listenerAcknowledgement: ListenerAcknowledgement) extends ListenerResult
 
-  def simpleStateless(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def simpleStateless(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
 
-    context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+    Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
 
     Tinker.receiveMessage {
       case TranscriptionEvent(notedTranscription) =>
         behavior(context, notedTranscription) match {
           case Ignored =>
           case Acknowledged(listenerAcknowledgement) =>
-            context.system.chronicler !! listenerAcknowledgement
+            Tinker.userExtension.chronicler !! listenerAcknowledgement
         }
 
         Tinker.steadily
@@ -52,9 +53,9 @@ object RasaAnnotatingListener {
   sealed trait Message
   private case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
-  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription], replacementCandidate: Option[String] = None)(implicit Tinker: EnhancedTinker[typed.ActorRef[RasaActor.Message]]): Ability[Message] = Tinker.setup { context =>
+  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription], replacementCandidate: Option[String] = None)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
-    context.system.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
+    Tinker.userExtension.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
     implicit val scheduler: Scheduler = context.system.actorSystem.scheduler
     implicit val duration: FiniteDuration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
@@ -65,7 +66,7 @@ object RasaAnnotatingListener {
 //    }
 
     def getRasaResultFut(rawText: String, modelChoice: String): Future[RasaResult] = {
-      Await.ready[RasaResult](Tinker.userExtension.ask(RasaActor.GetRasaResult(rawText, modelChoice, _)), duration)
+      Await.ready[RasaResult](Tinker.userExtension.rasa.underlying.ask(RasaActor.GetRasaResult(rawText, modelChoice, _)), duration)
     }
 
     Tinker.receiveMessage {

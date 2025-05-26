@@ -2,17 +2,18 @@ package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
 import me.micseydel.actor.kitties.kibble.KibbleModel._
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.TinkerListener
 import me.micseydel.dsl.tinkerer.TinkerListener.{Acknowledged, Ignored}
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerContext}
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent}
 import me.micseydel.util.StringImplicits.RichString
 import org.slf4j.Logger
 
 object KibbleManagerListenerActor {
-  def apply(manager: SpiritRef[KibbleManagerActor.Message])(implicit Tinker: Tinker): Ability[TinkerListener.Message] =
+  def apply(manager: SpiritRef[KibbleManagerActor.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[TinkerListener.Message] =
     TinkerListener.simpleStateless { (context, notedTranscription) =>
       implicit val tc: TinkerContext[_] = context
       notedTranscription match {

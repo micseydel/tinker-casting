@@ -5,6 +5,7 @@ import cats.data.NonEmptyList
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
 import me.micseydel.actor.kitties.TranscriptionAboutCats.{NoIntentJustWordMatch, NotAboutCats, WithIntent, WithIntentFailedExtraction}
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter, RasaActor}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl._
@@ -34,7 +35,7 @@ object CatTranscriptionListener {
 
   //
 
-  def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
+  def apply(catsHelper: SpiritRef[CatsHelper.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(CatBrown, "👂").setup { context =>
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[TranscriptionEvent]]] = context.cast(DailyNotesRouter(
       "CatsTranscriptions notes",
@@ -53,14 +54,14 @@ object CatTranscriptionListener {
                         catsHelper: SpiritRef[CatsHelper.Message],
                         dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[TranscriptionEvent]]],
                         alreadyAcked: Set[NoteId]
-                      )(implicit Tinker: Tinker): Ability[Message] = Tinker.receive[Message] { (context, message) =>
+                      )(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive[Message] { (context, message) =>
     implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     context.actorContext.log.debug("Received message, processing...")
     message match {
       // FIXME: remove/replace this indirection (REGRET)
       case event@TranscriptionAboutCats(WithIntent(_, noteId, captureTime, catMessage, confidence)) =>
-        context.system.gossiper !! noteId.voteMeasuredly(confidence, context.messageAdapter(ReceiveVotes), Some("rasa matched"))
+        Tinker.userExtension.gossiper !! noteId.voteMeasuredly(confidence, context.messageAdapter(ReceiveVotes), Some("rasa matched"))
 
         context.actorContext.log.info(s"Received $noteId about cats at capture time $captureTime, extracted ${catMessage.getClass} with confidence $confidence, noting in MOC and sending to CatsHelper")
         catsHelper !! catMessage
@@ -80,7 +81,7 @@ object CatTranscriptionListener {
         }
 
         if (!alreadyAcked.contains(noteId)) {
-          context.system.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"Extracted cat message $pretty", Some(AutomaticallyIntegrated))
+          Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"Extracted cat message $pretty", Some(AutomaticallyIntegrated))
           behavior(catsHelper, dailyNotesAssistant, alreadyAcked + noteId)
         } else {
           event match {

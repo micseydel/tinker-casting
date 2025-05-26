@@ -1,17 +1,19 @@
 package me.micseydel.actor
 
+import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.http.scaladsl.unmarshalling.Unmarshaller.UnsupportedContentTypeException
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.{Tinker, TinkerContext}
 import me.micseydel.model.RasaResult
 import me.micseydel.model.RasaResultProtocol.rasaResultFormat
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContextExecutorService, Future}
 import scala.util.{Failure, Success, Try}
 
 object RasaActor {
@@ -20,9 +22,12 @@ object RasaActor {
   private final case class ReceiveRasaResult(result: RasaResult, replyTo: ActorRef[RasaResult]) extends Message
   private final case class RasaRequestFailed(message: String, throwable: Throwable) extends Message
 
-  def apply(host: String)(implicit httpExecutionContext: ExecutionContext): Behavior[Message] = Behaviors.setup { context =>
-    import context.system
-    Behaviors.receiveMessage {
+  def apply(host: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    import context.actorContext.system
+    implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
+    implicit val tc: TinkerContext[_] = context
+
+    Tinker.receiveMessage {
       case GetRasaResult(string, model, replyTo) =>
         val payload = Map("string" -> string)
         val responseFuture: Future[HttpResponse] = Http().singleRequest(
@@ -50,7 +55,7 @@ object RasaActor {
                 RasaRequestFailed(s"payload $payload failed", exception)
             }
           case Failure(exception) =>
-            context.self ! RasaRequestFailed("Future failed", exception)
+            context.self !! RasaRequestFailed("Future failed", exception)
         }
 
         Behaviors.same
@@ -59,7 +64,7 @@ object RasaActor {
         replyTo ! result
         Behaviors.same
       case RasaRequestFailed(message, exception) =>
-        context.log.error(message, exception)
+        context.actorContext.log.error(message, exception)
         Behaviors.same
     }
   }

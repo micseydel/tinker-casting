@@ -1,11 +1,12 @@
 package me.micseydel.actor
 
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.dsl._
 import me.micseydel.model.NotedTranscription
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.util.TimeUtil
@@ -32,11 +33,11 @@ object NutritionListener {
 
   // behavior
 
-  def apply(subscriber: SpiritRef[LastAte])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(135, 206, 235), "👂").setup { context =>
+  def apply(subscriber: SpiritRef[LastAte])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(rgb(135, 206, 235), "👂").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     context.actorContext.log.info("Subscribing to accurate transcriptions")
-    context.system.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+    Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
 
     Tinker.receiveMessage {
       case TranscriptionEvent(m) =>
@@ -47,14 +48,14 @@ object NutritionListener {
             Tinker.steadily
           case Some(when) =>
             context.actorContext.log.info(s"Setting [[last_ate]] to $when, notifying foodReminder and subscriber ${subscriber.path}")
-            context.system.chronicler !! Chronicler.ListenerAcknowledgement(m.noteId, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
+            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(m.noteId, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
             subscriber !! LastAte(when)
             behavior(subscriber)(when)
         }
     }
   }
 
-  private def behavior(subscriber: SpiritRef[LastAte])(lastAte: ZonedDateTime)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(subscriber: SpiritRef[LastAte])(lastAte: ZonedDateTime)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
       case TranscriptionEvent(notedTranscription) =>
@@ -69,7 +70,7 @@ object NutritionListener {
           case Some(when) =>
             context.actorContext.log.info(s"Setting [[last_ate]] to $when (was $lastAte), notifying subscriber ${subscriber.path}")
             subscriber !! LastAte(when)
-            context.system.chronicler !! Chronicler.ListenerAcknowledgement(notedTranscription.noteId, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
+            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(notedTranscription.noteId, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
             behavior(subscriber)(when)
         }
 

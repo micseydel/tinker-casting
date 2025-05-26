@@ -5,6 +5,7 @@ import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegene
 import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter, RasaActor}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
@@ -77,7 +78,7 @@ object CatsHelper {
     val messageListFormat: RootJsonFormat[List[Observation]] = listFormat(MessageJsonFormat)
   }
 
-  def apply()(implicit Tinker: EnhancedTinker[ActorRef[RasaActor.Message]]): Ability[Message] = Tinkerer(CatBrown, "🐱").setup { context =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(CatBrown, "🐱").setup { context =>
     @unused
     val catTranscriptionListener: SpiritRef[CatTranscriptionListener.Message] = context.cast(CatTranscriptionListener(context.self), "CatTranscriptionListener")
 
