@@ -36,19 +36,19 @@ object TinkerCasterApp {
         // ensure json subdirectory exists
         Files.createDirectories(config.vaultRoot.resolve("json"))
 
+        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system...")
+        // this line suppresses -
+        //   SLF4J: A number (1) of logging calls during the initialization phase have been intercepted and are
+        //   SLF4J: now being replayed. These are subject to the filtering rules of the underlying logging system.
+        //   SLF4J: See also https://www.slf4j.org/codes.html#replay
+        LoggerFactory.getILoggerFactory
+        // https://doc.akka.io/docs/akka/current/typed/logging.html#slf4j-api-compatibility wasn't as good
+
         run(config)
     }
   }
 
   def run(config: AppConfig): Unit = {
-    println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system...")
-    // this line suppresses -
-    //   SLF4J: A number (1) of logging calls during the initialization phase have been intercepted and are
-    //   SLF4J: now being replayed. These are subject to the filtering rules of the underlying logging system.
-    //   SLF4J: See also https://www.slf4j.org/codes.html#replay
-    LoggerFactory.getILoggerFactory
-    // https://doc.akka.io/docs/akka/current/typed/logging.html#slf4j-api-compatibility wasn't as good
-
     val notificationCenterAbilities = NotificationCenterAbilities(
       NtfyerActor()(_),
       HueControl(config.hueConfig.get)(_), // FIXME remove .get, use note config
@@ -63,7 +63,6 @@ object TinkerCasterApp {
       config.gmail
     )
 
-    println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system")
     @unused
     val container: actor.ActorSystem =
       TinkerContainer(config, notificationCenterAbilities)(
