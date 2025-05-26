@@ -20,8 +20,6 @@ import scala.concurrent.duration.DurationInt
 object HueControl {
   sealed trait Message
 
-  case class StartTinkering(tinker: EnhancedTinker[ActorRef[RasaActor.Message]]) extends Message
-
   case class NoteUpdated(noOp: NoOp.type) extends Message
 
   // to change the lights
@@ -151,10 +149,6 @@ object HueControl {
         for (light <- AllList) {
           context.self !! HueControl.SetLight(light, state)
         }
-        Tinker.steadily
-
-      case StartTinkering(_) =>
-        context.actorContext.log.warn("Received a redundant StartTinkering")
         Tinker.steadily
     }
   }

@@ -54,7 +54,6 @@ object RootTinkerBehavior {
   // this is what the `applications` must accept
   case class ReceiveMqttEvent(topic: String, payload: Array[Byte])
 
-  // FIXME: applications accepts mqtt events, but should probably/maybe also take voice notes...?
   def apply(config: AppConfig, applications: Tinker => Ability[ReceiveMqttEvent], notificationCenterAbilities: NotificationCenterAbilities)(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>
     val jsonPath = config.vaultRoot.resolve("json")
 
@@ -66,8 +65,6 @@ object RootTinkerBehavior {
       // VaultKeeper is important for Tinker Cast initialization, and does no I/O
       DispatcherSelector.fromConfig("vaultkeeper-high-priority-dispatcher")
     )
-//    val gossiper: typed.ActorRef[Gossiper.Message] = context.spawn(Gossiper(), "Gossiper")
-//    val chronicler = context.spawn(Chronicler(ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort), gossiper), "Chronicler")
 
     // perimeter
 
@@ -98,8 +95,6 @@ object RootTinkerBehavior {
       context.system,
       tinkerBrain,
       vaultKeeper,
-//      chronicler,
-//      gossiper,
       // perimeter
       notificationCenterManager,
       networkPerimeter,
@@ -111,9 +106,7 @@ object RootTinkerBehavior {
     implicit val tinker: Tinker = new Tinker(tinkerSystem)
 
     // Cmd+F for "case class StartTinkering" and count
-//    chronicler ! Chronicler.StartTinkering(tinker)
     notificationCenterManager ! NotificationCenterManager.StartTinkering(tinker)
-//    gossiper ! Gossiper.StartTinkering(tinker)
     actorNotesFolderWatcherActor ! ActorNotesFolderWatcherActor.StartTinkering(tinker)
 
     @unused // driven internally
@@ -123,19 +116,6 @@ object RootTinkerBehavior {
     context.log.info("Waiting 3 seconds before announcing system started")
     context.scheduleOnce(3.seconds, tinkerBrain, TinkerBrain.SystemStarted())
     context.scheduleOnce(10.seconds, tinkerBrain, TinkerBrain.WriteNote(tinker))
-
-    // FIXME: I can create a DIFFERENT Tinker object here, for user space
-    // ...ah, so the user's extension object will take the SystemTinker object, and the UserTinker one will have a second field with their goodies
-    // how to contextualize the context? different subclasses, or type parameterization?
-    // UserExtensions(various spiritref fields, e.g. Rasa and Ollama, maybe something that registers with the operator for push notifications (which only the notif center will use)
-
-    // FIXME: central cast
-    // FIXME: I thought this could be created here, but it's actually going to have to be deeper - in applications()
-    //    val perimeter = perimeterFactory(context)
-    // FIXME: ok os userspace (TinkerOrchestrator) needs to be created with access to a TinkerContext
-    //   problem is, right now tinkercontext immediately means user space
-
-    //    val enhancedTinker = new EnhancedTinker(tinkerSystem, rasaActor)
 
     // this should be internally-driven, doesn't need messages FROM here
     @unused
