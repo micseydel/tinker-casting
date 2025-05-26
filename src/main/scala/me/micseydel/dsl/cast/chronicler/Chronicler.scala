@@ -30,8 +30,6 @@ object Chronicler {
 
   sealed trait Message
 
-//  case class StartTinkering(tinker: Tinker) extends Message
-
   sealed trait PostTinkeringInitMessage extends Message
 
   case class TranscriptionStartedEvent(capture: NoticedAudioNote) extends PostTinkeringInitMessage
@@ -47,35 +45,11 @@ object Chronicler {
 
   def apply(config: ChroniclerConfig, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
     initializing(config.vaultRoot, gossiper, config.eventReceiverHost, config.eventReceiverPort)
-//    finishInitializing(config.vaultRoot, gossiper, t, config.eventReceiverHost, config.eventReceiverPort)
-//    Behaviors.setup { context =>
-//    waitingToStartTinkering(config, vaultKeeper, gossiper)
-//  }
 
   case class ChroniclerConfig(vaultRoot: VaultPath, eventReceiverHost: String, eventReceiverPort: Int)
 
-//  private def waitingToStartTinkering(config: ChroniclerConfig,
-//                           vaultKeeper: ActorRef[VaultKeeper.Message],
-//                           gossiper: ActorRef[Gossiper.Message]): Behavior[Message] = Behaviors.withStash(10) { stash =>
-//    Behaviors.receive[Message] { (context, message) =>
-//      message match {
-//        case StartTinkering(tinker) =>
-//          implicit val Tinker: Tinker = tinker
-//          context.log.info("finishingInitialization")
-//          context.self ! ReceiveNotePing(NoOp)
-//          stash.unstashAll(initializing(config.vaultRoot, vaultKeeper, tinker.tinkerSystem.wrap(gossiper), config.eventReceiverHost, config.eventReceiverPort))
-//
-//        case message: PostTinkeringInitMessage =>
-//          context.log.info("Buffering a message")
-//          stash.stash(message)
-//          Behaviors.same
-//      }
-//    }
-//  }
-
   private def initializing(
                         vaultRoot: VaultPath,
-//                        vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
                         whisperEventReceiverHost: String,
                         whisperEventReceiverPort: Int
@@ -102,7 +76,6 @@ object Chronicler {
 
   private def finishInitializing(
                         vaultRoot: VaultPath,
-//                        vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
                         config: AudioNoteCaptureProperties,
                         whisperEventReceiverHost: String, whisperEventReceiverPort: Int
@@ -193,10 +166,6 @@ object Chronicler {
           moc ! ChroniclerMOC.ListenerAcknowledgement(noteRef, timeOfAck, details, setNoteState)
           Tinker.steadily
 
-//        case StartTinkering(system) =>
-//          context.actorContext.log.warn(s"Received an unexpected (extra) tinker system: $system")
-//          Tinker.steadily
-
         case ReceiveNotePing(_) =>
           context.actorContext.log.warn("Ignoring note ping")
           Tinker.steadily
@@ -246,6 +215,7 @@ object Chronicler {
     }
   }
 
+  // FIXME: untangle chronicler and audionotecapture
   case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String)
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {

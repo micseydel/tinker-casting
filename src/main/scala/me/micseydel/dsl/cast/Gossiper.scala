@@ -1,7 +1,6 @@
 package me.micseydel.dsl.cast
 
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.ActorRef
 import cats.data.NonEmptyList
 import me.micseydel.NoOp
 import me.micseydel.dsl.Tinker.Ability
@@ -15,15 +14,13 @@ import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 
-import Ordering.Implicits._
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import scala.math.Ordering.Implicits._
 import scala.util.{Failure, Success}
 
 object Gossiper {
   sealed trait Message
-
-//  case class StartTinkering(tinker: Tinker) extends Message
 
   final case class Receive(notedTranscription: NotedTranscription) extends Message
 
@@ -46,18 +43,6 @@ object Gossiper {
   //
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = finishInitializing()
-
-//  private def initializing(): Behavior[Message] = Behaviors.setup { context =>
-//    context.log.info(s"Gossiper initializing")
-//
-//    Behaviors.receiveMessage {
-//      case StartTinkering(tinker) =>
-//        finishInitializing()(tinker)
-//      case other =>
-//        context.log.warn(s"Did not expect to receive $other before StartTinkering message, ignoring")
-//        Behaviors.same
-//    }
-//  }
 
   private def finishInitializing()(implicit Tinker: Tinker): Ability[Message] =
     NoteMakingTinkerer("Gossiper", rgb(255, 190, 230), "🗣️") { (context, noteRef) =>
@@ -131,10 +116,6 @@ object Gossiper {
       case SubscribeHybrid(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to both fast and accurate subscribers")
         behavior(accurateListeners + subscriber, fastListeners + subscriber, votesMapping)
-
-//      case StartTinkering(_) =>
-//        context.actorContext.log.warn("Received redundant StartTinkering message, ignoring")
-//        Tinker.steadily
 
       // experiment; voting on *notes* may generalize well, but requires receivers to interpret arbitrarily
       case SubmitVote(newVote) =>

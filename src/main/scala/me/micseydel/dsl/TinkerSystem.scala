@@ -21,28 +21,18 @@ abstract class TinkerSystem {
 
   private[dsl] def tinkerBrain: ActorRef[TinkerBrain.Message]
 
-  // core abilities
   def vaultKeeper: SpiritRef[VaultKeeper.Message]
-
-//  def chronicler: SpiritRef[Chronicler.ListenerAcknowledgement]
-//
-//  def gossiper: SpiritRef[Gossiper.Message]
 
   def notifier: SpiritRef[NotificationCenterManager.NotificationMessage]
 
   def actorNotesFolderWatcherActor: SpiritRef[ActorNotesFolderWatcherActor.Message]
 
-  // perimeter
+  // experimental
   def networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost]
-
-//  def hueControl: SpiritRef[HueControl.Command]
 
   def eventReceiver: ActorRef[EventReceiver.ClaimEventType]
 
-  //  def homeMonitor: SpiritRef[HomeMonitorActor.Monitoring]
   def operator: SpiritRef[Operator.Message]
-
-//  private[dsl] def chroniclerActor: ActorRef[Chronicler.Message]
 
   /**
    * Enables !! for message tracking, but does not provide the actor with TinkerSystem access
@@ -90,15 +80,14 @@ abstract class TinkerSystem {
 }
 
 object TinkerSystem {
-  def apply(actorSystem: ActorSystem[_], tinkerBrain: ActorRef[TinkerBrain.Message], vaultKeeper: ActorRef[VaultKeeper.Message],
-//            chronicler: ActorRef[Chronicler.Message], gossiper: ActorRef[Gossiper.Message],
+  def apply(actorSystem: ActorSystem[_],
+            tinkerBrain: ActorRef[TinkerBrain.Message],
+            vaultKeeper: ActorRef[VaultKeeper.Message],
             notifier: ActorRef[NotificationCenterManager.NotificationMessage],
             networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
             actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message], eventReceiver: ActorRef[EventReceiver.ClaimEventType]): TinkerSystem = {
-    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper,
-//      chronicler, gossiper,
-      notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
+    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
   }
 }
 
@@ -106,8 +95,6 @@ class TinkerSystemImplementation(
                                   val actorSystem: ActorSystem[_],
                                   val tinkerBrain: ActorRef[TinkerBrain.Message],
                                   vaultKeeperActor: ActorRef[VaultKeeper.Message],
-//                                  private[dsl] val chroniclerActor: ActorRef[Chronicler.Message],
-//                                  gossiperActor: ActorRef[Gossiper.Message],
                                   notifierActor: ActorRef[NotificationCenterManager.NotificationMessage],
                                   val networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
                                   operatorActor: ActorRef[Operator.Message],
@@ -123,13 +110,7 @@ class TinkerSystemImplementation(
 
   override def vaultKeeper: SpiritRef[VaultKeeper.Message] = this.wrap(vaultKeeperActor)
 
-//  override def chronicler: SpiritRef[Chronicler.ListenerAcknowledgement] = this.wrap(chroniclerActor)
-//
-//  override def gossiper: SpiritRef[Gossiper.Message] = this.wrap(gossiperActor)
-
   override def notifier: SpiritRef[NotificationCenterManager.NotificationMessage] = this.wrap(notifierActor)
-
-//  val hueControl: SpiritRef[HueControl.Command] = wrap(hueControlActor)
 
   override def operator: SpiritRef[Operator.Message] = wrap(operatorActor)
 

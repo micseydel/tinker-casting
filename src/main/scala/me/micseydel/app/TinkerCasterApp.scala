@@ -82,6 +82,7 @@ object TinkerCasterApp {
     MyCentralCast(chronicler, gossiper, rasaActor)
   }
 
+  // FIXME: where should this live?
   type AbilityFactory[T] = Tinker => Ability[T]
 }
 
