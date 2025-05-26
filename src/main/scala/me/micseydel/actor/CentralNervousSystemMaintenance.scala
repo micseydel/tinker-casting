@@ -1,16 +1,15 @@
 package me.micseydel.actor
 
-import me.micseydel.actor.TinkerOrchestrator.Config
-import me.micseydel.actor.inactive.fitbit.{FitbitActor, FitbitTesterActor}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, Tinkerer}
+import me.micseydel.dsl.TinkerOrchestrator.ConfigToSimplifyAway
+import me.micseydel.dsl.{Tinker, TinkerColor, Tinkerer}
 
 import scala.annotation.unused
 
 object CentralNervousSystemMaintenance {
   sealed trait Message
 
-  def apply(config: Config)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(100, 100, 200), "😵‍💫").setup { context =>
+  def apply(config: ConfigToSimplifyAway)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor(100, 100, 200), "😵‍💫").setup { context =>
 //    @unused // driven internally by its own casting
 //    val halto = context.cast(Halto(fitbitActor, config.ntfyKeys), "Halto")
 

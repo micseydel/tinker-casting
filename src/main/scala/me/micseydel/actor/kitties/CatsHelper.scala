@@ -1,13 +1,15 @@
 package me.micseydel.actor.kitties
 
+import akka.actor.typed.ActorRef
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown
 import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor
-import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
+import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter, RasaActor}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
 import me.micseydel.model._
 import me.micseydel.vault._
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
@@ -76,7 +78,7 @@ object CatsHelper {
     val messageListFormat: RootJsonFormat[List[Observation]] = listFormat(MessageJsonFormat)
   }
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(CatBrown, "🐱").setup { context =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(CatBrown, "🐱").setup { context =>
     @unused
     val catTranscriptionListener: SpiritRef[CatTranscriptionListener.Message] = context.cast(CatTranscriptionListener(context.self), "CatTranscriptionListener")
 

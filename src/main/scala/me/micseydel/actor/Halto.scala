@@ -62,42 +62,42 @@ object Halto {
 
   // behaviors
 
-  def apply(fitbitActor: SpiritRef[FitbitActor.Message], ntfyKeys: NtfyKeys)(implicit Tinker: Tinker): Ability[Event] = Tinkerer(Yellow, "🛑").setup { context =>
-    implicit val c: TinkerContext[Event] = context
-
-    c.actorContext.log.info("Starting hunger tracker, frustration listener, sleep report actor and subscribing to CO2")
-
-    // HALT - Hungry, Angry (frustrated), (Lonely), Tired
-
-    @unused // internally driven
-    val hungerTrackerActor: SpiritRef[HungerTracker.Message] = context.cast(HungerTracker(context.messageAdapter(ReceiveHungerState), ntfyKeys.foodTime), "HungerTracker")
-
-    @unused // frustrationListener notifies halto when frustrated transcriptions are detected
-    val frustrationListener: SpiritRef[FrustrationListener.Event] = context.cast(FrustrationListener(context.messageAdapter(ReceiveFrustrationDetected)), "DistressListener")
-
-    // FIXME: lonely could integrate Google Calendar to estimate?
-
-//    @unused // sleep report actor is driven by an internal timer
-//    val sleepReportActor: SpiritRef[SleepReportActor.Message] = context.cast(SleepReportActor(fitbitActor, context.messageAdapter(ReceiveSleepReport)), "SleepReportActor")
-
-    context.system.operator !! Operator.SubscribeAranet4(context.messageAdapter(ReceiveAranetResult))
-
-    if (ntfyKeys.searchSpace.isEmpty) {
-      context.actorContext.log.warn(s"Search space key not configured, will not be sending push notifications with Ntfy")
-    }
-
-    val log = context.actorContext.log
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Event]]] = context.cast(DailyNotesRouter(
-      "HALT-O notes",
-      "halto_notes",
-      MessageListJsonProtocol.messageJsonFormat,
-      toMarkdown(_: List[Event], _: TinkerClock)(log)
-    ), "HALTODailyNotesRouter")
-
-    dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.RegenerateMarkdown(), context.system.clock.now())
-
-    behavior(HaltState.Default, None)(Tinker, hungerTrackerActor, dailyNotesAssistant, ntfyKeys.searchSpace)
-  }
+//  def apply(fitbitActor: SpiritRef[FitbitActor.Message], ntfyKeys: NtfyKeys)(implicit Tinker: Tinker): Ability[Event] = Tinkerer(Yellow, "🛑").setup { context =>
+//    implicit val c: TinkerContext[Event] = context
+//
+//    c.actorContext.log.info("Starting hunger tracker, frustration listener, sleep report actor and subscribing to CO2")
+//
+//    // HALT - Hungry, Angry (frustrated), (Lonely), Tired
+//
+////    @unused // internally driven
+////    val hungerTrackerActor: SpiritRef[HungerTracker.Message] = context.cast(HungerTracker(context.messageAdapter(ReceiveHungerState), ntfyKeys.foodTime), "HungerTracker")
+////
+////    @unused // frustrationListener notifies halto when frustrated transcriptions are detected
+////    val frustrationListener: SpiritRef[FrustrationListener.Event] = context.cast(FrustrationListener(context.messageAdapter(ReceiveFrustrationDetected)), "DistressListener")
+//
+//    // FIXME: lonely could integrate Google Calendar to estimate?
+//
+////    @unused // sleep report actor is driven by an internal timer
+////    val sleepReportActor: SpiritRef[SleepReportActor.Message] = context.cast(SleepReportActor(fitbitActor, context.messageAdapter(ReceiveSleepReport)), "SleepReportActor")
+//
+//    context.system.operator !! Operator.SubscribeAranet4(context.messageAdapter(ReceiveAranetResult))
+//
+//    if (ntfyKeys.searchSpace.isEmpty) {
+//      context.actorContext.log.warn(s"Search space key not configured, will not be sending push notifications with Ntfy")
+//    }
+//
+//    val log = context.actorContext.log
+//    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Event]]] = context.cast(DailyNotesRouter(
+//      "HALT-O notes",
+//      "halto_notes",
+//      MessageListJsonProtocol.messageJsonFormat,
+//      toMarkdown(_: List[Event], _: TinkerClock)(log)
+//    ), "HALTODailyNotesRouter")
+//
+//    dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.RegenerateMarkdown(), context.system.clock.now())
+//
+//    behavior(HaltState.Default, None)(Tinker, hungerTrackerActor, dailyNotesAssistant, ntfyKeys.searchSpace)
+//  }
 
   private def behavior(state: HaltState, frustrationPushCooldownUntil: Option[ZonedDateTime])(implicit Tinker: Tinker, hungerTrackerActor: SpiritRef[HungerTracker.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[Event]]], searchSpaceNtfyKey: Option[String]): Ability[Event] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[Event] = context
@@ -115,7 +115,7 @@ object Halto {
       case ReceiveFrustrationDetected(DistressDetected(notedTranscription, specifics)) =>
         // FIXME: REVIEW
         context.actorContext.log.info(s"Doing a light show because distress was detected, also sending a push notification")
-        context.system.hueControl !! HueControl.DoALightShow()
+//        context.system.hueControl !! HueControl.DoALightShow()
 
         // focus on binary thinking first
         // otherwise fallback to random

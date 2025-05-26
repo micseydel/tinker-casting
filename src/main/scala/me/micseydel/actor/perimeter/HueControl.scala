@@ -1,10 +1,9 @@
 package me.micseydel.actor.perimeter
 
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.ActorRef
 import akka.util.Timeout
 import me.micseydel.NoOp
-import me.micseydel.actor.HueListener
+import me.micseydel.actor.RasaActor
 import me.micseydel.actor.perimeter.HueControl._
 import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
@@ -16,16 +15,10 @@ import me.micseydel.model._
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.Duration
-import scala.annotation.unused
-import scala.concurrent.ExecutionContextExecutorService
 import scala.concurrent.duration.DurationInt
 
 object HueControl {
-  // mailbox
-
   sealed trait Message
-
-  case class StartTinkering(tinker: Tinker) extends Message
 
   case class NoteUpdated(noOp: NoOp.type) extends Message
 
@@ -55,56 +48,31 @@ object HueControl {
   case class SetAllBrightness(brightnessPct: Int) extends Command
 
 
-  private case class LogLightKeeperResponseInfo(message: String) extends StateUpdate
-
-  private case class LogLightKeeperFailure(message: String, throwable: Option[Throwable] = None) extends StateUpdate
-
   // behavior
 
   case class HueConfig(ip: String, username: String)
 
-  def apply(hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = {
-    setup(hueConfig)
-  }
-
-  private def setup(hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService): Ability[Message] = Behaviors.setup { context =>
-    implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
-
-    Behaviors.withStash(20) { stash =>
-      Behaviors.receiveMessage {
-        case StartTinkering(tinker) =>
-          implicit val t: Tinker = tinker
-          val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
-            // these are as good as first-class SpiritRefs
-            (lightName, light) -> tinker.tinkerSystem.wrap(context.spawn(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName"))
-          }
-
-          val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
-          val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
-
-          // it's always waiting for a command, or waiting to hear back from Hue
-          stash.unstashAll(finishSetup(lightKeepersByName, lightKeepersByLight)(httpExecutionContext, timeout, tinker))
-        case other =>
-          stash.stash(other)
-          Behaviors.same
-      }
+  def apply(hueConfig: HueConfig)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
+      (lightName, light) -> context.cast(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName")
     }
+
+    val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
+    val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
+
+    implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
+      finishSetup(lightKeepersByName, lightKeepersByLight)
   }
 
-  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
-    // call this actor if needed
-    @unused
-    val hueListener = context.cast(HueListener(context.self), "HueListener")
-
+  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit timeout: Timeout, Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
     implicit val hueNote: HueNoteRef = new HueNoteRef(noteRef)
     behavior(lightKeepersByName, lightKeepersByLight)
   }
 
   // states / behaviors
 
-  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit httpExecutionContext: ExecutionContextExecutorService, timeout: Timeout, Tinker: Tinker, hueNote: HueNoteRef): Ability[Message] = Tinker.setup { context =>
+  private def behavior(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit timeout: Timeout, Tinker: Tinker, hueNote: HueNoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
-    implicit val actorSystem: ActorSystem[Nothing] = context.system.actorSystem
 
     hueNote.setToDefault()
 
@@ -181,10 +149,6 @@ object HueControl {
         for (light <- AllList) {
           context.self !! HueControl.SetLight(light, state)
         }
-        Tinker.steadily
-
-      case StartTinkering(_) =>
-        context.actorContext.log.warn("Received a redundant StartTinkering")
         Tinker.steadily
     }
   }

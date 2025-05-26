@@ -1,9 +1,9 @@
 package me.micseydel.actor
 
 import cats.data.NonEmptyList
-import me.micseydel.actor.HueListener.Message
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.Yellow
 import me.micseydel.dsl.cast.Gossiper
@@ -11,12 +11,12 @@ import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerClock, TinkerContext, Tinkerer}
-import me.micseydel.model.{BaseModel, NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent, WhisperResultMetadata, WhisperSegment}
+import me.micseydel.dsl.{EnhancedTinker, TinkerClock, TinkerContext, Tinkerer}
+import me.micseydel.model._
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.vault.persistence.{NoteRef, TypedJsonRef}
-import me.micseydel.vault.{HeadingId, LinkIdJsonProtocol, NoteId, SpiritId, VaultKeeper}
+import me.micseydel.vault.{HeadingId, LinkIdJsonProtocol, NoteId, SpiritId}
 import spray.json.{DefaultJsonProtocol, JsonFormat, RootJsonFormat}
 
 import java.io.FileNotFoundException
@@ -37,19 +37,19 @@ object RemindMeListenerActor {
   private val NoteName = "Reminders"
   private val JsonName = "reminders_tinkering"
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer[Message](NoteName, Yellow, "⚠️") { (context, noteRef) =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer[Message](NoteName, Yellow, "⚠️") { (context, noteRef) =>
     Tinker.withTypedJson(JsonName, StateJsonProtocol.stateFormat) { jsonRef =>
         implicit val c: TinkerContext[_] = context
         context.actorContext.log.info(s"Starting RemindMeListenerActor(note=$NoteName, json=$JsonName): sending Gossiper.SubscribeHybrid")
 
-        context.system.gossiper !! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
+        Tinker.userExtension.gossiper !! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
         context.system.notifier !! NotificationCenterManager.RegisterReplyTo(context.messageAdapter(MarkAsDone), SpiritId)
 
         behavior(noteRef, jsonRef)
     }
   }
 
-  private def behavior(noteRef: NoteRef, jsonRef: TypedJsonRef[State])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(Yellow, "⚠️").receive { (context, message) =>
+  private def behavior(noteRef: NoteRef, jsonRef: TypedJsonRef[State])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(Yellow, "⚠️").receive { (context, message) =>
     implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     val replyTo = Some(SpiritId)
@@ -59,18 +59,18 @@ object RemindMeListenerActor {
         whisperResult match {
           case WhisperResult(WhisperResultContent(text, _), WhisperResultMetadata(BaseModel, _, _, _)) if isAMatch(text) =>
             context.actorContext.log.debug("Base model is only observed for voting, not behavior")
-            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"exact match for ${BaseModel}"))
+            Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"exact match for ${BaseModel}"))
             Tinker.steadily
 
           case WhisperResult(WhisperResultContent(text, segments), meta) if isAMatch(text) =>
-            context.system.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"exact match for ${meta.model}"))
+            Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"exact match for ${meta.model}"))
 
             val reminder = Reminder(captureTime, noteId, text)
             val state = jsonRef.readState()
 
             val (thereWasAnUpdate, latestState) = state.integrate(reminder)
             if (thereWasAnUpdate) {
-              context.system.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "reminder", Some(AutomaticallyIntegrated))
+              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "reminder", Some(AutomaticallyIntegrated))
 
               context.actorContext.log.info(s"State updated! Writing to JSON and note")
               jsonRef.setState(latestState)
@@ -111,7 +111,7 @@ object RemindMeListenerActor {
             Tinker.steadily
 
           case WhisperResult(WhisperResultContent(text, _), _) =>
-            context.system.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVotes), Some("trigger phrase not detected"))
+            Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVotes), Some("trigger phrase not detected"))
             if (context.actorContext.log.isDebugEnabled) {
               context.actorContext.log.debug(s"trigger phrase was not detected, ignoring ($text)")
             }

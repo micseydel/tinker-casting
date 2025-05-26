@@ -37,7 +37,7 @@ object BaseWhisperListener {
 //      "BaseWhisper_MOC"
 //    )
 //
-//    context.system.gossiper ! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
+//    Tinker.userExtension.gossiper ! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
 //
 //    behavior(moc)
 //  }

@@ -10,56 +10,56 @@ import me.micseydel.model.{Entity, IntentRanking, NotedTranscription, RasaResult
 import me.micseydel.util.{MarkdownUtil, StringUtil}
 import me.micseydel.util.StringImplicits.RichString
 
-object HypothesisListener {
-  sealed trait Message
-
-  def apply()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = {
-//    behavior()
-    Behaviors.ignore
-  }
-
-  private def behavior()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = Tinkerer(TinkerColor.rgb(30, 250, 70), "🥼").setup { context =>
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[NotedTranscription]]] = context.cast(DailyNotesRouter(
-      "Hypotheses",
-      "hypotheses",
-      NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat,
-      HypothesesMarkdown.apply
-    ), "DailyNotesRouter")
-
-    implicit val c: TinkerContext[_] = context
-
-    dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.RegenerateMarkdown(), context.system.clock.now())
-
-    TinkerListener.simpleStateless { (_, transcription) =>
-      transcription match {
-        case NotedTranscription(capture, noteId) =>
-          val text = capture.whisperResult.whisperResultContent.text
-          val lowerText = text.toLowerCase
-
-          val maybeDetails = if (lowerText.contains("always") || lowerText.contains("never")) {
-            Some("binary thinking detected")
-          } else if (lowerText.contains("hypothesis")) {
-            Some(if (text.wordCount > 20) {
-              "A long hypothesis was detected"
-            } else {
-              s": $text"
-            })
-          } else {
-            None
-          }
-
-          maybeDetails match {
-            case None =>
-              Ignored
-
-            case Some(details) =>
-              dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(transcription), transcription.capture.captureTime)
-              Acknowledged(ListenerAcknowledgement(noteId, context.system.clock.now(), details, None))
-          }
-      }
-    }
-  }
-}
+//object HypothesisListener {
+//  sealed trait Message
+//
+//  def apply()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = {
+////    behavior()
+//    Behaviors.ignore
+//  }
+//
+//  private def behavior()(implicit Tinker: Tinker): Ability[TinkerListener.Message] = Tinkerer(TinkerColor.rgb(30, 250, 70), "🥼").setup { context =>
+//    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[NotedTranscription]]] = context.cast(DailyNotesRouter(
+//      "Hypotheses",
+//      "hypotheses",
+//      NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat,
+//      HypothesesMarkdown.apply
+//    ), "DailyNotesRouter")
+//
+//    implicit val c: TinkerContext[_] = context
+//
+//    dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.RegenerateMarkdown(), context.system.clock.now())
+//
+//    TinkerListener.simpleStateless { (_, transcription) =>
+//      transcription match {
+//        case NotedTranscription(capture, noteId) =>
+//          val text = capture.whisperResult.whisperResultContent.text
+//          val lowerText = text.toLowerCase
+//
+//          val maybeDetails = if (lowerText.contains("always") || lowerText.contains("never")) {
+//            Some("binary thinking detected")
+//          } else if (lowerText.contains("hypothesis")) {
+//            Some(if (text.wordCount > 20) {
+//              "A long hypothesis was detected"
+//            } else {
+//              s": $text"
+//            })
+//          } else {
+//            None
+//          }
+//
+//          maybeDetails match {
+//            case None =>
+//              Ignored
+//
+//            case Some(details) =>
+//              dailyNotesAssistant !! DailyNotesRouter.Envelope(DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(transcription), transcription.capture.captureTime)
+//              Acknowledged(ListenerAcknowledgement(noteId, context.system.clock.now(), details, None))
+//          }
+//      }
+//    }
+//  }
+//}
 
 private object HypothesesMarkdown {
   def apply(messages: List[NotedTranscription], clock: TinkerClock): String = {

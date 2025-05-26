@@ -1,20 +1,18 @@
 package me.micseydel.dsl.cast.chronicler
 
 import akka.actor.InvalidActorNameException
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.ActorRef
 import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor._
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper
-import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
+import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{AutomaticallyIntegrated, NoteState, TranscribedMobileNoteEntry}
-import me.micseydel.dsl.cast.{Gossiper, TinkerBrain}
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.model._
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.vault._
@@ -24,7 +22,6 @@ import java.nio.file.{Path, Paths}
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDateTime, ZoneId, ZonedDateTime}
 import scala.annotation.unused
-import scala.concurrent.ExecutionContextExecutorService
 import scala.util.{Failure, Success, Try}
 
 object Chronicler {
@@ -32,8 +29,6 @@ object Chronicler {
   // mailbox
 
   sealed trait Message
-
-  case class StartTinkering(tinker: Tinker) extends Message
 
   sealed trait PostTinkeringInitMessage extends Message
 
@@ -48,47 +43,24 @@ object Chronicler {
   final case class ReceiveNotePing(ping: Ping) extends PostTinkeringInitMessage
 
 
-  def apply(config: AppConfig, vaultKeeper: ActorRef[VaultKeeper.Message], gossiper: ActorRef[Gossiper.Message], tinkerBrain: ActorRef[TinkerBrain.Message])(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>
-    waitingToStartTinkering(config, vaultKeeper, gossiper, tinkerBrain)
-  }
+  def apply(config: ChroniclerConfig, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
+    initializing(config.vaultRoot, gossiper, config.eventReceiverHost, config.eventReceiverPort)
 
-  private def waitingToStartTinkering(config: AppConfig,
-                           vaultKeeper: ActorRef[VaultKeeper.Message],
-                           gossiper: ActorRef[Gossiper.Message],
-                           tinkerBrain: ActorRef[TinkerBrain.Message]): Behavior[Message] = Behaviors.withStash(10) { stash =>
-    Behaviors.receive[Message] { (context, message) =>
-      message match {
-        case StartTinkering(tinker) =>
-          implicit val Tinker: Tinker = tinker
-          context.log.info("finishingInitialization")
-          context.self ! ReceiveNotePing(NoOp)
-          stash.unstashAll(initializing(config.vaultRoot, vaultKeeper, tinker.tinkerSystem.wrap(gossiper), tinkerBrain, config.eventReceiverHost, config.eventReceiverPort))
-
-        case message: PostTinkeringInitMessage =>
-          context.log.info("Buffering a message")
-          stash.stash(message)
-          Behaviors.same
-      }
-    }
-  }
+  case class ChroniclerConfig(vaultRoot: VaultPath, eventReceiverHost: String, eventReceiverPort: Int)
 
   private def initializing(
                         vaultRoot: VaultPath,
-                        vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
-                        tinkerBrain: ActorRef[TinkerBrain.Message],
                         whisperEventReceiverHost: String,
                         whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing) { case (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
+    context.self !! ReceiveNotePing(NoOp) // bootstrap
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
         noteRef.properties match {
-          case Success(Some((audioWatchPath, whisperLarge, whisperBase, ollamaTranscriptionSummarizer))) =>
-            finishInitializing(
-              vaultRoot, vaultKeeper, gossiper, tinkerBrain,
-              audioWatchPath, whisperLarge, whisperBase, ollamaTranscriptionSummarizer,
-              whisperEventReceiverHost, whisperEventReceiverPort
-            )
+          case Success(Some(config)) =>
+            finishInitializing(vaultRoot, gossiper, config, whisperEventReceiverHost, whisperEventReceiverPort)
 
           case Failure(exception) =>
             throw exception
@@ -106,28 +78,24 @@ object Chronicler {
 
   private def finishInitializing(
                         vaultRoot: VaultPath,
-                        vaultKeeper: ActorRef[VaultKeeper.Message],
                         gossiper: SpiritRef[Gossiper.Message],
-                        tinkerBrain: ActorRef[TinkerBrain.Message],
-                        audioWatchPath: Path, whisperLarge: String, whisperBase: String, ollamaTranscriptionSummarizer: Option[String],
+                        config: AudioNoteCaptureProperties,
                         whisperEventReceiverHost: String, whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
-      vaultRoot, context.self.underlying, audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort
+      vaultRoot, context.self.underlying, config, whisperEventReceiverHost, whisperEventReceiverPort
     ), "AudioNoteCapturer")
 
     val moc: ActorRef[ChroniclerMOC.Message] = context.spawn(ChroniclerMOC(), "ChroniclerMOC")
 
-    behavior(Map.empty)(Tinker, vaultKeeper, gossiper, tinkerBrain, moc, ollamaTranscriptionSummarizer)
+    behavior(Map.empty)(Tinker, gossiper, moc)
   }
 
   private def behavior(wavNameToTranscriptionNoteOwner: Map[String, SpiritRef[TranscriptionNoteWrapper.Message]])
-                      (implicit Tinker: Tinker, vaultKeeper: ActorRef[VaultKeeper.Message],
+                      (implicit Tinker: Tinker,
                        gossiper: SpiritRef[Gossiper.Message],
-                       tinkerBrain: ActorRef[TinkerBrain.Message],
-                       moc: ActorRef[ChroniclerMOC.Message],
-                       ollamaTranscriptionSummarizer: Option[String]
+                       moc: ActorRef[ChroniclerMOC.Message]
                       ): Ability[Message] =  Tinker.setup { context =>
     context.actorContext.log.info(s"Behavior initialized with ${wavNameToTranscriptionNoteOwner.size} elements")
     Tinker.receiveMessage { message =>
@@ -145,7 +113,7 @@ object Chronicler {
               wavNameToTranscriptionNoteOwner
             case None =>
               val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
-              val behavior = TranscriptionNoteWrapper(capture, context.self, ollamaTranscriptionSummarizer)
+              val behavior = TranscriptionNoteWrapper(capture, context.self)
               context.actorContext.log.debug(
                 s"Creating note wrapper actor with name $name (wavPath $wavPath); " +
                   s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(wavName)}")
@@ -200,10 +168,6 @@ object Chronicler {
           moc ! ChroniclerMOC.ListenerAcknowledgement(noteRef, timeOfAck, details, setNoteState)
           Tinker.steadily
 
-        case StartTinkering(system) =>
-          context.actorContext.log.warn(s"Received an unexpected (extra) tinker system: $system")
-          Tinker.steadily
-
         case ReceiveNotePing(_) =>
           context.actorContext.log.warn("Ignoring note ping")
           Tinker.steadily
@@ -253,14 +217,17 @@ object Chronicler {
     }
   }
 
+  // FIXME: untangle chronicler and audionotecapture
+  case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String)
+
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def properties: Try[Option[(Path, String, String, Option[String])]] = {
+    def properties: Try[Option[AudioNoteCaptureProperties]] = {
       noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
         for {
           audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
           whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
           whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
-        } yield (audioWatchPath, whisperLarge, whisperBase, properties.get("ollamaTranscriptionSummarizer").map(_.asInstanceOf[String]))
+        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase)
       }
     }
   }

@@ -43,10 +43,10 @@ object HueLightKeeper {
 
   private case class ReceiveLightState(lightState: LightState) extends Message
 
-  def apply(light: Light, hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService, Tinker: Tinker): Ability[Message] =
+  def apply(light: Light, hueConfig: HueConfig)(implicit Tinker: Tinker): Ability[Message] =
     setup(light, hueConfig)
 
-  private def setup(light: Light, hueConfig: HueConfig)(implicit httpExecutionContext: ExecutionContextExecutorService, Tinker: Tinker): Ability[Message] = Tinkerer(rgb(230, 230, 230), "💡").setup { context =>
+  private def setup(light: Light, hueConfig: HueConfig)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(230, 230, 230), "💡").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
@@ -56,12 +56,12 @@ object HueLightKeeper {
 
     // initialize empty, but should get a value shortly
     api !! HueLightKeeperAPIActor.GetLightState(context.messageAdapter(ReceiveLightState).underlying)
-    behavior(None)(httpExecutionContext, context.system.actorSystem, Tinker, api, light, timeKeeper)
+    behavior(None)(context.system.actorSystem, Tinker, api, light, timeKeeper)
   }
 
   // states / behaviors
 
-  private def behavior(cachedLightState: Option[LightState])(implicit httpExecutionContext: ExecutionContextExecutorService, actorSystem: ActorSystem[Nothing], Tinker: Tinker, apiForThisLight: SpiritRef[HueLightKeeperAPIActor.Message], light: Light, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(cachedLightState: Option[LightState])(implicit actorSystem: ActorSystem[Nothing], Tinker: Tinker, apiForThisLight: SpiritRef[HueLightKeeperAPIActor.Message], light: Light, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
       case GetLightState(replyTo) =>
@@ -143,7 +143,6 @@ private object HueLightKeeperAPIActor {
   // FIXME: add a timeout message and have a timekeeper spawn off a message
 
   def apply(light: Light)(implicit Tinker: Tinker, hueConfig: HueConfig): Ability[Message] = Tinker.setup { context =>
-    implicit val tc: TinkerContext[_] = context
     implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
     implicit val s: ActorSystem[_] = context.system.actorSystem
     Tinker.receiveMessage {

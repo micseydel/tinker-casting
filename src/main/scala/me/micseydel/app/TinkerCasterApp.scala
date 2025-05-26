@@ -2,33 +2,40 @@ package me.micseydel.app
 
 import akka.actor
 import cats.data.Validated
-import me.micseydel.Common
-import me.micseydel.dsl.TinkerContainer
-
-import scala.annotation.unused
+import me.micseydel.actor.kitties.CatsHelper
+import me.micseydel.actor.{CentralNervousSystemMaintenance, GmailExperimentActor, GroceryManagerActor, HueListener, PeriodicNotesCreatorActor, RasaActor, RemindMeListenerActor, kitties}
+import me.micseydel.actor.notifications.ChimeActor
+import me.micseydel.actor.ollama.OllamaActor
+import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.app.AppConfiguration.AppConfig
+import me.micseydel.app.TinkerCasterApp.AbilityFactory
+import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TinkerOrchestrator.ConfigToSimplifyAway
+import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerContainer, TinkerContext}
 import me.micseydel.util.TimeUtil
 import org.slf4j.LoggerFactory
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.Files
 import java.time.ZonedDateTime
+import scala.annotation.unused
 
 
 object TinkerCasterApp {
-  // FIXME: what should the userspace "app" be responsible for?
-  //   - minimally?
-  //       - Rasa
-  //   - ntfy implementation
   def main(args: Array[String]): Unit = {
     AppConfiguration.getConfig() match {
       case Validated.Invalid(errors) =>
         println("FAILED, errors-")
         println(errors)
       case Validated.Valid(config) =>
-//        println(s"[${Common.zonedDateTimeToISO8601(ZonedDateTime.now())}] Using config: $config")
         println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Using config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
+
         // ensure json subdirectory exists
         Files.createDirectories(config.vaultRoot.resolve("json"))
+
         run(config)
     }
   }
@@ -42,10 +49,107 @@ object TinkerCasterApp {
     LoggerFactory.getILoggerFactory
     // https://doc.akka.io/docs/akka/current/typed/logging.html#slf4j-api-compatibility wasn't as good
 
+    val notificationCenterAbilities = NotificationCenterAbilities(
+      NtfyerActor()(_),
+      HueControl(config.hueConfig.get)(_), // FIXME remove .get, use note config
+      ChimeActor()(_)
+    )
+
+    val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
+
+    val orchestratorConfig = ConfigToSimplifyAway(
+      config.vaultRoot,
+      config.ntfyKeys,
+      config.gmail
+    )
+
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system")
     @unused
-    val container: actor.ActorSystem = TinkerContainer(config)
+    val container: actor.ActorSystem =
+      TinkerContainer(config, notificationCenterAbilities)(
+        centralCastFactory(config.rasaHost, chroniclerConfig),
+        UserTinkerCast(orchestratorConfig)(_: EnhancedTinker[MyCentralCast])
+      )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
   }
+
+  def centralCastFactory(rasaHost: String, config: ChroniclerConfig)(Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
+    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rassa")
+    val gossiper = context.cast(Gossiper()(Tinker), "Gossiper")
+    val chronicler = context.cast(Chronicler(config, gossiper)(Tinker), "Chronicler")
+    val rasaActor = context.cast(RasaActor(rasaHost)(Tinker), "RasaActor")
+    MyCentralCast(chronicler, gossiper, rasaActor)
+  }
+
+  // FIXME: where should this live?
+  type AbilityFactory[T] = Tinker => Ability[T]
 }
+
+// FIXME: if these were registered async instead, Hue (for example) could rely on EnhancedTinkering for Rasa
+case class NotificationCenterAbilities(
+                                      ntfy: AbilityFactory[NtfyerActor.Message],
+                                      hue: AbilityFactory[HueControl.Message],
+                                      chime: AbilityFactory[ChimeActor.Message]
+                                      )
+
+case class MyCentralCast(
+                    chronicler: SpiritRef[Chronicler.Message],
+                    gossiper: SpiritRef[Gossiper.Message],
+                    rasa: SpiritRef[RasaActor.Message]
+                    )
+
+
+object UserTinkerCast {
+
+  def apply(config: ConfigToSimplifyAway)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+    @unused
+    val hueListener = context.cast(HueListener(), "HueListener")
+
+    config.gmail.foreach { gmailConfig =>
+      context.actorContext.log.debug("Casting GmailTestActor")
+      context.cast(GmailExperimentActor(gmailConfig), "GmailTestActor")
+    }
+
+    @unused // subscribes to gmail
+    val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
+
+    // !! specializations
+
+    //    @unused // driven internally
+    //    val llmTinkeringActor = context.cast(LLMTinkeringActor(), "LLMTinkeringActor")
+
+    @unused // uses an internal folder watcher
+    val ollamaActor = context.cast(OllamaActor(), "OllamaActor")
+
+    @unused // subscribes to Gossiper
+    val remindMeListenerActor = context.cast(RemindMeListenerActor(), "RemindMeListenerActor")
+
+    // me :)
+    @unused
+    val centralNervousSystemMaintenance: SpiritRef[CentralNervousSystemMaintenance.Message] = context.cast(CentralNervousSystemMaintenance(config), "CentralNervousSystemMaintenance")
+
+    // my cats
+
+    @unused
+    val catsHelper: SpiritRef[CatsHelper.Message] = context.cast(kitties.CatsHelper(), "CatsHelper")
+
+    // high level note stuff
+
+    @unused // runs itself via TimeKeeper
+    val periodicNotesCreatorActor: SpiritRef[PeriodicNotesCreatorActor.Message] =
+      context.cast(PeriodicNotesCreatorActor(config.vaultRoot), "PeriodicNotesCreatorActor")
+
+    implicit val tc: TinkerContext[_] = context
+    Tinker.receiveMessage {
+      //      case event@ReceiveMqttEvent(owntracks.Topic, _) =>
+      ////        locationTracker !! LocationTracker.ReceiveMqtt(event)
+      //        Tinker.steadily
+
+      case ReceiveMqttEvent(topic, payload) =>
+        context.actorContext.log.warn(s"Unexpected topic $topic message, payload ${payload.length} bytes")
+        Tinker.steadily
+    }
+  }
+}
+
