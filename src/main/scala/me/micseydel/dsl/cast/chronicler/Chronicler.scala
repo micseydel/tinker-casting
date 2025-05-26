@@ -2,7 +2,7 @@ package me.micseydel.dsl.cast.chronicler
 
 import akka.actor.InvalidActorNameException
 import akka.actor.typed.ActorRef
-import me.micseydel.Common
+import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor._
@@ -54,6 +54,8 @@ object Chronicler {
                         whisperEventReceiverHost: String,
                         whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing) { case (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
+    context.self !! ReceiveNotePing(NoOp) // bootstrap
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
         noteRef.properties match {

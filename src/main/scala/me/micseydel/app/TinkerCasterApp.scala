@@ -75,6 +75,7 @@ object TinkerCasterApp {
   }
 
   def centralCastFactory(rasaHost: String, config: ChroniclerConfig)(Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
+    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rassa")
     val gossiper = context.cast(Gossiper()(Tinker), "Gossiper")
     val chronicler = context.cast(Chronicler(config, gossiper)(Tinker), "Chronicler")
     val rasaActor = context.cast(RasaActor(rasaHost)(Tinker), "RasaActor")
