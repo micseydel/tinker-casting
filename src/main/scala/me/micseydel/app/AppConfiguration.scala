@@ -13,7 +13,6 @@ object AppConfiguration {
     eventReceiverHost: String,
     eventReceiverPort: Int,
     ntfyKeys: NtfyKeys,
-    hueConfig: Option[HueConfig],
     mqttConfig: Option[MqttConfig],
   )
 
@@ -40,11 +39,6 @@ object AppConfiguration {
           } yield MqttConfig(username, password, brokerUrl)
         }
 
-        val hueConfig: Option[HueConfig] = for {
-          ip <- getOptionalString(config, "hue_api.ip")
-          username <- getOptionalString(config, "hue_api.username")
-        } yield HueConfig(ip, username)
-
         Validated.Valid(AppConfig(
           vaultRoot,
           config.getString("transcription.whisper.event-receiver.host"),
@@ -54,7 +48,6 @@ object AppConfiguration {
             getOptionalString(config, "ntfy-keys.highCO2Key"),
             getOptionalString(config, "ntfy-keys.searchSpaceKey")
           ),
-          hueConfig,
           maybeMqttConfig
         ))
     }

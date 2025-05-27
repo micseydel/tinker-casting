@@ -51,7 +51,7 @@ object TinkerCasterApp {
   def run(config: AppConfig): Unit = {
     val notificationCenterAbilities = NotificationCenterAbilities(
       NtfyerActor()(_),
-      HueControl(config.hueConfig.get)(_), // FIXME remove .get, use note config
+      HueControl()(_),
       ChimeActor()(_)
     )
 

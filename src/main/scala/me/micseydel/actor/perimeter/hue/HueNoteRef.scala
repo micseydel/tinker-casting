@@ -9,7 +9,7 @@ import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success}
 
-// FIXME: ideally the underlying reads would return Validated objects, to report parsing and other issues
+// FIXME: ideally the underlying reads would return ValidatedNels, to report parsing and other issues
 private[perimeter] class HueNoteRef(noteRef: NoteRef) {
   def setToDefault(): Note = {
     val frontmatter: Map[String, Object] = Map(

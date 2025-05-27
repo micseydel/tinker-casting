@@ -1,9 +1,10 @@
 package me.micseydel.actor.perimeter
 
-import akka.actor.typed.ActorRef
 import akka.util.Timeout
-import me.micseydel.NoOp
-import me.micseydel.actor.RasaActor
+import cats.data.Validated
+import cats.implicits.catsSyntaxValidatedId
+import me.micseydel.Common.getValidatedStringFromConfig
+import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.perimeter.HueControl._
 import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
@@ -16,6 +17,7 @@ import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsOb
 
 import java.time.Duration
 import scala.concurrent.duration.DurationInt
+import scala.util.{Failure, Success}
 
 object HueControl {
   sealed trait Message
@@ -24,10 +26,6 @@ object HueControl {
 
   // to change the lights
   sealed trait Command extends Message
-
-  // for handling the Hue Bridge response
-  //  private
-  sealed trait StateUpdate extends Message
 
   case class FlashTheLight(light: Light) extends Command
 
@@ -52,21 +50,37 @@ object HueControl {
 
   case class HueConfig(ip: String, username: String)
 
-  def apply(hueConfig: HueConfig)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
-      (lightName, light) -> context.cast(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName")
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
+    val validatedConfig = noteRef.readNote().flatMap(_.yamlFrontMatter) match {
+      case Failure(exception) =>
+        s"Reading frontmatter failed ${Common.getStackTraceString(exception)}".invalidNel
+      case Success(map) =>
+        val validatedIp = getValidatedStringFromConfig(map, "hueApiIP")
+        val validatedUsername = getValidatedStringFromConfig(map, "hueApiUsername")
+        validatedIp.andThen { ip =>
+          validatedUsername.andThen { username =>
+            HueConfig(ip, username).validNel
+          }
+        }
     }
 
-    val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
-    val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
+    validatedConfig match {
+      case Validated.Valid(hueConfig: HueConfig) =>
+        val lightKeepers: Map[(String, Light), SpiritRef[HueLightKeeper.Message]] = Light.AllMap.map { case (lightName, light) =>
+          (lightName, light) -> context.cast(HueLightKeeper(light, hueConfig), s"HueLightKeeper-$lightName")
+        }
 
-    implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
-      finishSetup(lightKeepersByName, lightKeepersByLight)
-  }
+        val lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((name, _), value) => name -> value }
+        val lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]] = lightKeepers.map { case ((_, light), value) => light -> value }
 
-  private def finishSetup(lightKeepersByName: Map[String, SpiritRef[HueLightKeeper.Message]], lightKeepersByLight: Map[Light, SpiritRef[HueLightKeeper.Message]])(implicit timeout: Timeout, Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
-    implicit val hueNote: HueNoteRef = new HueNoteRef(noteRef)
-    behavior(lightKeepersByName, lightKeepersByLight)
+        implicit val timeout: Timeout = Timeout.create(Duration.ofMillis(20.seconds.toMillis))
+        implicit val hueNote: HueNoteRef = new HueNoteRef(noteRef)
+        behavior(lightKeepersByName, lightKeepersByLight)
+
+      case Validated.Invalid(e) =>
+        context.actorContext.log.warn(s"Failed to start HueControl: $e")
+        Tinker.ignore
+    }
   }
 
   // states / behaviors
@@ -86,10 +100,6 @@ object HueControl {
             hueNote.setToDefault()
         }
 
-        Tinker.steadily
-
-      case stateUpdate: StateUpdate =>
-        context.actorContext.log.debug(s"Was waiting for command, did not expect Hue status update $stateUpdate")
         Tinker.steadily
 
       case DoALightShow() =>

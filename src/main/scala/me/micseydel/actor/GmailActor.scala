@@ -14,6 +14,7 @@ import com.google.api.client.util.store.FileDataStoreFactory
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
+import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.GmailActor.Email
 import me.micseydel.dsl.Tinker.Ability
@@ -167,13 +168,6 @@ object GmailActor {
                 }
               }
           }
-      }
-    }
-
-    private def getValidatedStringFromConfig(map: Map[String, Any], key: String): ValidatedNel[String, String] = {
-      map.get(key) match {
-        case Some(value: String) => value.validNel
-        case other => s"Expected a string for key $key but found: $other".invalidNel
       }
     }
   }

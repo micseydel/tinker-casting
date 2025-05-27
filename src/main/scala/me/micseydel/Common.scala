@@ -1,5 +1,7 @@
 package me.micseydel
 
+import cats.data.ValidatedNel
+import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.dsl.TinkerClock
 import spray.json.{DeserializationException, JsNull, JsNumber, JsString, JsValue, JsonFormat, RootJsonFormat}
 
@@ -184,6 +186,13 @@ object Common {
         throw throwable
       case None =>
         throw new RuntimeException(s"Expected ask to be non-empty")
+    }
+  }
+
+  def getValidatedStringFromConfig(map: Map[String, Any], key: String): ValidatedNel[String, String] = {
+    map.get(key) match {
+      case Some(value: String) => value.validNel
+      case other => s"Expected a string for key $key but found: $other".invalidNel
     }
   }
 }
