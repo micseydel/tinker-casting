@@ -17,7 +17,7 @@ import me.micseydel.vault.persistence.NoteRef
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import scala.math.Ordering.Implicits._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object Gossiper {
   sealed trait Message
@@ -45,7 +45,14 @@ object Gossiper {
   def apply()(implicit Tinker: Tinker): Ability[Message] =
     NoteMakingTinkerer("Gossiper", rgb(255, 190, 230), "🗣️") { (context, noteRef) =>
       context.actorContext.log.info("Started Gossiper")
-      behavior(Set.empty, Set.empty, Map.empty)(Tinker, noteRef)
+      val generatedMarkdown = noteRef.generateMarkdown() match {
+        case Failure(exception) =>
+          context.actorContext.log.warn(s"Failed to read YAML; will not write Markdown to ${noteRef.noteId}, but will manage listeners and votes", exception)
+          false
+        case Success(value) => value
+      }
+
+      behavior(Set.empty, Set.empty, Map.empty, generatedMarkdown)(Tinker, noteRef)
     }
 
   /**
@@ -54,42 +61,45 @@ object Gossiper {
   private def behavior(
                         accurateListeners: Set[SpiritRef[NotedTranscription]],
                         fastListeners: Set[SpiritRef[NotedTranscription]],
-                        votesMapping: Map[NoteId, Map[String, NonEmptyList[Vote]]]
+                        votesMapping: Map[NoteId, Map[String, NonEmptyList[Vote]]],
+                        generatedMarkdown: Boolean
                       )(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val sender: Sender = Sender(context.self.path)
     implicit val tinkerBrain: ActorRef[TinkerBrain.Message] = context.system.tinkerBrain
 
-    val formattedMarkdown = votesMapping
-      .toSeq.sortBy(_._2.values.toList.map(_.head).map(_.voteTime))
-      .map { case (noteId, votesOnNote) =>
-        val formattedVotesOnNote = votesOnNote.values
-          .map {
-            case NonEmptyList(Vote(_, confidence, voter, voteTime, maybeComments), theRest) =>
-              val priorVotes = if (theRest.nonEmpty) s"$theRest" else ""
-              MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) +
-                (if (priorVotes.nonEmpty) {
-                  s"""
-                     |        - comments: $maybeComments
-                     |        - prior votes: $priorVotes""".stripMargin
-                } else {
-                  s"""
-                     |        - comments: $maybeComments""".stripMargin
-                })
-          }.mkString("    ", "\n    ", "")
-        val filename = noteId.asString.drop(18).dropRight(3) + "wav"
-        val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
-          case Left(msg) =>
-            context.actorContext.log.warn(s"Failed to extract time from noteId $filename: $msg")
-            noteId.toString
-          case Right(time) =>
-            MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")).drop(2)
-        }
-        s"$firstLine\n$formattedVotesOnNote"
-      }.mkString("- ", "\n- ", "\n")
+    if (generatedMarkdown) {
+      val formattedMarkdown = votesMapping
+        .toSeq.sortBy(_._2.values.toList.map(_.head).map(_.voteTime))
+        .map { case (noteId, votesOnNote) =>
+          val formattedVotesOnNote = votesOnNote.values
+            .map {
+              case NonEmptyList(Vote(_, confidence, voter, voteTime, maybeComments), theRest) =>
+                val priorVotes = if (theRest.nonEmpty) s"$theRest" else ""
+                MarkdownUtil.listLineWithTimestamp(voteTime, s"${toNormalizedUri(voter.path.toSerializationFormat).drop(35)} -> $confidence", dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")) +
+                  (if (priorVotes.nonEmpty) {
+                    s"""
+                       |        - comments: $maybeComments
+                       |        - prior votes: $priorVotes""".stripMargin
+                  } else {
+                    s"""
+                       |        - comments: $maybeComments""".stripMargin
+                  })
+            }.mkString("    ", "\n    ", "")
+          val filename = noteId.asString.drop(18).dropRight(3) + "wav"
+          val firstLine = Chronicler.getCaptureTimeFromAndroidAudioPath(filename) match {
+            case Left(msg) =>
+              context.actorContext.log.warn(s"Failed to extract time from noteId $filename: $msg")
+              noteId.toString
+            case Right(time) =>
+              MarkdownUtil.listLineWithTimestampAndRef(time, s"[[${noteId.asString.drop(18)}]]", noteId, dateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")).drop(2)
+          }
+          s"$firstLine\n$formattedVotesOnNote"
+        }.mkString("- ", "\n- ", "\n")
 
-    noteRef.setMarkdown(formattedMarkdown) match {
-      case Failure(exception) => throw exception
-      case Success(NoOp) =>
+      noteRef.setMarkdown(formattedMarkdown) match {
+        case Failure(exception) => throw exception
+        case Success(NoOp) =>
+      }
     }
 
     Tinker.receiveMessage {
@@ -109,11 +119,11 @@ object Gossiper {
 
       case SubscribeAccurate(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to accurate subscribers")
-        behavior(accurateListeners + subscriber, fastListeners, votesMapping)
+        behavior(accurateListeners + subscriber, fastListeners, votesMapping, generatedMarkdown)
 
       case SubscribeHybrid(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to both fast and accurate subscribers")
-        behavior(accurateListeners + subscriber, fastListeners + subscriber, votesMapping)
+        behavior(accurateListeners + subscriber, fastListeners + subscriber, votesMapping, generatedMarkdown)
 
       // experiment; voting on *notes* may generalize well, but requires receivers to interpret arbitrarily
       case SubmitVote(newVote) =>
@@ -122,7 +132,7 @@ object Gossiper {
         votesMapping.get(newVote.noteId) match {
           case None =>
             val updatedVotes = votesMapping.updated(newVote.noteId, Map(normalizedUri -> NonEmptyList.of(newVote)))
-            behavior(accurateListeners, fastListeners, updatedVotes)
+            behavior(accurateListeners, fastListeners, updatedVotes, generatedMarkdown)
           case Some(voterToVotesMap) =>
             voterToVotesMap.get(normalizedUri) match {
               case None =>
@@ -134,7 +144,7 @@ object Gossiper {
                 }
 
                 val updatedVotes: Map[String, NonEmptyList[Vote]] = voterToVotesMap.updated(normalizedUri, NonEmptyList.of(newVote))
-                behavior(accurateListeners, fastListeners, votesMapping.updated(newVote.noteId, updatedVotes))
+                behavior(accurateListeners, fastListeners, votesMapping.updated(newVote.noteId, updatedVotes), generatedMarkdown)
 
               case Some(votes) =>
                 val latestVote = votes.head
@@ -151,7 +161,7 @@ object Gossiper {
                   val updatedVotesMap = voterToVotesMap.updated(normalizedUri, updatedVotesListForVoter)
                   val updatedVotesMapping = votesMapping.updated(newVote.noteId, updatedVotesMap)
 
-                  behavior(accurateListeners, fastListeners, updatedVotesMapping)
+                  behavior(accurateListeners, fastListeners, updatedVotesMapping, generatedMarkdown)
                 }
             }
         }
@@ -166,6 +176,15 @@ object Gossiper {
     t.split('#').toList match {
       case List(wanted, _) => wanted
       case _ => t
+    }
+  }
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def generateMarkdown(): Try[Boolean] = {
+      noteRef
+        .readNote()
+        .flatMap(_.yamlFrontMatter)
+        .map(_.get("generateMarkdown").exists(_ == true))
     }
   }
 }
