@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
-import me.micseydel.actor.WhisperFlaskAmbassador.{Enqueue, Message}
+import me.micseydel.actor.WhisperFlaskProtocol.{Enqueue, Message}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.vault.VaultPath
 import spray.json.DefaultJsonProtocol._
@@ -16,14 +16,12 @@ import java.util.Base64
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-object WhisperFlaskAmbassador {
+object WhisperFlaskProtocol {
   sealed trait Message
   case class Enqueue(vaultPath: String) extends Message
 }
 
-/**
- * At the time of writing, "primary" here means LOCAL to the Akka server and the LARGE Whisper model.
- */
+// FIXME verify local stuff works (on same-machine)
 object PrimaryWhisperFlaskAmbassador {
   case class Config(
                      whisperHost: String,
@@ -67,10 +65,7 @@ object PrimaryWhisperFlaskAmbassador {
   }
 }
 
-/**
- * At the time of writing, "secondary" here means LOCAL NETWORK to the Akka server and the BASE Whisper model.
- */
-object SecondaryWhisperFlaskAmbassador {
+object WhisperUploadActor {
   case class Config(
                      whisperHost: String,
                      eventReceiverHost: String,

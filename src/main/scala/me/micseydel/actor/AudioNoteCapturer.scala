@@ -74,28 +74,26 @@ object AudioNoteCapturer {
     val transcriptionAdapter = context.messageAdapter(TranscriptionEvent).underlying
     context.system.eventReceiver ! EventReceiver.ClaimEventType(TranscriptionCompleted, transcriptionAdapter)
 
-    context.actorContext.log.info(s"Starting primaryWhisperFlaskAmbassador on ${config.whisperLarge} and secondaryWhisperFlaskAmbassador on ${config.whisperBase}")
+    context.actorContext.log.info(s"Starting WhisperLargeUploadActor on ${config.whisperLarge} and WhisperBaseUploadActor on ${config.whisperBase}")
 
-    // FIXME: bad names, secondary means transfer the file over the network
-    // maybe on_host, on_local_network?
-    val primaryWhisperFlaskAmbassador: ActorRef[WhisperFlaskAmbassador.Message] = context.spawn(
-      SecondaryWhisperFlaskAmbassador(SecondaryWhisperFlaskAmbassador.Config(
+    val whisperLargeActor: ActorRef[WhisperFlaskProtocol.Message] = context.spawn(
+      WhisperUploadActor(WhisperUploadActor.Config(
         config.whisperLarge,
         whisperEventReceiverHost,
         whisperEventReceiverPort,
         vaultRoot
       )),
-      "PrimaryWhisperFlaskAmbassador"
+      "WhisperLargeUploadActor"
     )
 
-    val secondaryWhisperFlaskAmbassador = context.spawn(
-      SecondaryWhisperFlaskAmbassador(SecondaryWhisperFlaskAmbassador.Config(
+    val whisperBaseActor = context.spawn(
+      WhisperUploadActor(WhisperUploadActor.Config(
         config.whisperBase,
         whisperEventReceiverHost,
         whisperEventReceiverPort,
         vaultRoot
       )),
-      "SecondaryWhisperFlaskAmbassador"
+      "WhisperBaseUploadActor"
     )
 
     val clock = context.system.clock
@@ -114,9 +112,9 @@ object AudioNoteCapturer {
           val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
           chronicler ! Chronicler.TranscriptionStartedEvent(capture)
 
-          val enqueueRequest = WhisperFlaskAmbassador.Enqueue(audioPath.toString.replace(vaultRoot.toString + "/", ""))
-          primaryWhisperFlaskAmbassador ! enqueueRequest
-          secondaryWhisperFlaskAmbassador ! enqueueRequest
+          val enqueueRequest = WhisperFlaskProtocol.Enqueue(audioPath.toString.replace(vaultRoot.toString + "/", ""))
+          whisperLargeActor ! enqueueRequest
+          whisperBaseActor ! enqueueRequest
       }
     }
 
@@ -273,7 +271,7 @@ object AudioNoteCapturer {
 
   private def now(clock: TinkerClock): String = TimeUtil.zonedDateTimeToISO8601(clock.now())
 
-  private case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String, generateMarkdown: Boolean)
+  private case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String, generateMarkdown: Boolean, whisperTurbo: Option[String])
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def properties: Try[Option[AudioNoteCaptureProperties]] = {
@@ -283,7 +281,8 @@ object AudioNoteCapturer {
           whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
           whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
           generateMarkdown <- properties.get("generateMarkdown").map(_.asInstanceOf[Boolean]).orElse(Some(false))
-        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase, generateMarkdown)
+          whisperTurbo = properties.get("whisperTurbo").map(_.asInstanceOf[String])
+        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase, generateMarkdown, whisperTurbo)
       }
     }
   }
