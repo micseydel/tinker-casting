@@ -14,7 +14,10 @@ import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}
 import me.micseydel.vault.VaultKeeper
+import org.slf4j.LoggerFactory
+import akka.actor.typed.scaladsl.adapter._
 
+import java.nio.file.Files
 import java.util.concurrent.Executors
 import scala.annotation.unused
 import scala.concurrent.duration.DurationInt
@@ -31,7 +34,10 @@ object TinkerContainer {
       notificationCenterAbilities
     )
 
-    import akka.actor.typed.scaladsl.adapter._
+    // ensure json subdirectory exists
+    Files.createDirectories(appConfig.vaultRoot.resolve("json"))
+
+    suppressSLF4JSpam()
 
     // the classic actor system is needed in order to get events from MQTT
     // FIXME ...even though none are sourced from there right now, this is worth keeping to easily add later
@@ -41,6 +47,15 @@ object TinkerContainer {
     val tinkercast: typed.ActorRef[_] = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
 
     actorSystem
+  }
+
+  private def suppressSLF4JSpam(): Unit = {
+    // this line suppresses -
+    //   SLF4J: A number (1) of logging calls during the initialization phase have been intercepted and are
+    //   SLF4J: now being replayed. These are subject to the filtering rules of the underlying logging system.
+    //   SLF4J: See also https://www.slf4j.org/codes.html#replay
+    LoggerFactory.getILoggerFactory
+    // https://doc.akka.io/docs/akka/current/typed/logging.html#slf4j-api-compatibility wasn't as good
   }
 }
 

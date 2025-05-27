@@ -2,24 +2,22 @@ package me.micseydel.app
 
 import akka.actor
 import cats.data.Validated
+import me.micseydel.actor._
 import me.micseydel.actor.kitties.CatsHelper
-import me.micseydel.actor.{CentralNervousSystemMaintenance, GmailExperimentActor, GroceryManagerActor, HueListener, PeriodicNotesCreatorActor, RasaActor, RemindMeListenerActor, kitties}
 import me.micseydel.actor.notifications.ChimeActor
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
-import me.micseydel.app.AppConfiguration.{AppConfig, NtfyKeys}
+import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl._
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
-import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerContainer, TinkerContext}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.VaultPath
-import org.slf4j.LoggerFactory
 
-import java.nio.file.Files
 import java.time.ZonedDateTime
 import scala.annotation.unused
 
@@ -28,22 +26,9 @@ object TinkerCasterApp {
   def main(args: Array[String]): Unit = {
     AppConfiguration.getConfig() match {
       case Validated.Invalid(errors) =>
-        println("FAILED, errors-")
-        println(errors)
-      case Validated.Valid(config) =>
-        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Using config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
-
-        // ensure json subdirectory exists
-        Files.createDirectories(config.vaultRoot.resolve("json"))
-
-        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system...")
-        // this line suppresses -
-        //   SLF4J: A number (1) of logging calls during the initialization phase have been intercepted and are
-        //   SLF4J: now being replayed. These are subject to the filtering rules of the underlying logging system.
-        //   SLF4J: See also https://www.slf4j.org/codes.html#replay
-        LoggerFactory.getILoggerFactory
-        // https://doc.akka.io/docs/akka/current/typed/logging.html#slf4j-api-compatibility wasn't as good
-
+        println(s"FAILED, errors-\n$errors")
+      case Validated.Valid(config: AppConfig) =>
+        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system: config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
         run(config)
     }
   }
@@ -62,7 +47,7 @@ object TinkerCasterApp {
     val container: actor.ActorSystem =
       TinkerContainer(config, notificationCenterAbilities)(
         centralCastFactory(chroniclerConfig),
-        UserTinkerCast(config.vaultRoot, config.ntfyKeys)(_: EnhancedTinker[MyCentralCast])
+        UserTinkerCast(config.vaultRoot)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
@@ -87,7 +72,7 @@ case class MyCentralCast(
 
 object UserTinkerCast {
 
-  def apply(vaultRoot: VaultPath, ntfyKeys: NtfyKeys)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply(vaultRoot: VaultPath)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
