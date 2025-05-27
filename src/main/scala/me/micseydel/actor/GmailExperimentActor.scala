@@ -13,10 +13,10 @@ object GmailExperimentActor {
 
   private case class ReceiveEmail(emails: Seq[GmailActor.Email]) extends Message
 
-  def apply(gmailConfig: GmailConfig)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Gmail API Integration Testing", TinkerColor.random(), "📮") { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Gmail API Integration Testing", TinkerColor.random(), "📮") { (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
 
-    val gmailFetcher = context.cast(GmailActor(gmailConfig), "GmailActor")
+    val gmailFetcher = context.cast(GmailActor(), "GmailActor")
 
     gmailFetcher !! GmailActor.Subscribe(context.messageAdapter(ReceiveEmail))
     context.actorContext.log.debug("Subscribed to GmailActor")

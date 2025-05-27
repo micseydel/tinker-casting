@@ -1,6 +1,9 @@
 package me.micseydel.actor
 
 import akka.actor.typed.scaladsl.Behaviors
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.ValidatedNel
+import cats.implicits.catsSyntaxValidatedId
 import com.google.api.client.auth.oauth2.{AuthorizationCodeFlow, Credential}
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver
@@ -10,6 +13,7 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.store.FileDataStoreFactory
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.MessagePart
+import me.micseydel.Common
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.GmailActor.Email
 import me.micseydel.dsl.Tinker.Ability
@@ -55,29 +59,31 @@ object GmailActor {
     }
   }
 
-  def apply(config: GmailConfig)(implicit Tinker: Tinker): Ability[Message] = {
-    AttentiveNoteMakingTinkerer[Message, ReceivePing]("Gmail Configuration", TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
-      implicit val tc: TinkerContext[_] = context
-      implicit val nr: NoteRef = noteRef
-      implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Gmail Configuration", TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
+    implicit val nr: NoteRef = noteRef
+    implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-      context.system.operator !! Operator.RegisterGmail(context.self)
+    context.system.operator !! Operator.RegisterGmail(context.self)
 
-      context.actorContext.log.info("Starting gmail service")
-      implicit val gmailService: Gmail = TinkerGmailService.createGmailService(config)
-      context.actorContext.log.info("Started gmail service")
+    noteRef.getDocument() match {
+      case Valid(Document(pollingMinutes, gmailConfig, _)) =>
+        context.actorContext.log.info("Starting gmail service")
+        implicit val gmailService: Gmail = TinkerGmailService.createGmailService(gmailConfig)
+        context.actorContext.log.info("Started gmail service")
 
-      val pollingMinutes = noteRef.getDocument() match {
-        case Document(pollingInterval, _) => pollingInterval.minutes
-      }
-      timeKeeper !! TimeKeeper.RemindMeEvery(pollingMinutes, context.self, HeartBeat, Some(this))
+        timeKeeper !! TimeKeeper.RemindMeEvery(pollingMinutes.minutes, context.self, HeartBeat, Some(this))
 
-      implicit val requestGmailAsync: () => Unit = () => {
-        implicit val ec: ExecutionContextExecutor = context.system.httpExecutionContext
-        context.pipeToSelf(TinkerGmailService.fetchEmails(gmailService))(ReceiveInbox)
-      }
+        implicit val requestGmailAsync: () => Unit = () => {
+          implicit val ec: ExecutionContextExecutor = context.system.httpExecutionContext
+          context.pipeToSelf(TinkerGmailService.fetchEmails(gmailService))(ReceiveInbox)
+        }
 
-      active(Set.empty)
+        active(Set.empty)
+
+      case Invalid(e) =>
+        context.actorContext.log.warn(s"Failed to start ${noteRef.noteId}: $e")
+        Tinker.ignore
     }
   }
 
@@ -91,7 +97,7 @@ object GmailActor {
 
       case ReceivePing(_) =>
         noteRef.getDocument() match {
-          case Document(pollingInterval, checkboxIsChecked) =>
+          case Valid(Document(pollingInterval, GmailConfig(_, _), checkboxIsChecked)) =>
             if (checkboxIsChecked) {
               context.actorContext.log.info("Note check box was check, requesting email async now")
               requestGmailAsync()
@@ -101,6 +107,9 @@ object GmailActor {
             } else {
               context.actorContext.log.debug("ignoring note ping")
             }
+
+          case Invalid(e) =>
+            context.actorContext.log.error(s"Something(s) went wrong reading ${noteRef.noteId}: $e")
         }
 
         Tinker.steadily
@@ -124,24 +133,47 @@ object GmailActor {
 
   //
 
-  private case class Document(pollingInterval: Int, checkboxIsChecked: Boolean)
+  private case class Document(pollingMinutes: Int, gmailConfig: GmailConfig, checkboxIsChecked: Boolean)
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def getDocument(): Document = {
+    def getDocument(): ValidatedNel[String, Document] = {
       noteRef.read() match {
         case Failure(exception) => throw exception
         case Success(note@Note(markdown, _)) =>
           note.yamlFrontMatter match {
-            case Failure(exception) => throw exception
+            case Failure(exception: org.yaml.snakeyaml.scanner.ScannerException) =>
+              s"YAML parsing failure ${Common.getStackTraceString(exception)}".invalidNel
+            case Failure(exception) =>
+              throw exception
             case Success(map) =>
-
-              map.get("polling_minutes") match {
+              val validatedPollingMinutes = map.get("polling_minutes") match {
                 case Some(value: Int) =>
-                  Document(value, markdown.startsWith("- [x] "))
-                case other =>
-                  throw new RuntimeException(s"required field Int polling_minutes in the ${noteRef.noteId} properties was $other")
+                  value.validNel
+                case other => s"Expected a string for key polling_minutes but found: $other".invalidNel
+              }
+
+              val validatedTokenPath = getValidatedStringFromConfig(map, "token_path")
+              val validatedCredsPath = getValidatedStringFromConfig(map, "creds_path")
+
+              validatedPollingMinutes.andThen { pollingMinutes =>
+                validatedTokenPath.andThen { tokenPath =>
+                  validatedCredsPath.andThen { credsPath =>
+                    Document(
+                      pollingMinutes,
+                      GmailConfig(credsPath, tokenPath),
+                      markdown.startsWith("- [x] ")
+                    ).validNel
+                  }
+                }
               }
           }
+      }
+    }
+
+    private def getValidatedStringFromConfig(map: Map[String, Any], key: String): ValidatedNel[String, String] = {
+      map.get(key) match {
+        case Some(value: String) => value.validNel
+        case other => s"Expected a string for key $key but found: $other".invalidNel
       }
     }
   }

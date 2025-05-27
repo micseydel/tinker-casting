@@ -105,10 +105,8 @@ object UserTinkerCast {
     @unused
     val hueListener = context.cast(HueListener(), "HueListener")
 
-    config.gmail.foreach { gmailConfig =>
-      context.actorContext.log.debug("Casting GmailTestActor")
-      context.cast(GmailExperimentActor(gmailConfig), "GmailTestActor")
-    }
+    @unused // registers with the Operator
+    val gmailActor = context.cast(GmailExperimentActor(), "GmailTestActor")
 
     @unused // subscribes to gmail
     val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
