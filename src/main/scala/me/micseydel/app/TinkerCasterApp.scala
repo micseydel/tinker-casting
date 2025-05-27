@@ -8,15 +8,15 @@ import me.micseydel.actor.notifications.ChimeActor
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
-import me.micseydel.app.AppConfiguration.AppConfig
+import me.micseydel.app.AppConfiguration.{AppConfig, NtfyKeys}
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.TinkerOrchestrator.ConfigToSimplifyAway
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
 import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerContainer, TinkerContext}
 import me.micseydel.util.TimeUtil
+import me.micseydel.vault.VaultPath
 import org.slf4j.LoggerFactory
 
 import java.nio.file.Files
@@ -55,18 +55,14 @@ object TinkerCasterApp {
       ChimeActor()(_)
     )
 
+    // Chronicler leverages the appconfig for EventReceiver details
     val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
-
-    val orchestratorConfig = ConfigToSimplifyAway(
-      config.vaultRoot,
-      config.ntfyKeys
-    )
 
     @unused
     val container: actor.ActorSystem =
       TinkerContainer(config, notificationCenterAbilities)(
         centralCastFactory(chroniclerConfig),
-        UserTinkerCast(orchestratorConfig)(_: EnhancedTinker[MyCentralCast])
+        UserTinkerCast(config.vaultRoot, config.ntfyKeys)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
@@ -91,7 +87,7 @@ case class MyCentralCast(
 
 object UserTinkerCast {
 
-  def apply(config: ConfigToSimplifyAway)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply(vaultRoot: VaultPath, ntfyKeys: NtfyKeys)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
@@ -108,7 +104,7 @@ object UserTinkerCast {
     val remindMeListenerActor = context.cast(RemindMeListenerActor(), "RemindMeListenerActor")
 
     @unused
-    val centralNervousSystemMaintenance: SpiritRef[CentralNervousSystemMaintenance.Message] = context.cast(CentralNervousSystemMaintenance(config), "CentralNervousSystemMaintenance")
+    val centralNervousSystemMaintenance: SpiritRef[CentralNervousSystemMaintenance.Message] = context.cast(CentralNervousSystemMaintenance(), "CentralNervousSystemMaintenance")
 
     @unused
     val catsHelper: SpiritRef[CatsHelper.Message] = context.cast(kitties.CatsHelper(), "CatsHelper")
@@ -117,7 +113,7 @@ object UserTinkerCast {
 
     @unused // runs itself via TimeKeeper
     val periodicNotesCreatorActor: SpiritRef[PeriodicNotesCreatorActor.Message] =
-      context.cast(PeriodicNotesCreatorActor(config.vaultRoot), "PeriodicNotesCreatorActor")
+      context.cast(PeriodicNotesCreatorActor(vaultRoot), "PeriodicNotesCreatorActor")
 
     Tinker.receiveMessage {
       case ReceiveMqttEvent(topic, payload) =>

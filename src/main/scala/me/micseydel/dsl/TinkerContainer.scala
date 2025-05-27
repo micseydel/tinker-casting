@@ -8,12 +8,12 @@ import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.perimeter.HomeMonitorActor
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor}
-import me.micseydel.app.AppConfiguration.{AppConfig, NtfyKeys}
 import me.micseydel.app.AppConfiguration
+import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}
-import me.micseydel.vault.{VaultKeeper, VaultPath}
+import me.micseydel.vault.VaultKeeper
 
 import java.util.concurrent.Executors
 import scala.annotation.unused
@@ -37,6 +37,7 @@ object TinkerContainer {
     // FIXME ...even though none are sourced from there right now, this is worth keeping to easily add later
     val actorSystem = ActorSystem("AkkaActor")
 
+    @unused
     val tinkercast: typed.ActorRef[_] = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
 
     actorSystem
@@ -140,9 +141,6 @@ object RootTinkerBehavior {
 
 
 object TinkerOrchestrator {
-  case class ConfigToSimplifyAway(vaultRoot: VaultPath,
-                                  ntfyKeys: NtfyKeys
-                                  )
   def apply[CentralCast](centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent])(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
     val enhancedTinker: EnhancedTinker[CentralCast] = new EnhancedTinker[CentralCast](context.system, centralCastFactory(Tinker, context))
     userCast(enhancedTinker)
