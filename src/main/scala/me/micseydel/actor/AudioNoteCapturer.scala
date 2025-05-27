@@ -8,7 +8,6 @@ import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEven
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.chronicler.Chronicler.AudioNoteCaptureProperties
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResult
@@ -20,7 +19,7 @@ import me.micseydel.{Common, NoOp}
 import spray.json._
 
 import java.io.File
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 import java.time.ZonedDateTime
 import java.util.UUID
 import javax.sound.sampled.UnsupportedAudioFileException
@@ -49,8 +48,16 @@ object AudioNoteCapturer {
   private val NoteName = "Audio Note Capture"
 
   // FIXME: Chronicler is passed here because it takes a broader message
-  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], config: AudioNoteCaptureProperties, whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
-    finishInitializing(vaultRoot, config, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
+  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
+    noteRef.properties match {
+      case Failure(exception) => throw exception
+      case Success(None) =>
+        context.actorContext.log.warn(s"No note found for ${noteRef.noteId}, going to sleep since no config is available...")
+        Tinker.ignore
+
+      case Success(Some(properties)) =>
+        finishInitializing(vaultRoot, properties, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
+    }
   }
 
   private def finishInitializing(vaultRoot: VaultPath, config: AudioNoteCaptureProperties, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
@@ -263,4 +270,18 @@ object AudioNoteCapturer {
   }
 
   private def now(clock: TinkerClock): String = TimeUtil.zonedDateTimeToISO8601(clock.now())
+
+  private case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String)
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def properties: Try[Option[AudioNoteCaptureProperties]] = {
+      noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
+        for {
+          audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
+          whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
+          whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
+        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase)
+      }
+    }
+  }
 }

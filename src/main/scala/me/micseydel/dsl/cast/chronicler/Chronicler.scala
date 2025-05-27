@@ -2,7 +2,6 @@ package me.micseydel.dsl.cast.chronicler
 
 import akka.actor.InvalidActorNameException
 import akka.actor.typed.ActorRef
-import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor._
@@ -16,9 +15,9 @@ import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.model._
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.vault._
-import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.{Common, NoOp}
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDateTime, ZoneId, ZonedDateTime}
 import scala.annotation.unused
@@ -44,29 +43,18 @@ object Chronicler {
   def apply(config: ChroniclerConfig, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
     initializing(config.vaultRoot, gossiper, config.eventReceiverHost, config.eventReceiverPort)
 
-  case class ChroniclerConfig(vaultRoot: VaultPath, eventReceiverHost: String, eventReceiverPort: Int)
-
   private def initializing(
                         vaultRoot: VaultPath,
                         gossiper: SpiritRef[Gossiper.Message],
                         whisperEventReceiverHost: String,
                         whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing) { case (context, noteRef) =>
+    // FIXME: remove noteref if it stays unused
     implicit val tc: TinkerContext[_] = context
     context.self !! ReceiveNotePing(NoOp) // bootstrap
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
-        noteRef.properties match {
-          case Success(Some(config)) =>
-            finishInitializing(vaultRoot, gossiper, config, whisperEventReceiverHost, whisperEventReceiverPort)
-
-          case Failure(exception) =>
-            throw exception
-
-          case Success(None) =>
-            context.actorContext.log.warn(s"Note checked but the contents weren't valid, expected: {audioWatchPath, whisperLarge, whisperBase, whisperEventReceiverHost, whisperEventReceiverPort, rasaHost} where the port is an int")
-            Tinker.steadily
-        }
+        finishInitializing(vaultRoot, gossiper, whisperEventReceiverHost, whisperEventReceiverPort)
 
       case other =>
         context.actorContext.log.warn(s"Waiting for necessary config, ignoring message $other")
@@ -77,12 +65,11 @@ object Chronicler {
   private def finishInitializing(
                         vaultRoot: VaultPath,
                         gossiper: SpiritRef[Gossiper.Message],
-                        config: AudioNoteCaptureProperties,
                         whisperEventReceiverHost: String, whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
-      vaultRoot, context.self.underlying, config, whisperEventReceiverHost, whisperEventReceiverPort
+      vaultRoot, context.self.underlying, whisperEventReceiverHost, whisperEventReceiverPort
     ), "AudioNoteCapturer")
 
     val moc: ActorRef[ChroniclerMOC.Message] = context.spawn(ChroniclerMOC(), "ChroniclerMOC")
@@ -215,18 +202,7 @@ object Chronicler {
     }
   }
 
-  // FIXME: untangle chronicler and audionotecapture
-  case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String)
+  case class WhisperHosts(large: String, base: String)
 
-  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def properties: Try[Option[AudioNoteCaptureProperties]] = {
-      noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
-        for {
-          audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
-          whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
-          whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
-        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase)
-      }
-    }
-  }
+  case class ChroniclerConfig(vaultRoot: VaultPath, eventReceiverHost: String, eventReceiverPort: Int)
 }
