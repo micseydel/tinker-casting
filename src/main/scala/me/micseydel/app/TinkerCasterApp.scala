@@ -5,10 +5,10 @@ import cats.data.Validated
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.{CentralNervousSystemMaintenance, GmailExperimentActor, GroceryManagerActor, HueListener, PeriodicNotesCreatorActor, RasaActor, RemindMeListenerActor, kitties}
 import me.micseydel.actor.notifications.ChimeActor
+import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.app.AppConfiguration.AppConfig
-import me.micseydel.app.TinkerCasterApp.AbilityFactory
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerOrchestrator.ConfigToSimplifyAway
@@ -79,17 +79,8 @@ object TinkerCasterApp {
     val rasaActor = context.cast(RasaActor()(Tinker), "RasaActor")
     MyCentralCast(chronicler, gossiper, rasaActor)
   }
-
-  // FIXME: where should this live?
-  type AbilityFactory[T] = Tinker => Ability[T]
 }
 
-// FIXME: if these were registered async instead, Hue (for example) could rely on EnhancedTinkering for Rasa
-case class NotificationCenterAbilities(
-                                      ntfy: AbilityFactory[NtfyerActor.Message],
-                                      hue: AbilityFactory[HueControl.Message],
-                                      chime: AbilityFactory[ChimeActor.Message]
-                                      )
 
 case class MyCentralCast(
                     chronicler: SpiritRef[Chronicler.Message],

@@ -5,10 +5,11 @@ import akka.actor.typed.{Behavior, DispatcherSelector}
 import akka.actor.{ActorRef, ActorSystem, Props, typed}
 import me.micseydel.actor.inactive.owntracks
 import me.micseydel.actor.notifications.NotificationCenterManager
+import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.perimeter.HomeMonitorActor
 import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor}
 import me.micseydel.app.AppConfiguration.{AppConfig, NtfyKeys}
-import me.micseydel.app.{AppConfiguration, NotificationCenterAbilities}
+import me.micseydel.app.AppConfiguration
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}

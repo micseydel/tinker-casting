@@ -4,7 +4,6 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.actor.notifications.NotificationCenterManager._
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
-import me.micseydel.app.NotificationCenterAbilities
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
@@ -220,6 +219,13 @@ object NotificationCenterManager {
   //
 
   final case class NotificationId(id: String) extends AnyVal
+
+  // FIXME: if these were registered async instead, Hue (for example) could rely on EnhancedTinkering for Rasa
+  case class NotificationCenterAbilities(
+                                          ntfy: Tinker => Ability[NtfyerActor.Message],
+                                          hue: Tinker => Ability[HueControl.Message],
+                                          chime: Tinker => Ability[ChimeActor.Message]
+                                        )
 }
 
 case class NotificationCenterState(map: Map[String, Notification]) {
