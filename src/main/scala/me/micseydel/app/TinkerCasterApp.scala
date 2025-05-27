@@ -64,14 +64,13 @@ object TinkerCasterApp {
 
 
 case class MyCentralCast(
-                    chronicler: SpiritRef[Chronicler.Message],
-                    gossiper: SpiritRef[Gossiper.Message],
-                    rasa: SpiritRef[RasaActor.Message]
-                    )
+  chronicler: SpiritRef[Chronicler.Message],
+  gossiper: SpiritRef[Gossiper.Message],
+  rasa: SpiritRef[RasaActor.Message]
+)
 
 
 object UserTinkerCast {
-
   def apply(vaultRoot: VaultPath)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
@@ -93,8 +92,6 @@ object UserTinkerCast {
 
     @unused
     val catsHelper: SpiritRef[CatsHelper.Message] = context.cast(kitties.CatsHelper(), "CatsHelper")
-
-    // high level note stuff
 
     @unused // runs itself via TimeKeeper
     val periodicNotesCreatorActor: SpiritRef[PeriodicNotesCreatorActor.Message] =
