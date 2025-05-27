@@ -86,7 +86,6 @@ object RootTinkerBehavior {
       "EventReceiver"
     )
 
-    // magic
     val tinkerSystem = TinkerSystem(
       context.system,
       tinkerBrain,

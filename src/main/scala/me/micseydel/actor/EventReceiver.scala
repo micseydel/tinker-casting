@@ -3,10 +3,13 @@ package me.micseydel.actor
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.server.Directives.concat
+import akka.http.scaladsl.model.ws.TextMessage
+import akka.http.scaladsl.server.Directives.{concat, handleWebSocketMessages, path}
 import akka.http.scaladsl.server.Route
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.{Flow, Sink, Source}
 import me.micseydel.dsl.cast.TinkerBrain
-import me.micseydel.prototyping.{EventRouting, WebSocketRouting}
+import me.micseydel.prototyping.EventRouting
 import spray.json._
 
 import scala.util.{Failure, Success}
@@ -104,5 +107,25 @@ object EventReceiver {
     }
 
     implicit val eventFormat: RootJsonFormat[IncomingEvent] = jsonFormat2(IncomingEvent)
+  }
+}
+
+private object WebSocketRouting {
+  def websocketRoute(messageActor: ActorRef[TinkerBrain.RegisterClient]): Route = {
+    path("ws-messages") {
+      handleWebSocketMessages {
+        val source = Source.actorRef[TextMessage](
+          completionMatcher = PartialFunction.empty,
+          failureMatcher = PartialFunction.empty,
+          bufferSize = 10,
+          overflowStrategy = OverflowStrategy.fail
+        ).mapMaterializedValue { clientActor =>
+          messageActor ! TinkerBrain.RegisterClient(clientActor)
+          clientActor
+        }
+
+        Flow.fromSinkAndSourceCoupled(Sink.ignore, source)
+      }
+    }
   }
 }

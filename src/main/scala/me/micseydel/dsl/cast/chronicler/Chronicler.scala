@@ -26,8 +26,6 @@ import scala.util.{Failure, Success, Try}
 
 object Chronicler {
 
-  // mailbox
-
   sealed trait Message
 
   sealed trait PostTinkeringInitMessage extends Message
