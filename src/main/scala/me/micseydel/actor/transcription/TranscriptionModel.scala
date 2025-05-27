@@ -20,13 +20,6 @@ private[transcription] object TranscriptionModel {
       message match {
         case TranscriptionCompletedEvent(wr) =>
           accumulatingResult.addTranscriptionCompletedEvent(TimedWhisperResult(wr, capture.transcriptionStartedTime))
-//        case ReceiveRasaResult(RasaResult(_, Intent(_, intent), _, _, _), _) =>
-//          accumulatingResult.copy(maybeRasaIntent = Some(intent))
-//        case ReceiveResponseOllama(chatResponse) =>
-//          chatResponse match {
-//            case result@OllamaModel.ChatResponseResult(_, _) => accumulatingResult.copy(maybeChatResponseResult = Some(result))
-//            case OllamaModel.ChatResponseFailure(_, _) => accumulatingResult
-//          }
       }
     }.toMarkdown
   }
