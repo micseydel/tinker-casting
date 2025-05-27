@@ -73,7 +73,7 @@ object TinkerCasterApp {
   }
 
   def centralCastFactory(config: ChroniclerConfig)(Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
-    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rassa")
+    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rasa")
     val gossiper = context.cast(Gossiper()(Tinker), "Gossiper")
     val chronicler = context.cast(Chronicler(config, gossiper)(Tinker), "Chronicler")
     val rasaActor = context.cast(RasaActor()(Tinker), "RasaActor")
@@ -92,19 +92,14 @@ case class MyCentralCast(
 object UserTinkerCast {
 
   def apply(config: ConfigToSimplifyAway)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
-    @unused
+    @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
     @unused // registers with the Operator
     val gmailActor = context.cast(GmailExperimentActor(), "GmailTestActor")
 
-    @unused // subscribes to gmail
+    @unused // subscribes to gmail via operator
     val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
-
-    // !! specializations
-
-    //    @unused // driven internally
-    //    val llmTinkeringActor = context.cast(LLMTinkeringActor(), "LLMTinkeringActor")
 
     @unused // uses an internal folder watcher
     val ollamaActor = context.cast(OllamaActor(), "OllamaActor")
@@ -112,11 +107,8 @@ object UserTinkerCast {
     @unused // subscribes to Gossiper
     val remindMeListenerActor = context.cast(RemindMeListenerActor(), "RemindMeListenerActor")
 
-    // me :)
     @unused
     val centralNervousSystemMaintenance: SpiritRef[CentralNervousSystemMaintenance.Message] = context.cast(CentralNervousSystemMaintenance(config), "CentralNervousSystemMaintenance")
-
-    // my cats
 
     @unused
     val catsHelper: SpiritRef[CatsHelper.Message] = context.cast(kitties.CatsHelper(), "CatsHelper")
@@ -127,12 +119,7 @@ object UserTinkerCast {
     val periodicNotesCreatorActor: SpiritRef[PeriodicNotesCreatorActor.Message] =
       context.cast(PeriodicNotesCreatorActor(config.vaultRoot), "PeriodicNotesCreatorActor")
 
-    implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
-      //      case event@ReceiveMqttEvent(owntracks.Topic, _) =>
-      ////        locationTracker !! LocationTracker.ReceiveMqtt(event)
-      //        Tinker.steadily
-
       case ReceiveMqttEvent(topic, payload) =>
         context.actorContext.log.warn(s"Unexpected topic $topic message, payload ${payload.length} bytes")
         Tinker.steadily
