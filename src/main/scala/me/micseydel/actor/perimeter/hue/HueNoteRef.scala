@@ -1,5 +1,6 @@
 package me.micseydel.actor.perimeter.hue
 
+import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.actor.perimeter.HueControl.{SetAllBrightness, SetAllLights}
 import me.micseydel.actor.perimeter.hue.HueNoteRef.{BrightnessKey, ColorKey, CommandsMap, Properties}
@@ -12,10 +13,24 @@ import scala.util.{Failure, Success}
 // FIXME: ideally the underlying reads would return ValidatedNels, to report parsing and other issues
 private[perimeter] class HueNoteRef(noteRef: NoteRef) {
   def setToDefault(): Note = {
+    val keeping: Map[String, Any] = (noteRef
+      .readNote()
+      .flatMap(_.yamlFrontMatter)
+      .map { map =>
+        val maybeKeepingHueApiIP = map.get("hueApiIP").map("hueApiIP" -> _)
+        val maybeHueApiUsername = map.get("hueApiUsername").map("hueApiUsername" -> _)
+        List(maybeKeepingHueApiIP, maybeHueApiUsername).flatten.toMap
+      }) match {
+      case Failure(exception) => throw exception
+      case Success(value) => value
+    }
+
     val frontmatter: Map[String, Object] = Map(
       BrightnessKey -> -1.asInstanceOf[Object],
       ColorKey -> "?".asInstanceOf[Object]
-    )
+    ) ++ keeping.map { case (k, v) =>
+      (k, v.asInstanceOf[Object])
+    }
 
     val default = Note(
       CommandsMap.keys.mkString("- [ ] ", "\n- [ ] ", "\n"),
