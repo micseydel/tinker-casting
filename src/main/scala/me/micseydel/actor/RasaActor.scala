@@ -7,7 +7,8 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.http.scaladsl.unmarshalling.Unmarshaller.UnsupportedContentTypeException
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{Tinker, TinkerContext}
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.model.RasaResult
 import me.micseydel.model.RasaResultProtocol.rasaResultFormat
 import spray.json.DefaultJsonProtocol._
@@ -22,10 +23,17 @@ object RasaActor {
   private final case class ReceiveRasaResult(result: RasaResult, replyTo: ActorRef[RasaResult]) extends Message
   private final case class RasaRequestFailed(message: String, throwable: Throwable) extends Message
 
-  def apply(host: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Rasa Config", TinkerColor.random(), "🤟", Some("_actor_notes")) { (context, noteRef) =>
     import context.actorContext.system
     implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext
     implicit val tc: TinkerContext[_] = context
+
+    val host = noteRef.readNote().flatMap(_.yamlFrontMatter).map(_.get("host")) match {
+      case Success(Some(value: String)) => value
+      case Success(other) => throw new RuntimeException(s"Expected a string but key host but found: $other")
+      case Failure(exception) =>
+        throw new RuntimeException("This code should probably be updated to have a waiting state, and to watch until it's ready", exception)
+    }
 
     Tinker.receiveMessage {
       case GetRasaResult(string, model, replyTo) =>

@@ -2,7 +2,6 @@ package me.micseydel.app
 
 import cats.data.{Validated, ValidatedNel}
 import com.typesafe.config.{Config, ConfigException, ConfigFactory}
-import me.micseydel.actor.GmailConfig
 import me.micseydel.actor.perimeter.HueControl.HueConfig
 import me.micseydel.vault.VaultPath
 
@@ -16,8 +15,6 @@ object AppConfiguration {
     ntfyKeys: NtfyKeys,
     hueConfig: Option[HueConfig],
     mqttConfig: Option[MqttConfig],
-    rasaHost: String,
-    gmail: Option[GmailConfig]
   )
 
   /**
@@ -58,15 +55,12 @@ object AppConfiguration {
             getOptionalString(config, "ntfy-keys.searchSpaceKey")
           ),
           hueConfig,
-          maybeMqttConfig,
-          config.getString("rasa.host"),
-          for (credsPath <- getOptionalString(config, "gmail.creds"); tokensPath <- getOptionalString(config, "gmail.tokens"))
-            yield GmailConfig(credsPath, tokensPath)
+          maybeMqttConfig
         ))
     }
   }
 
-  def getOptionalString(config: Config, key: String): Option[String] = {
+  private def getOptionalString(config: Config, key: String): Option[String] = {
     try {
       Some(config.getString(key))
     } catch {
@@ -88,6 +82,4 @@ object AppConfiguration {
                      highCO2: Option[String],
                      searchSpace: Option[String]
                      )
-
-  case class AranetConfig(host: String, port: Int)
 }

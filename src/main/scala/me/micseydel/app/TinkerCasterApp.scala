@@ -59,25 +59,24 @@ object TinkerCasterApp {
 
     val orchestratorConfig = ConfigToSimplifyAway(
       config.vaultRoot,
-      config.ntfyKeys,
-      config.gmail
+      config.ntfyKeys
     )
 
     @unused
     val container: actor.ActorSystem =
       TinkerContainer(config, notificationCenterAbilities)(
-        centralCastFactory(config.rasaHost, chroniclerConfig),
+        centralCastFactory(chroniclerConfig),
         UserTinkerCast(orchestratorConfig)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
   }
 
-  def centralCastFactory(rasaHost: String, config: ChroniclerConfig)(Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
+  def centralCastFactory(config: ChroniclerConfig)(Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
     context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rassa")
     val gossiper = context.cast(Gossiper()(Tinker), "Gossiper")
     val chronicler = context.cast(Chronicler(config, gossiper)(Tinker), "Chronicler")
-    val rasaActor = context.cast(RasaActor(rasaHost)(Tinker), "RasaActor")
+    val rasaActor = context.cast(RasaActor()(Tinker), "RasaActor")
     MyCentralCast(chronicler, gossiper, rasaActor)
   }
 

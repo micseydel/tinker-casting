@@ -6,7 +6,7 @@ import akka.actor.{ActorRef, ActorSystem, Props, typed}
 import me.micseydel.actor.inactive.owntracks
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.perimeter.HomeMonitorActor
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, GmailConfig, PahoWrapperClassicActor}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor}
 import me.micseydel.app.AppConfiguration.{AppConfig, NtfyKeys}
 import me.micseydel.app.{AppConfiguration, NotificationCenterAbilities}
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
@@ -141,8 +141,7 @@ object RootTinkerBehavior {
 
 object TinkerOrchestrator {
   case class ConfigToSimplifyAway(vaultRoot: VaultPath,
-                                  ntfyKeys: NtfyKeys,
-                                  gmail: Option[GmailConfig]
+                                  ntfyKeys: NtfyKeys
                                   )
   def apply[CentralCast](centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent])(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
     val enhancedTinker: EnhancedTinker[CentralCast] = new EnhancedTinker[CentralCast](context.system, centralCastFactory(Tinker, context))
