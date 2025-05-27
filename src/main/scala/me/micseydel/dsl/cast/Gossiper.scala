@@ -9,7 +9,7 @@ import me.micseydel.dsl.cast.TinkerBrainUtil.Listeners
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Sender, SpiritRef, Tinker}
-import me.micseydel.model.{BaseModel, LargeModel, NotedTranscription}
+import me.micseydel.model.{BaseModel, LargeModel, NotedTranscription, TurboModel}
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
@@ -110,6 +110,8 @@ object Gossiper {
           case LargeModel =>
             context.actorContext.log.info(s"Sending ${notedTranscription.noteId} to ${accurateListeners.size} listeners (large, accurate model)")
             accurateListeners *!* notedTranscription
+          case TurboModel =>
+            // FIXME
           case BaseModel =>
             context.actorContext.log.info(s"Sending ${notedTranscription.noteId} to ${fastListeners.size} listeners (base, fast model)")
             fastListeners *!* notedTranscription

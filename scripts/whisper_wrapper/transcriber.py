@@ -167,7 +167,7 @@ if __name__ == '__main__':
     try:
         _, model, port, vault_root = sys.argv
 
-        accepted_models = ("base", "large")
+        accepted_models = ("base", "turbo", "large")
         if model not in accepted_models:
             raise ValueError(f"model {model} not in {accepted_models}")
 

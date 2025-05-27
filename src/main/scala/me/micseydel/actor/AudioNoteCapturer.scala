@@ -41,6 +41,7 @@ object AudioNoteCapturer {
   case class TranscriptionEvent(payload: String) extends Message
 
   private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+
   private case class ReceivePing(ping: Ping) extends Message
 
   // behavior
@@ -86,6 +87,18 @@ object AudioNoteCapturer {
       "WhisperLargeUploadActor"
     )
 
+    val maybeWhisperTurboActor = config.whisperTurbo.map { host =>
+      context.spawn(
+        WhisperUploadActor(WhisperUploadActor.Config(
+          host,
+          whisperEventReceiverHost,
+          whisperEventReceiverPort,
+          vaultRoot
+        )),
+        "WhisperTurboUploadActor"
+      )
+    }
+
     val whisperBaseActor = context.spawn(
       WhisperUploadActor(WhisperUploadActor.Config(
         config.whisperBase,
@@ -97,6 +110,7 @@ object AudioNoteCapturer {
     )
 
     val clock = context.system.clock
+
     def triggerTranscriptionForAudioPath(audioPath: Path): Unit = {
       Chronicler.getCaptureTimeFromAndroidAudioPath(audioPath) match {
         case Left(msg) =>
@@ -106,7 +120,7 @@ object AudioNoteCapturer {
             context.actorContext.log.error(s"Failed to get capture time for wavPath $audioPath: $msg")
           }
         case Right(captureTime) =>
-          context.actorContext.log.debug(s"Sending TranscriptionStartedEvent to wrapper")
+          context.actorContext.log.debug(s"Sending TranscriptionStartedEvent to wrapper then Whisper large and base; turbo? ${maybeWhisperTurboActor.nonEmpty}")
 
           val transcriptionStartTime = clock.now()
           val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
@@ -115,6 +129,7 @@ object AudioNoteCapturer {
           val enqueueRequest = WhisperFlaskProtocol.Enqueue(audioPath.toString.replace(vaultRoot.toString + "/", ""))
           whisperLargeActor ! enqueueRequest
           whisperBaseActor ! enqueueRequest
+          maybeWhisperTurboActor.foreach(_ ! enqueueRequest)
       }
     }
 

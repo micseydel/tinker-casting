@@ -6,6 +6,7 @@ import spray.json.{DefaultJsonProtocol, DeserializationException, JsString, JsVa
 sealed trait WhisperModel
 case object BaseModel extends WhisperModel
 case object LargeModel extends WhisperModel
+case object TurboModel extends WhisperModel
 
 case class WhisperResultMetadata(
                                   model: WhisperModel,
@@ -39,7 +40,8 @@ object WhisperResultJsonProtocol extends DefaultJsonProtocol {
       case JsString(s) => s match {
         case "BaseModel" | "base_model" | "base" => BaseModel
         case "LargeModel" | "large_model" | "large" => LargeModel
-        case _ => throw DeserializationException(s"Expected BaseModel (or camel case or 'base') or LargeModel but got $s")
+        case "TurboModel" | "turbo_model" | "turbo" => TurboModel
+        case _ => throw DeserializationException(s"Expected BaseModel|LargeModel|TurboModel (or camel case or lowercase without model) but got $s")
       }
       case _ => throw DeserializationException("Expected a string")
     }

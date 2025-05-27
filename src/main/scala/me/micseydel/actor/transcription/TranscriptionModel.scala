@@ -1,7 +1,6 @@
 package me.micseydel.actor.transcription
 
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
-import me.micseydel.actor.ollama.OllamaModel.ChatResponseResult
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, TranscriptionCompletedEvent}
 import me.micseydel.model._
 import me.micseydel.util.StringImplicits.RichString
@@ -32,6 +31,7 @@ private[transcription] object TranscriptionModel {
                             queuedForTranscription: ZonedDateTime,
                             // async additions
                             maybeWhisperLargeResult: Option[TimedWhisperResult] = None,
+                            maybeWhisperTurboResult: Option[TimedWhisperResult] = None,
                             maybeWhisperBaseResult: Option[TimedWhisperResult] = None
                           ) {
 
@@ -51,6 +51,7 @@ private[transcription] object TranscriptionModel {
         Some(s"![[${wavPath.getFileName}]]"),
         Some("# Details"),
         maybeWhisperLargeResult.map(_.whisperResult).map(noteContentsForModel),
+        maybeWhisperTurboResult.map(_.whisperResult).map(noteContentsForModel),
         maybeWhisperBaseResult.map(_.whisperResult).map(noteContentsForModel)
       ).flatten
 
@@ -61,6 +62,8 @@ private[transcription] object TranscriptionModel {
       model match {
         case BaseModel =>
           maybeWhisperBaseResult
+        case TurboModel =>
+          maybeWhisperTurboResult
         case LargeModel =>
           maybeWhisperLargeResult
       }
@@ -85,6 +88,8 @@ private[transcription] object TranscriptionModel {
               whisperModel match {
                 case BaseModel =>
                   model.copy(maybeWhisperBaseResult = resultToAdd)
+                case TurboModel =>
+                  model.copy(maybeWhisperTurboResult = resultToAdd)
                 case LargeModel =>
                   model.copy(maybeWhisperLargeResult = resultToAdd)
               }

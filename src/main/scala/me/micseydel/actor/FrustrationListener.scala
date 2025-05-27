@@ -79,6 +79,7 @@ object FrustrationListener {
                 Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(fast) Detected frustration", Some(NeedsAttention))
               case LargeModel =>
                 Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(accurate) Detected frustration", Some(NeedsAttention))
+              case TurboModel => ???
             }
 
             context.actorContext.log.info("Sending to daily notes router")

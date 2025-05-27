@@ -195,6 +195,7 @@ object HueListener {
         s"Updated the lights (fast): $text"
       case LargeModel =>
         s"Updated the lights (accurate): $text"
+      case TurboModel => ???
     }
 
     Chronicler.ListenerAcknowledgement(noteId, clock.now(), ackText, Some(AutomaticallyIntegrated))
