@@ -42,9 +42,7 @@ object Gossiper {
 
   //
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = finishInitializing()
-
-  private def finishInitializing()(implicit Tinker: Tinker): Ability[Message] =
+  def apply()(implicit Tinker: Tinker): Ability[Message] =
     NoteMakingTinkerer("Gossiper", rgb(255, 190, 230), "🗣️") { (context, noteRef) =>
       context.actorContext.log.info("Started Gossiper")
       behavior(Set.empty, Set.empty, Map.empty)(Tinker, noteRef)

@@ -1,12 +1,11 @@
 package me.micseydel.actor.transcription
 
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
-import me.micseydel.actor.ollama.OllamaModel
 import me.micseydel.actor.ollama.OllamaModel.ChatResponseResult
-import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, ReceiveResponseOllama, TranscriptionCompletedEvent}
+import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, TranscriptionCompletedEvent}
 import me.micseydel.model._
 import me.micseydel.util.StringImplicits.RichString
-import me.micseydel.util.{StringUtil, TimeUtil}
+import me.micseydel.util.StringUtil
 
 import java.nio.file.Path
 import java.time.ZonedDateTime
@@ -23,11 +22,11 @@ private[transcription] object TranscriptionModel {
           accumulatingResult.addTranscriptionCompletedEvent(TimedWhisperResult(wr, capture.transcriptionStartedTime))
 //        case ReceiveRasaResult(RasaResult(_, Intent(_, intent), _, _, _), _) =>
 //          accumulatingResult.copy(maybeRasaIntent = Some(intent))
-        case ReceiveResponseOllama(chatResponse) =>
-          chatResponse match {
-            case result@OllamaModel.ChatResponseResult(_, _) => accumulatingResult.copy(maybeChatResponseResult = Some(result))
-            case OllamaModel.ChatResponseFailure(_, _) => accumulatingResult
-          }
+//        case ReceiveResponseOllama(chatResponse) =>
+//          chatResponse match {
+//            case result@OllamaModel.ChatResponseResult(_, _) => accumulatingResult.copy(maybeChatResponseResult = Some(result))
+//            case OllamaModel.ChatResponseFailure(_, _) => accumulatingResult
+//          }
       }
     }.toMarkdown
   }
@@ -40,9 +39,7 @@ private[transcription] object TranscriptionModel {
                             queuedForTranscription: ZonedDateTime,
                             // async additions
                             maybeWhisperLargeResult: Option[TimedWhisperResult] = None,
-                            maybeWhisperBaseResult: Option[TimedWhisperResult] = None,
-                            maybeChatResponseResult: Option[ChatResponseResult] = None,
-                            maybeRasaIntent: Option[String] = None
+                            maybeWhisperBaseResult: Option[TimedWhisperResult] = None
                           ) {
 
     def toMarkdown: String = {
@@ -61,11 +58,7 @@ private[transcription] object TranscriptionModel {
         Some(s"![[${wavPath.getFileName}]]"),
         Some("# Details"),
         maybeWhisperLargeResult.map(_.whisperResult).map(noteContentsForModel),
-        maybeWhisperBaseResult.map(_.whisperResult).map(noteContentsForModel),
-        maybeRasaIntent.filterNot(_ == "no_intent").map(intent => s"# Rasa\n\n- $intent\n"),
-        maybeChatResponseResult.map {
-          case ChatResponseResult(response, model) => s"# $model\n\n$response\n"
-        }
+        maybeWhisperBaseResult.map(_.whisperResult).map(noteContentsForModel)
       ).flatten
 
       parts.mkString("\n")

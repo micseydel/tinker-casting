@@ -27,17 +27,15 @@ object Chronicler {
 
   sealed trait Message
 
-  sealed trait PostTinkeringInitMessage extends Message
+  case class TranscriptionStartedEvent(capture: NoticedAudioNote) extends Message
 
-  case class TranscriptionStartedEvent(capture: NoticedAudioNote) extends PostTinkeringInitMessage
+  case class TranscriptionCompletedEvent(event: WhisperResult) extends Message
 
-  case class TranscriptionCompletedEvent(event: WhisperResult) extends PostTinkeringInitMessage
+  case class ReceiveNotedTranscription(notedTranscription: NotedTranscription) extends Message
 
-  case class ActOnNoteRef(event: NotedTranscription) extends PostTinkeringInitMessage
+  case class ListenerAcknowledgement(noteId: NoteId, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends Message
 
-  case class ListenerAcknowledgement(noteId: NoteId, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends PostTinkeringInitMessage
-
-  final case class ReceiveNotePing(ping: Ping) extends PostTinkeringInitMessage
+  final case class ReceiveNotePing(ping: Ping) extends Message
 
 
   def apply(config: ChroniclerConfig, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
@@ -82,7 +80,7 @@ object Chronicler {
                        gossiper: SpiritRef[Gossiper.Message],
                        moc: ActorRef[ChroniclerMOC.Message]
                       ): Ability[Message] =  Tinker.setup { context =>
-    context.actorContext.log.info(s"Behavior initialized with ${wavNameToTranscriptionNoteOwner.size} elements")
+    context.actorContext.log.info(s"Currently have ${wavNameToTranscriptionNoteOwner.size} elements")
     Tinker.receiveMessage { message =>
       implicit val c: TinkerContext[_] = context
       context.actorContext.log.debug(s"Chronicler received message $message")
@@ -128,7 +126,7 @@ object Chronicler {
               Tinker.steadily
           }
 
-        case ActOnNoteRef(notedTranscription) =>
+        case ReceiveNotedTranscription(notedTranscription) =>
           val captureTime = notedTranscription.capture.captureTime
 
           // add to the MOC, but just for the large model
@@ -201,8 +199,6 @@ object Chronicler {
       ListenerAcknowledgement(noteId, tinkerContext.system.clock.now(), details, Some(AutomaticallyIntegrated))
     }
   }
-
-  case class WhisperHosts(large: String, base: String)
 
   case class ChroniclerConfig(vaultRoot: VaultPath, eventReceiverHost: String, eventReceiverPort: Int)
 }
