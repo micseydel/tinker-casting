@@ -168,7 +168,7 @@ object Chronicler {
   private val mobilePattern = """mobile_audio_capture_(\d{8}-\d{6})\.wav""".r
   private val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
-  def tryParse(dateTimeStr: String): Either[String, ZonedDateTime] = {
+  private def tryParse(dateTimeStr: String): Either[String, ZonedDateTime] = {
     Try(LocalDateTime.parse(dateTimeStr, formatter)) match {
       case Success(localDateTime) =>
         // FIXME: get the timezone by location of the device at the time; assumed California for foreseeable future

@@ -1,6 +1,5 @@
 package me.micseydel.dsl.tinkerer
 
-import akka.actor.typed
 import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.util.Timeout
@@ -9,15 +8,13 @@ import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
-import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
-import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerColor, TinkerContext}
-import me.micseydel.model.{Entity, NotedTranscription, RasaResult}
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerContext}
+import me.micseydel.model.{NotedTranscription, RasaResult}
 import me.micseydel.util.StringImplicits.RichString
-import me.micseydel.util.{MarkdownUtil, StringUtil}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 
 object TinkerListener {
@@ -31,6 +28,7 @@ object TinkerListener {
 
   case class Acknowledged(listenerAcknowledgement: ListenerAcknowledgement) extends ListenerResult
 
+  // FIXME: TinkerListener is NOT clearly in userspace, should fix
   def simpleStateless(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
 

@@ -254,10 +254,9 @@ object AudioNoteCapturer {
 
   //
 
-  def onTranscriptionEvent(state: String, payload: String, chronicler: ActorRef[Chronicler.Message], noteRef: NoteRef, generateMarkdown: Boolean)(implicit context: TinkerContext[_]): Try[NoOp.type] = {
+  private def onTranscriptionEvent(state: String, payload: String, chronicler: ActorRef[Chronicler.Message], noteRef: NoteRef, generateMarkdown: Boolean)(implicit context: TinkerContext[_]): Try[NoOp.type] = {
     val whisperResultEvent = try {
       payload.parseJson.convertTo[WhisperResult]
-
     } catch {
       case e: DeserializationException =>
         context.actorContext.log.error(s"Deserialization failed for payload $payload", e)
