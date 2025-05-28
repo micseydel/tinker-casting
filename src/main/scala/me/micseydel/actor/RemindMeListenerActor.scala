@@ -28,19 +28,18 @@ object RemindMeListenerActor {
 
   sealed trait Message
 
-  case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
+  final case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
-  case class MarkAsDone(notificationId: NotificationId) extends Message
+  private case class MarkAsDone(notificationId: NotificationId) extends Message
 
   final case class ReceiveVotes(votes: NonEmptyList[Vote]) extends Message
 
-  private val NoteName = "Reminders"
   private val JsonName = "reminders_tinkering"
 
-  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer[Message](NoteName, Yellow, "⚠️") { (context, noteRef) =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer[Message]("Reminders", Yellow, "⚠️") { (context, noteRef) =>
     Tinker.withTypedJson(JsonName, StateJsonProtocol.stateFormat) { jsonRef =>
         implicit val c: TinkerContext[_] = context
-        context.actorContext.log.info(s"Starting RemindMeListenerActor(note=$NoteName, json=$JsonName): sending Gossiper.SubscribeHybrid")
+        context.actorContext.log.info(s"Starting RemindMeListenerActor(note=${noteRef.noteId}, json=$JsonName): sending Gossiper.SubscribeHybrid")
 
         Tinker.userExtension.gossiper !! Gossiper.SubscribeHybrid(context.messageAdapter(TranscriptionEvent))
         context.system.notifier !! NotificationCenterManager.RegisterReplyTo(context.messageAdapter(MarkAsDone), SpiritId)

@@ -33,9 +33,9 @@ object AranetActor {
 
   private val NoteName = "Aranet Devices"
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = setup(lastSeenElevated = false)
+  def apply()(implicit Tinker: Tinker): Ability[Message] = setup()
 
-  private def setup(lastSeenElevated: Boolean)(implicit Tinker: Tinker): Ability[Message] = {
+  private def setup()(implicit Tinker: Tinker): Ability[Message] = {
     AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated) { (context, noteRef) =>
       val maybeUri = noteRef.readNote().flatMap(_.yamlFrontMatter).map(_.get("uri")) match {
         case Success(Some(uri: String)) => Some(uri)
