@@ -77,15 +77,17 @@ object AudioNoteCapturer {
 
     context.actorContext.log.info(s"Starting WhisperLargeUploadActor on ${config.whisperLarge} and WhisperBaseUploadActor on ${config.whisperBase}")
 
-    val whisperLargeActor: ActorRef[WhisperFlaskProtocol.Message] = context.spawn(
-      WhisperUploadActor(WhisperUploadActor.Config(
-        config.whisperLarge,
-        whisperEventReceiverHost,
-        whisperEventReceiverPort,
-        vaultRoot
-      )),
-      "WhisperLargeUploadActor"
-    )
+    val maybeWhisperLargeActor = config.whisperLarge.map { host =>
+      context.spawn(
+        WhisperUploadActor(WhisperUploadActor.Config(
+          host,
+          whisperEventReceiverHost,
+          whisperEventReceiverPort,
+          vaultRoot
+        )),
+        "WhisperLargeUploadActor"
+      )
+    }
 
     val maybeWhisperTurboActor = config.whisperTurbo.map { host =>
       context.spawn(
@@ -99,15 +101,19 @@ object AudioNoteCapturer {
       )
     }
 
-    val whisperBaseActor = context.spawn(
-      WhisperUploadActor(WhisperUploadActor.Config(
-        config.whisperBase,
-        whisperEventReceiverHost,
-        whisperEventReceiverPort,
-        vaultRoot
-      )),
-      "WhisperBaseUploadActor"
-    )
+    val maybeWhisperBaseActor = config.whisperBase.map { host =>
+      context.spawn(
+        WhisperUploadActor(WhisperUploadActor.Config(
+          host,
+          whisperEventReceiverHost,
+          whisperEventReceiverPort,
+          vaultRoot
+        )),
+        "WhisperBaseUploadActor"
+      )
+    }
+
+    val recipients: List[ActorRef[WhisperFlaskProtocol.Message]] = List(maybeWhisperLargeActor, maybeWhisperBaseActor, maybeWhisperTurboActor).flatten
 
     val clock = context.system.clock
 
@@ -120,16 +126,14 @@ object AudioNoteCapturer {
             context.actorContext.log.error(s"Failed to get capture time for wavPath $audioPath: $msg")
           }
         case Right(captureTime) =>
-          context.actorContext.log.debug(s"Sending TranscriptionStartedEvent to wrapper then Whisper large and base; turbo? ${maybeWhisperTurboActor.nonEmpty}")
+          context.actorContext.log.debug(s"Sending TranscriptionStartedEvent to $recipients")
 
           val transcriptionStartTime = clock.now()
           val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
           chronicler ! Chronicler.TranscriptionStartedEvent(capture)
 
           val enqueueRequest = WhisperFlaskProtocol.Enqueue(audioPath.toString.replace(vaultRoot.toString + "/", ""))
-          whisperLargeActor ! enqueueRequest
-          whisperBaseActor ! enqueueRequest
-          maybeWhisperTurboActor.foreach(_ ! enqueueRequest)
+          recipients.foreach(_ ! enqueueRequest)
       }
     }
 
@@ -285,15 +289,15 @@ object AudioNoteCapturer {
 
   private def now(clock: TinkerClock): String = TimeUtil.zonedDateTimeToISO8601(clock.now())
 
-  private case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: String, whisperBase: String, generateMarkdown: Boolean, whisperTurbo: Option[String])
+  private case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: Option[String], whisperBase: Option[String], generateMarkdown: Boolean, whisperTurbo: Option[String])
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def properties: Try[Option[AudioNoteCaptureProperties]] = {
       noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
         for {
           audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
-          whisperLarge <- properties.get("whisperLarge").map(_.asInstanceOf[String])
-          whisperBase <- properties.get("whisperBase").map(_.asInstanceOf[String])
+          whisperLarge = properties.get("whisperLarge").map(_.asInstanceOf[String])
+          whisperBase = properties.get("whisperBase").map(_.asInstanceOf[String])
           generateMarkdown <- properties.get("generateMarkdown").map(_.asInstanceOf[Boolean]).orElse(Some(false))
           whisperTurbo = properties.get("whisperTurbo").map(_.asInstanceOf[String])
         } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase, generateMarkdown, whisperTurbo)
