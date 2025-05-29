@@ -226,6 +226,16 @@ object NotificationCenterManager {
                                           hue: Tinker => Ability[HueControl.Message],
                                           chime: Tinker => Ability[ChimeActor.Message]
                                         )
+
+  object NotificationCenterAbilities {
+    val None: NotificationCenterAbilities = NotificationCenterAbilities(_.ignore, _.ignore, _.ignore)
+
+    val Defaults: NotificationCenterAbilities = NotificationCenterAbilities(
+      NtfyerActor()(_),
+      HueControl()(_),
+      ChimeActor()(_)
+    )
+  }
 }
 
 case class NotificationCenterState(map: Map[String, Notification]) {

@@ -4,10 +4,8 @@ import akka.actor
 import cats.data.Validated
 import me.micseydel.actor._
 import me.micseydel.actor.kitties.CatsHelper
-import me.micseydel.actor.notifications.ChimeActor
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
-import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
@@ -34,19 +32,13 @@ object TinkerCasterApp {
   }
 
   def run(config: AppConfig): Unit = {
-    val notificationCenterAbilities = NotificationCenterAbilities(
-      NtfyerActor()(_),
-      HueControl()(_),
-      ChimeActor()(_)
-    )
-
-    // Chronicler leverages the appconfig for EventReceiver details
+    // Chronicler, unlike my other actors, leverages EventReceiver for HTTP responses so needs non-note-config
     val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
 
     @unused
     val container: actor.ActorSystem =
-      TinkerContainer(config, notificationCenterAbilities)(
-        centralCastFactory(chroniclerConfig),
+      TinkerContainer(config, NotificationCenterAbilities.Defaults)(
+        centralCastFactory(chroniclerConfig), // effectively globals
         UserTinkerCast(config.vaultRoot)(_: EnhancedTinker[MyCentralCast])
       )
 
