@@ -1,15 +1,25 @@
-**FYI** This is a **"learning in public" personal code base**. Instructions for getting started can be found [here](https://github.com/micseydel/tinker-starter-vault/). This is not polished and I tried to embrace my imperfectionism and -- at times -- a little bit of chaos. It definitely has bugs, use at your own risk. I'd say the most embarrassing thing here is the lack of tests (or possibly tests that don't even compile), but [NoteRefs](https://github.com/micseydel/tinker-casting/blob/main/src/main/scala/me/micseydel/vault/persistence/VaultRef.scala) and other mechanisms exist with that in mind, once the design is more settled.
+Welcome to my "tinker cast" - a personal project by Michael Seydel. This is essentially a combination of **atomic notes** and **the actor model**, ideas from "personal knowledge management" and computer science.
 
-# About
+I've wrapped Akka's actor model implementation with a few additions
+- my actors can easily use Markdown notes for memory - inspired from Obsidian's "vault"
+- a markdown-based notification center is available to actors
+- a "tinkerbrain" visualization, like so
 
-## Applying my Tinker Cast
+![](https://i.imgur.com/IQkaDYQ.png)
 
-- Single-stream [voice transcriptions](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20voice%20transcriptions.md)
-- ⭐️Voice-based [cat litter tracking](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20cat%20litter%20tracking.md) ⭐️
-- [Smart light](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20smart%20lights%20control.md) controls using a note (or voice)
-- ⭐️A text-centered [notification center](documentation/Applications%20of%20my%20Tinker%20Cast%20-%20notification%20center.md) ⭐️
-- Air quality monitoring
-- HALT (hungry/angry/lonely/tired)
+[Click here](https://imgur.com/a/extended-mind-visualization-2024-10-20-Hygmvkq) for a more historical Imgur album.
+
+# Problems I've solved with my Tinker Cast
+
+The initial problem solved was to replace Google Keep and Google Pixel Recorder, two apps I was using for **transcribed voice notes**. When OpenAI released Whisper, I replaced those Google apps with a **fully local** solution using [Easy Voice Recorder](https://play.google.com/store/apps/details?id=com.coffeebeanventures.easyvoicerecorder) and [Syncthing](https://play.google.com/store/apps/details?id=com.github.catfriend1.syncthingandroid) - an actor watches for new files, and then they get transcribed and added to my [Obsidian](https://obsidian.md/) vault.
+
+An important application of voice notes for me was **cat litter tracking**. One of my cats has a life-threatening chronic condition, and tracking his litter use gives me peace of mind in good times and helps at the vet in bad times. The generated summary reports look like:
+![](https://i.imgur.com/8xt6XAl.png)
+
+LLMs are not used for this flow, though some light machine learning is, so when events are ambiguous, they go to an inbox instead so that I can manually fix the note.
+
+!!! The following needs cleanup/updates !!!
+---
 
 ## Some Context
 
