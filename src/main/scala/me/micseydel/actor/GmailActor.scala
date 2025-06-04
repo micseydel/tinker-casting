@@ -60,7 +60,9 @@ object GmailActor {
     }
   }
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Gmail Configuration", TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
+  val NoteName = "Gmail Configuration"
+
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
     implicit val nr: NoteRef = noteRef
     implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
@@ -183,7 +185,7 @@ private object TinkerGmailService {
       .build()
   }
 
-  def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor): Future[Seq[Email]] = Future {
+  def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor): Future[Seq[Email]] = (Future {
     val messages: List[com.google.api.services.gmail.model.Message] = {
       val rawMessages = gmailService.users().messages().list("me")
         // FIXME
@@ -216,6 +218,13 @@ private object TinkerGmailService {
 
       Some(Email(sender, subject, body, time, groupedHeaders))
     }
+  }).recoverWith {
+    case e: com.google.api.client.auth.oauth2.TokenResponseException =>
+      if (e.getDetails.getError == "invalid_grant" && e.getDetails.getErrorDescription == "Token has been expired or revoked") {
+        Future.failed(new RuntimeException(s"This happens once a week, delete the file: .gmail_tokens.json/StoredCredential"))
+      } else {
+        Future.failed(e)
+      }
   }
 
   private def extractPlainText(parts: java.util.List[MessagePart]): String = {
