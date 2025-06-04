@@ -342,10 +342,6 @@ private object TinkerBrainUtil {
         .filterNot(_.id.contains("AudioNoteCapturer"))
         // potentially VERY high message rate
         .filterNot(_.id.contains("HeartRateMonitorActor"))
-        // FIXME can be removed after a couple days
-        .filterNot(_.id.contains("ActorNotesFolderWatcherActor"))
-        .filterNot(_.id.contains("FitbitActor"))
-        .filterNot(_.id.contains("AirPurifierActor"))
       ,
       edges.filterNot {
         case TinkerEdge(source, target) =>
@@ -353,8 +349,7 @@ private object TinkerBrainUtil {
             source.contains("ChroniclerMOC") || target.contains("ChroniclerMOC") ||
             source.contains("Operator") || target.contains("Operator") ||
             source.contains("AudioNoteCapturer") || target.contains("AudioNoteCapturer") ||
-            source.contains("HeartRateMonitorActor") || target.contains("HeartRateMonitorActor") ||
-            source.contains("ActorNotesFolderWatcherActor") || target.contains("ActorNotesFolderWatcherActor") || source.contains("FitbitActor") || target.contains("FitbitActor") || source.contains("AirPurifierActor") || target.contains("AirPurifierActor")
+            source.contains("HeartRateMonitorActor") || target.contains("HeartRateMonitorActor")
       },
       todaysFrames
     )

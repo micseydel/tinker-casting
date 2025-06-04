@@ -49,8 +49,7 @@ object FetchChatResponseActor {
       case Some(specialization) =>
         context.actorContext.log.info("Found llava with attachments, handing off to specialized image handling actor")
         context.castAnonymous(specialization)
-        Tinker.steadily // FIXME
-        Tinker.ignore // FIXME
+        Tinker.ignore
 
       case None =>
         context.actorContext.log.info("Starting HTTP request...")
@@ -64,9 +63,7 @@ object FetchChatResponseActor {
 
         import me.micseydel.actor.ollama.OllamaJsonFormat.chatResponseResultFormat
         context.castAnonymous(EXPERIMENTHttpFetchAndUnmarshall(uri, payload, replyTo, ChatResponseFailure.apply))
-
-        Tinker.steadily // FIXME
-        Tinker.ignore // FIXME
+        Tinker.ignore
     }
   }
 }

@@ -1,7 +1,5 @@
 package me.micseydel.app
 
-import akka.actor
-import akka.actor.typed.ActorRef
 import cats.data.Validated
 import me.micseydel.actor._
 import me.micseydel.actor.kitties.CatsHelper
@@ -39,18 +37,18 @@ object TinkerCasterApp {
     @unused
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
-        centralCastFactory(chroniclerConfig), // effectively globals
+        centralCastFactory(chroniclerConfig)(_, _), // effectively globals
         UserTinkerCast(config.vaultRoot)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
   }
 
-  def centralCastFactory(config: ChroniclerConfig)(Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
+  def centralCastFactory(config: ChroniclerConfig)(implicit Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
     context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rasa")
-    val gossiper = context.cast(Gossiper()(Tinker), "Gossiper")
-    val chronicler = context.cast(Chronicler(config, gossiper)(Tinker), "Chronicler")
-    val rasaActor = context.cast(RasaActor()(Tinker), "RasaActor")
+    val gossiper = context.cast(Gossiper(), "Gossiper")
+    val chronicler = context.cast(Chronicler(config, gossiper), "Chronicler")
+    val rasaActor = context.cast(RasaActor(), "RasaActor")
     MyCentralCast(chronicler, gossiper, rasaActor)
   }
 }

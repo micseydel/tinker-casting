@@ -75,6 +75,7 @@ object HueListener {
         validated match {
           case Valid(SetTheLights(_, maybeColor, maybeBrightness, maybeSetOnOff)) =>
             // FIXME: why is maybeSetOnOff unused? is it because it's broken?
+            context.actorContext.log.info(s"maybeSetOnOff=$maybeSetOnOff for $noteId")
 
             val key = (noteId, model)
             val isStale = TimeUtil.timeSince(capturedTime).toMinutes > IgnoredMinutesAgo

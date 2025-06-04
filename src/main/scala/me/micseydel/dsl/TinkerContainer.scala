@@ -94,7 +94,7 @@ object RootTinkerBehavior {
 
     val operator: typed.ActorRef[Operator.Message] = context.spawn(Operator(), "Operator")
 
-    // FIXME
+    // FIXME - ideally this would lazy-start based on NoteConfig; does NOT need EnhancedTinker
     val eventReceiver: typed.ActorRef[EventReceiver.Message] = context.spawn(
       EventReceiver(
         EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),
