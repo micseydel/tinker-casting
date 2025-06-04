@@ -6,14 +6,11 @@ import me.micseydel.actor.FrustrationListener.{DistressDetected, DistressDetecti
 import me.micseydel.actor.Halto._
 import me.micseydel.actor.HungerTracker.HungerState
 import me.micseydel.actor.NutritionListener.LastAte
-import me.micseydel.actor.inactive.fitbit.FitbitActor
-import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffect, PushNotification}
-import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetFailure, AranetResults, Meta}
-import me.micseydel.actor.perimeter.{AranetActor, HueControl}
 import me.micseydel.actor.inactive.fitbit.FitbitModel.{SleepReport, SleepSummary}
-import me.micseydel.app.AppConfiguration.NtfyKeys
+import me.micseydel.actor.notifications.NotificationCenterManager.{JustSideEffect, PushNotification}
+import me.micseydel.actor.perimeter.AranetActor
+import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetFailure, AranetResults, Meta}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.TinkerColor.{Yellow, rgb}
 import me.micseydel.dsl._
 import me.micseydel.model.NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat
 import me.micseydel.util.TimeUtil
@@ -21,9 +18,8 @@ import org.slf4j.Logger
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.ZonedDateTime
-import scala.annotation.{tailrec, unused}
+import scala.annotation.tailrec
 import scala.concurrent.duration.DurationInt
-import scala.util.Random
 
 object Halto {
 

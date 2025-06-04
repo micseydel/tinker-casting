@@ -2,7 +2,6 @@ package me.micseydel.app
 
 import cats.data.{Validated, ValidatedNel}
 import com.typesafe.config.{Config, ConfigException, ConfigFactory}
-import me.micseydel.actor.perimeter.HueControl.HueConfig
 import me.micseydel.vault.VaultPath
 
 import scala.util.{Failure, Success, Try}
@@ -12,7 +11,6 @@ object AppConfiguration {
     vaultRoot: VaultPath,
     eventReceiverHost: String,
     eventReceiverPort: Int,
-    ntfyKeys: NtfyKeys,
     mqttConfig: Option[MqttConfig],
   )
 
@@ -43,11 +41,6 @@ object AppConfiguration {
           vaultRoot,
           config.getString("transcription.whisper.event-receiver.host"),
           config.getInt("transcription.whisper.event-receiver.port"),
-          NtfyKeys(
-            getOptionalString(config, "ntfy-keys.foodTimeKey"),
-            getOptionalString(config, "ntfy-keys.highCO2Key"),
-            getOptionalString(config, "ntfy-keys.searchSpaceKey")
-          ),
           maybeMqttConfig
         ))
     }
@@ -69,10 +62,4 @@ object AppConfiguration {
                          password: String,
                          brokerUrl: String
                        )
-
-  case class NtfyKeys(
-                     foodTime: Option[String],
-                     highCO2: Option[String],
-                     searchSpace: Option[String]
-                     )
 }
