@@ -23,8 +23,10 @@ import scala.annotation.unused
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 
+case class TinkerContainer(actorSystem: ActorSystem, tinkerCast: typed.ActorRef[RootTinkerBehavior.Message])
+
 object TinkerContainer {
-  def apply[CentralCast](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent]): ActorSystem = {
+  def apply[CentralCast](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent]): TinkerContainer = {
     implicit val httpExecutionContext: ExecutionContextExecutorService =
       ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(20))
 
@@ -40,13 +42,12 @@ object TinkerContainer {
     suppressSLF4JSpam()
 
     // the classic actor system is needed in order to get events from MQTT
-    // FIXME ...even though none are sourced from there right now, this is worth keeping to easily add later
-    val actorSystem = ActorSystem("AkkaActor")
+    // FIXME ...even though none are sourced from there right now, this is worth keeping for now to easily add later
+    val actorSystem: ActorSystem = ActorSystem("AkkaActor")
 
-    @unused
-    val tinkercast: typed.ActorRef[_] = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
+    val tinkerCast = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
 
-    actorSystem
+    TinkerContainer(actorSystem, tinkerCast)
   }
 
   private def suppressSLF4JSpam(): Unit = {

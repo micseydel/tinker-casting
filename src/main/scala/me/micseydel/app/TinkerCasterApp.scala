@@ -1,6 +1,7 @@
 package me.micseydel.app
 
 import akka.actor
+import akka.actor.typed.ActorRef
 import cats.data.Validated
 import me.micseydel.actor._
 import me.micseydel.actor.kitties.CatsHelper
@@ -36,7 +37,7 @@ object TinkerCasterApp {
     val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
 
     @unused
-    val container: actor.ActorSystem =
+    val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
         centralCastFactory(chroniclerConfig), // effectively globals
         UserTinkerCast(config.vaultRoot)(_: EnhancedTinker[MyCentralCast])
