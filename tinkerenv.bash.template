@@ -2,13 +2,6 @@
 
 # replace this with the path to your Obsidian vault
 export vaultRoot="/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion"
-# replace this with a path to a directory into which *.wav files will be added for transcription, e.g. 
-export audioWatchPath="/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/deliberate_knowledge_accretion_attachments/mobile_audio_captures"
-
-# for transcription (can be offloaded e.g. to a Mac Mini on the local network)
-export whisperLarge="localhost:5001"
-# optional
-export whisperBase="localhost:5002"
 
 # if whisperLarge is on the local network, make sure to name this appropriately
 export whisperEventReceiverHost="localhost"
@@ -18,18 +11,6 @@ export whisperEventReceiverPort=5003
 # export mqttBrokerURL="tcp://localhost:1883"
 # export mqttUsername="mosquitto"
 # export mqttPassword=""
-
-# FIXME - document these better
-
-# export ntfyFoodTimeKey=""
-# export ntfyHighCO2Key=""
-# export ntfySearchSpaceKey=""
-
-# export aranetHost="localhost"
-# export aranetPort=5004
-
-# export hueApiIP=""
-# export hueApiUsername=""
 
 echo "Running: sbt 'runMain me.micseydel.app.TinkerCasterApp'"
 sbt 'runMain me.micseydel.app.TinkerCasterApp'
