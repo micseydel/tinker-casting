@@ -1,6 +1,8 @@
-Welcome to my "tinker cast" - a personal project by Michael Seydel. This is essentially a combination of **atomic notes** and **the actor model**, ideas from "personal knowledge management" and computer science.
+Welcome to my "tinker cast" - a personal project. It is at its core an extension of the computer science [actor model](https://en.wikipedia.org/wiki/Actor_model) with "personal knowledge management" (PKM) through plaintext Markdown notes. I chose Markdown over JSON, a database, or other options because I can use [Obsidian](https://obsidian.md) or any other app for reading text rather than relying on a fancy frontend.
 
-I've wrapped Akka's actor model implementation with a few additions
+Built on top of that is a process for automatic transcription of captured voice notes, along with various other input sources.
+
+I've wrapped [Akka's actor model implementation](https://doc.akka.io/libraries/akka-core/2.6/typed/guide/actors-motivation.html) with a few specific additions
 - my actors can easily use Markdown notes for memory - inspired from Obsidian's "vault"
 - a markdown-based notification center is available to actors
 - a "tinkerbrain" visualization, like so
