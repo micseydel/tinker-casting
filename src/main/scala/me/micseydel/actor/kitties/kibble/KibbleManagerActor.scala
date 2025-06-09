@@ -130,7 +130,7 @@ object KibbleManagerActor {
           // FIXME: this will be chatty!
           context.actorContext.log.debug(s"Ignoring $votes")
         } else {
-          context.actorContext.log.warn(s"Ignoring useful vote(s) from reminder actor $maybeReminderVotes")
+          context.actorContext.log.debug(s"Ignoring useful vote(s) from reminder actor $maybeReminderVotes")
         }
 
         Tinker.steadily

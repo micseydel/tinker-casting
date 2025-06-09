@@ -112,7 +112,7 @@ object Gossiper {
             accurateListeners *!* notedTranscription
           case TurboModel =>
             // FIXME
-            context.actorContext.log.warn(s"ignoring TurboModel for ${noteRef.noteId}")
+            context.actorContext.log.debug(s"ignoring TurboModel for ${noteRef.noteId}")
           case BaseModel =>
             context.actorContext.log.info(s"Sending ${notedTranscription.noteId} to ${fastListeners.size} listeners (base, fast model)")
             fastListeners *!* notedTranscription
