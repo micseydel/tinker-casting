@@ -1,4 +1,4 @@
-Welcome to my "tinker cast" - a personal project. It is at its core an extension of the computer science [actor model](https://en.wikipedia.org/wiki/Actor_model) with "personal knowledge management" (PKM) through plaintext Markdown notes. I chose Markdown over JSON, a database, or other options because I can use [Obsidian](https://obsidian.md) or any other app for reading text rather than relying on a fancy frontend.
+Welcome to my "tinker cast" - a personal project. It is at its core an extension of the computer science [actor model](https://en.wikipedia.org/wiki/Actor_model) with "personal knowledge management" (PKM) through plaintext Markdown notes. I chose Markdown over JSON, a database, or other options because I can use [Obsidian](https://obsidian.md) or any other app for reading and writing my text notes, allowing them to act as a shared memory between me and my cast of actors.
 
 Built on top of that is a process for automatic transcription of captured voice notes, along with various other input sources.
 
