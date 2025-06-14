@@ -340,6 +340,7 @@ private object TinkerBrainUtil {
         .filterNot(_.id.contains("ChroniclerMOC"))
         .filterNot(_.id.contains("Operator"))
         .filterNot(_.id.contains("AudioNoteCapturer"))
+        .filterNot(_.id.contains("ActorNotesFolderWatcherActor")) // causes centralization
         // potentially VERY high message rate
         .filterNot(_.id.contains("HeartRateMonitorActor"))
       ,
@@ -349,7 +350,8 @@ private object TinkerBrainUtil {
             source.contains("ChroniclerMOC") || target.contains("ChroniclerMOC") ||
             source.contains("Operator") || target.contains("Operator") ||
             source.contains("AudioNoteCapturer") || target.contains("AudioNoteCapturer") ||
-            source.contains("HeartRateMonitorActor") || target.contains("HeartRateMonitorActor")
+            source.contains("HeartRateMonitorActor") || target.contains("HeartRateMonitorActor") ||
+            source.contains("ActorNotesFolderWatcherActor") || target.contains("ActorNotesFolderWatcherActor")
       },
       todaysFrames
     )
