@@ -1,24 +1,22 @@
 package me.micseydel.actor
 
+import cats.data.Validated.{Invalid, Valid}
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
 import me.micseydel.actor.DailyNoteActor.TheDayHasPassed
-import me.micseydel.actor.PeriodicNotesCreatorActor.{Message, behavior}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
+import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Operator, SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.VaultKeeper
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist, FileReadException}
 
-import java.io.FileNotFoundException
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.{LocalDate, ZonedDateTime}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object PeriodicNotesCreatorActor {
   sealed trait Message
@@ -68,35 +66,6 @@ object PeriodicNotesCreatorActor {
       }
     }
   }
-
-  def main(args: Array[String]): Unit = {
-    // these replacements are hacks for Obsidian Templater compatibility
-    println(s"""|<% "---" %>
-                |aliases:
-                |- <% moment().format("dddd, D MMMM YYYY (DDD)") %>
-                |---
-                |
-                |-
-                |
-                |# I/O
-                |
-                |-
-                |
-                |# See also
-                |
-                |- Prior day: [[<% tp.date.yesterday("YYYY-MM-DD") %>]]
-                |- Next day: [[<% tp.date.tomorrow("YYYY-MM-DD") %>]]
-                |- [[Things I wish I had time for (<% tp.date.now("YYYY-MM-DD") %>)]]
-                |- Captures
-                |    - [[Transcribed mobile notes (<% tp.date.now("YYYY-MM-DD") %>)]]
-                |        - Cats
-                |            - [[CatsTranscriptions notes (<% tp.date.now("YYYY-MM-DD") %>)]]
-                |            - [[Structured cats notes (<% tp.date.now("YYYY-MM-DD") %>)]]
-                |                - [[Litter boxes (<% tp.date.now("YYYY-MM-DD") %>)]]
-                |                - [[Litter boxes sifting (<% tp.date.now("YYYY-MM-DD") %>)]]
-                |
-                |""".stripMargin)
-  }
 }
 
 object DailyNotesManager {
@@ -105,8 +74,12 @@ object DailyNotesManager {
   case class ItsMidnight(day: LocalDate) extends Message
 
   def apply(templateName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(templateName, TinkerColor.random(), "🏛️") { (context, noteRef) =>
+    implicit val c: TinkerContext[_] = context
+    context.actorContext.log.info(s"Starting DailyNotesManager for day $templateName")
     val dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message] = LookUpSpiritByDay[DailyNoteActor.Message] { (context, captureDate) =>
-      context.cast(DailyNoteActor(captureDate, noteRef.getTemplate()), TimeUtil.localDateTimeToISO8601Date(captureDate))
+      val actor: SpiritRef[DailyNoteActor.Message] = context.cast(DailyNoteActor(captureDate), TimeUtil.localDateTimeToISO8601Date(captureDate))
+      actor !! DailyNoteActor.Create(noteRef.getTemplate())
+      actor
     }
 
     behavior(dailyNoteLookup)
@@ -129,16 +102,11 @@ object DailyNotesManager {
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     //noinspection AccessorLikeMethodIsEmptyParen
-    def getTemplate(): String = {
-      // FIXME: return the validated object instead
-      val validated: ValidatedNel[String, String] = noteRef.readMarkdownSafer() match {
+    def getTemplate(): ValidatedNel[String, String] = {
+      noteRef.readMarkdownSafer() match {
         case Contents(s) => s.validNel
         case NoteRef.FileDoesNotExist => s"Note ${noteRef.noteId} did not exist".invalidNel
         case FileReadException(exception) => Common.getStackTraceString(exception).invalidNel
-      }
-      validated match {
-        case Validated.Valid(a: String) => a
-        case Validated.Invalid(e) => throw new RuntimeException(e.toString())
       }
     }
   }
@@ -148,34 +116,42 @@ object DailyNotesManager {
 object DailyNoteActor {
   sealed trait Message
 
+  final case class Create(template: ValidatedNel[String, String]) extends Message
   final case object TheDayHasPassed extends Message
 
-  def apply(forDay: LocalDate, template: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(forDay.toString, rgb(255, 222, 71), "•", Some("periodic_notes/daily")) { (context, noteRef) =>
-    val substitutedTemplate = template // FIXME HACKS so the Templater plugin can be used in a pinch
-      .replace("<% \"---\" %>", "---")
-      .replace("<% tp.date.now(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay))
-      .replace("<% moment().format(\"dddd, D MMMM YYYY (DDD)\") %>", VerboseDayFormatter.format(forDay))
-      .replace("<% tp.date.yesterday(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.minusDays(1)))
-      .replace("<% tp.date.tomorrow(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.plusDays(1)))
-
-    noteRef.readMarkdownSafer() match {
-      case Contents(_) =>
-        context.actorContext.log.info(s"NOT creating daily note for $forDay, note already exists")
-        behavior(forDay)
-
-      case FileDoesNotExist =>
-        context.actorContext.log.info(s"Creating daily note for $forDay")
-        noteRef.setMarkdown(substitutedTemplate)
-        behavior(forDay)
-
-      case FileReadException(exception) =>
-        context.actorContext.log.error(s"Daily note creation for $forDay failed", exception)
-        Tinker.ignore
-    }
+  def apply(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(forDay.toString, rgb(255, 222, 71), "•", Some("periodic_notes/daily")) { (context, noteRef) =>
+    context.actorContext.log.info(s"Starting DailyNoteActor for day $forDay")
+    behavior(forDay, noteRef)
   }
 
-  private def behavior(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(forDay: LocalDate, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
+      case Create(Valid(template)) =>
+        val substitutedTemplate = template // FIXME HACKS so the Templater plugin can be used in a pinch
+          .replace("<% \"---\" %>", "---")
+          .replace("<% tp.date.now(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay))
+          .replace("<% moment().format(\"dddd, D MMMM YYYY (DDD)\") %>", VerboseDayFormatter.format(forDay))
+          .replace("<% tp.date.yesterday(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.minusDays(1)))
+          .replace("<% tp.date.tomorrow(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.plusDays(1)))
+
+        noteRef.readMarkdownSafer() match {
+          case Contents(_) =>
+            context.actorContext.log.info(s"NOT creating daily note for $forDay, note already exists")
+
+          case FileDoesNotExist =>
+            context.actorContext.log.info(s"Creating daily note for $forDay")
+            noteRef.setMarkdown(substitutedTemplate)
+
+          case FileReadException(exception) =>
+            context.actorContext.log.error(s"Daily note creation for $forDay failed", exception)
+        }
+
+        Tinker.steadily
+
+      case Create(Invalid(msg)) =>
+        context.actorContext.log.warn(s"Failed to create daily template for day $forDay: $msg")
+        Tinker.steadily
+
       case TheDayHasPassed =>
         context.actorContext.log.info(s"The day $forDay has passed")
         Tinker.steadily
