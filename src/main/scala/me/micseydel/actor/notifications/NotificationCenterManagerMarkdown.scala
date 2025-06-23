@@ -9,13 +9,18 @@ import java.io.FileNotFoundException
 import scala.util.{Success, Try}
 
 object NotificationCenterManagerMarkdown {
+  private val ClearAll = "- [ ] *Clear all*"
 
   /**
    * @return the completed
    */
   def clearDone(noteRef: NoteRef): Try[List[NotificationId]] = {
     noteRef.readMarkdown().map(_.split("\n")).flatMap { lines =>
-      val (done, notDone) = lines.toList.partition(_.startsWith("- [x]"))
+      val (done, notDone) = if (lines.headOption.contains(ClearAll)) {
+        (lines.toList, Nil)
+      } else {
+        lines.toList.partition(_.startsWith("- [x]"))
+      }
 
       val toWrite: Option[String] = if (done.nonEmpty) {
         Some(notDone.mkString("", "\n", "\n"))
@@ -30,7 +35,7 @@ object NotificationCenterManagerMarkdown {
           // now that the reads and writes are done, let's return to the caller the completed items
           done.flatMap(
             _.split(" ")
-              .lastOption
+              .lastOption // FIXME: use regex or something instead
               .filter(_.startsWith("^"))
               .map(_.drop(1))
           ).map(NotificationId)
@@ -44,7 +49,11 @@ object NotificationCenterManagerMarkdown {
         updateMarkdown(noteRef) { lines =>
           val newListLine = Notification.toMarkdownListLine(n)
           val newLines = lines.filter(!_.endsWith(notificationId.id)) :+ newListLine
-          Some(newLines.mkString("", "\n", "\n"))
+          if (newLines.size > 3 && !newLines.headOption.contains(ClearAll)) {
+            Some((ClearAll :: newLines).mkString("", "\n", "\n"))
+          } else {
+            Some(newLines.mkString("", "\n", "\n"))
+          }
         }
     }
   }
@@ -53,7 +62,11 @@ object NotificationCenterManagerMarkdown {
     updateMarkdown(noteRef) { lines =>
       val updated = lines.filter(!_.endsWith(s" ^$notificationId"))
       if (updated.size < lines.size) {
-        Some(updated.mkString("", "\n", "\n"))
+        if (updated.headOption.contains(ClearAll) && updated.size <= 4) {
+          Some(updated.drop(1).mkString("", "\n", "\n"))
+        } else {
+          Some(updated.mkString("", "\n", "\n"))
+        }
       } else {
         None
       }
