@@ -38,7 +38,7 @@ object TinkerCasterApp {
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
         centralCastFactory(chroniclerConfig)(_, _), // effectively globals
-        UserTinkerCast(config.vaultRoot)(_: EnhancedTinker[MyCentralCast])
+        UserTinkerCast()(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
@@ -62,7 +62,7 @@ case class MyCentralCast(
 
 
 object UserTinkerCast {
-  def apply(vaultRoot: VaultPath)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
@@ -86,7 +86,7 @@ object UserTinkerCast {
 
     @unused // runs itself via TimeKeeper
     val periodicNotesCreatorActor: SpiritRef[PeriodicNotesCreatorActor.Message] =
-      context.cast(PeriodicNotesCreatorActor(vaultRoot), "PeriodicNotesCreatorActor")
+      context.cast(PeriodicNotesCreatorActor(), "PeriodicNotesCreatorActor")
 
     Tinker.receiveMessage {
       case ReceiveMqttEvent(topic, payload) =>

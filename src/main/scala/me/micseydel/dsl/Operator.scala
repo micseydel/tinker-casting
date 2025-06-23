@@ -6,12 +6,13 @@ import me.micseydel.actor.GmailActor
 import me.micseydel.actor.GmailActor.Email
 import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor}
 import me.micseydel.dsl.cast.SystemWideTimeKeeper
-import me.micseydel.dsl.cast.SystemWideTimeKeeper.ItsMidnight
+
+import java.time.LocalDate
 
 object Operator {
   sealed trait Message
 
-  final case class SubscribeMidnight(replyTo: SpiritRef[ItsMidnight.type]) extends Message
+  final case class SubscribeMidnight(replyTo: SpiritRef[LocalDate]) extends Message
 
   sealed trait Register extends Message
   case class RegisterHomeMonitor(registrant: SpiritRef[HomeMonitorActor.Monitoring]) extends Register

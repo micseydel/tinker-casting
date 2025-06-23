@@ -4,6 +4,7 @@ import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor
 import me.micseydel.dsl.TinkerContext
 import me.micseydel.util.FileSystemUtil
+import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExit, FileReadException, FileReadResult}
 import me.micseydel.vault.{Note, NoteId, VaultPath}
 import spray.json._
 
@@ -56,6 +57,14 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
     }
   }
 
+  def readMarkdownSafer(): FileReadResult = {
+    readMarkdown() match {
+      case Failure(_: FileNotFoundException) => FileDoesNotExit
+      case Failure(exception) => FileReadException(exception)
+      case Success(contents) => Contents(contents)
+    }
+  }
+
   def readMarkdown(): Try[String] = {
     read().map(_.markdown)
   }
@@ -90,6 +99,13 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
         Note(f(markdown), frontmatter)
     }
   }
+}
+
+object NoteRef {
+  sealed trait FileReadResult
+  case class Contents(s: String) extends FileReadResult
+  case object FileDoesNotExit extends FileReadResult
+  case class FileReadException(exception: Throwable) extends FileReadResult
 }
 
 

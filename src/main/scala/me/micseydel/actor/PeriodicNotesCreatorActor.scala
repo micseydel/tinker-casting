@@ -1,99 +1,147 @@
 package me.micseydel.actor
 
+import me.micseydel.actor.DailyNoteActor.TheDayHasPassed
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.cast.{SystemWideTimeKeeper, TimeKeeper}
-import me.micseydel.dsl.{Operator, SpiritRef, Tinker, TinkerContext, TinkerContextImpl, Tinkerer}
-import me.micseydel.util.FileSystemUtil
-import me.micseydel.vault.VaultPath
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Operator, Tinker, TinkerContext}
+import me.micseydel.util.TimeUtil
+import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExit, FileReadException}
 
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.time.{LocalDate, ZonedDateTime}
 
 object PeriodicNotesCreatorActor {
   sealed trait Message
-  private case class ItsMidnight(itsMidnight: SystemWideTimeKeeper.ItsMidnight.type) extends Message
+  private case class ItsMidnight(day: LocalDate) extends Message
 
-  def apply(vaultPath: VaultPath)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    context.actorContext.log.info("Starting up")
-    behavior(vaultPath)
+  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    context.actorContext.log.info("Starting up PeriodicNotesCreatorActor")
+    setup()
   }
 
-  private def behavior(vaultPath: VaultPath)(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(255, 222, 71), "🌞").setup { context =>
+  private def setup()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Periodic Notes Templates", rgb(255, 222, 71), "🌞") { (context, noteRef) =>
+    // FIXME: use the noteRef to wire in non-hard coded template
     implicit val c: TinkerContext[_] = context
     context.actorContext.log.info("Subscribing ItsMidnight message through Operator")
     context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
 
-    Tinker.receiveMessage {
-      case ItsMidnight(_) =>
-        val dayForNote = {
-          val now = context.system.clock.now()
-          MillisFromMidnight(now) match {
-            case MillisUntil(millis) =>
-              context.actorContext.log.info(s"Received ItsMidnight $millis ms before midnight, using TOMORROW")
-              now.plusDays(1)
-            case MillisSince(millis) =>
-              context.actorContext.log.info(s"Received ItsMidnight $millis ms after midnight, using TODAY")
-              now
-          }
+    val dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message] = LookUpSpiritByDay[DailyNoteActor.Message] { (context, captureDate) =>
+      context.cast(DailyNoteActor(captureDate), TimeUtil.localDateTimeToISO8601Date(captureDate))
+    }
+
+    behavior(dailyNoteLookup)
+  }
+
+  private def behavior(dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val c: TinkerContext[_] = context
+    message match {
+      case ItsMidnight(dayForNote) =>
+        dailyNoteLookup :?> dayForNote match {
+          case (potentiallyUpdatedLookup, _) =>
+            potentiallyUpdatedLookup :?> dayForNote.minusDays(1) match {
+              case (potentiallyEvenMoreUpdatedLookup, yesterdaysDailyNoteActor) =>
+                yesterdaysDailyNoteActor !! TheDayHasPassed
+                behavior(potentiallyEvenMoreUpdatedLookup)
+            }
         }
-
-        context.actorContext.log.info(s"Using $dayForNote for the day")
-
-        val notePath = vaultPath.resolve("periodic_notes")
-          .resolve("daily")
-          .resolve(s"${isoDateFormatter.format(dayForNote)}.md")
-
-        // FIXME: abstract this into the noteref, remove FileSystemUtil uses in this package
-        val shouldNotCreate = FileSystemUtil.pathIsANonEmptyFile(notePath.toString)
-        if (shouldNotCreate) {
-          context.actorContext.log.warn(s"Was about to write to $notePath but it wasn't empty so aborted")
-        } else {
-          context.actorContext.log.info(s"Writing daily note to $notePath")
-          val contents = template(dayForNote)
-          FileSystemUtil.writeToPath(notePath, contents)
-        }
-
-        Tinker.steadily
     }
   }
 
-  // util
+  def main(args: Array[String]): Unit = {
+    // these replacements are hacks for Obsidian Templater compatibility
+    println(s"""|<% "---" %>
+                |aliases:
+                |- <% moment().format("dddd, D MMMM YYYY (DDD)") %>
+                |---
+                |
+                |-
+                |
+                |# I/O
+                |
+                |-
+                |
+                |# See also
+                |
+                |- Prior day: [[<% tp.date.yesterday("YYYY-MM-DD") %>]]
+                |- Next day: [[<% tp.date.tomorrow("YYYY-MM-DD") %>]]
+                |- [[Things I wish I had time for (<% tp.date.now("YYYY-MM-DD") %>)]]
+                |- Captures
+                |    - [[Transcribed mobile notes (<% tp.date.now("YYYY-MM-DD") %>)]]
+                |        - Cats
+                |            - [[CatsTranscriptions notes (<% tp.date.now("YYYY-MM-DD") %>)]]
+                |            - [[Structured cats notes (<% tp.date.now("YYYY-MM-DD") %>)]]
+                |                - [[Litter boxes (<% tp.date.now("YYYY-MM-DD") %>)]]
+                |                - [[Litter boxes sifting (<% tp.date.now("YYYY-MM-DD") %>)]]
+                |
+                |""".stripMargin)
+  }
+}
 
-  private val verboseDayFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy (DDD)")
+object DailyNoteActor {
+  sealed trait Message
+
+  final case object TheDayHasPassed extends Message
+
+  def apply(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(forDay.toString, rgb(255, 222, 71), "•", Some("periodic_notes/daily")) { (context, noteRef) =>
+    noteRef.readMarkdownSafer() match {
+      case Contents(_) =>
+        context.actorContext.log.info(s"NOT creating daily note for $forDay, note already exists")
+        behavior(forDay)
+      case FileDoesNotExit =>
+        context.actorContext.log.info(s"Creating daily note for $forDay")
+        noteRef.setMarkdown(PeriodicNotesCreatorActorUtil.template(forDay))
+        behavior(forDay)
+      case FileReadException(exception) =>
+        context.actorContext.log.error(s"Daily note creation for $forDay failed", exception)
+        Tinker.ignore
+    }
+  }
+
+  private def behavior(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    message match {
+      case TheDayHasPassed =>
+        context.actorContext.log.info(s"The day $forDay has passed")
+        Tinker.steadily
+    }
+  }
+}
+
+private object PeriodicNotesCreatorActorUtil {
+  val VerboseDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy (DDD)")
+  val IsoDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
   private val mobileTextCaptureFormatter = DateTimeFormatter.ofPattern("M-d-yy")
-  private val isoDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-  private def template(today: ZonedDateTime): String = {
+  def template(today: LocalDate): String = {
     val yesterday = today.minus(1, ChronoUnit.DAYS)
     val tomorrow = today.plus(1, ChronoUnit.DAYS)
 
     s"""|---
-       |aliases:
-       |- ${verboseDayFormatter.format(today)}
-       |---
-       |
-       |-
-       |
-       |# I/O
-       |
-       |- 
-       |
-       |# See also
-       |
-       |- Prior day: [[${isoDateFormatter.format(yesterday)}]]
-       |- Next day: [[${isoDateFormatter.format(tomorrow)}]]
-       |- [[Things I wish I had time for (${isoDateFormatter.format(today)})]]
-       |- Captures
-       |    - [[Transcribed mobile notes (${isoDateFormatter.format(today)})]]
-       |        - Cats
-       |            - [[CatsTranscriptions notes (${isoDateFormatter.format(today)})]]
-       |            - [[Structured cats notes (${isoDateFormatter.format(today)})]]
-       |                - [[Litter boxes (${isoDateFormatter.format(today)})]]
-       |                - [[Litter boxes sifting (${isoDateFormatter.format(today)})]]
-       |
-       |""".stripMargin
+        |aliases:
+        |- ${VerboseDayFormatter.format(today)}
+        |---
+        |
+        |-
+        |
+        |# I/O
+        |
+        |-
+        |
+        |# See also
+        |
+        |- Prior day: [[${IsoDateFormatter.format(yesterday)}]]
+        |- Next day: [[${IsoDateFormatter.format(tomorrow)}]]
+        |- [[Things I wish I had time for (${IsoDateFormatter.format(today)})]]
+        |- Captures
+        |    - [[Transcribed mobile notes (${IsoDateFormatter.format(today)})]]
+        |        - Cats
+        |            - [[CatsTranscriptions notes (${IsoDateFormatter.format(today)})]]
+        |            - [[Structured cats notes (${IsoDateFormatter.format(today)})]]
+        |                - [[Litter boxes (${IsoDateFormatter.format(today)})]]
+        |                - [[Litter boxes sifting (${IsoDateFormatter.format(today)})]]
+        |
+        |""".stripMargin
   }
 }
 

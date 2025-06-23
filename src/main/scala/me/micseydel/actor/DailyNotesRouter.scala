@@ -83,7 +83,7 @@ object DailyNotesRouter {
   }
 }
 
-private class LookUpSpiritByDay[S] private(
+class LookUpSpiritByDay[S] private(
                                             map: Map[LocalDate, SpiritRef[S]],
                                             caster: (TinkerContext[_], LocalDate) => SpiritRef[S]
                                           ) {
@@ -106,7 +106,7 @@ private class LookUpSpiritByDay[S] private(
   }
 }
 
-private object LookUpSpiritByDay {
+object LookUpSpiritByDay {
   def apply[S](caster: (TinkerContext[_], LocalDate) => SpiritRef[S]): LookUpSpiritByDay[S] = {
     new LookUpSpiritByDay[S](Map.empty, caster)
   }

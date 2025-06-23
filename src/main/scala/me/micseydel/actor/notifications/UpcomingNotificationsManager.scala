@@ -6,13 +6,12 @@ import me.micseydel.actor.notifications.NotificationCenterManager.{Notification,
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.Purple
 import me.micseydel.dsl._
-import me.micseydel.dsl.cast.SystemWideTimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.{LocalDate, ZonedDateTime}
 import scala.util.{Failure, Success}
 
 object UpcomingNotificationsManager {
@@ -23,7 +22,7 @@ object UpcomingNotificationsManager {
 
   sealed trait Message
 
-  private case class ItsMidnight(itsMidnight: SystemWideTimeKeeper.ItsMidnight.type) extends Message
+  private case class ItsMidnight(forDay: LocalDate) extends Message
 
   private case class ReceiveNotePing(ping: Ping) extends Message
 
