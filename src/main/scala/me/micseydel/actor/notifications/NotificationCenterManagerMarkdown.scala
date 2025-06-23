@@ -10,20 +10,25 @@ import scala.util.{Success, Try}
 
 object NotificationCenterManagerMarkdown {
   private val ClearAll = "- [ ] *Clear all*"
+  private val DOClearAll = "- [x] *Clear all*"
 
   /**
    * @return the completed
    */
   def clearDone(noteRef: NoteRef): Try[List[NotificationId]] = {
     noteRef.readMarkdown().map(_.split("\n")).flatMap { lines =>
-      val (done, notDone) = if (lines.headOption.contains(ClearAll)) {
+      val (done, notDone) = if (lines.headOption.contains(DOClearAll)) {
         (lines.toList, Nil)
       } else {
         lines.toList.partition(_.startsWith("- [x]"))
       }
 
       val toWrite: Option[String] = if (done.nonEmpty) {
-        Some(notDone.mkString("", "\n", "\n"))
+        if (notDone.headOption.contains(ClearAll) && notDone.size <= 4) {
+          Some(notDone.drop(1).mkString("", "\n", "\n"))
+        } else {
+          Some(notDone.mkString("", "\n", "\n"))
+        }
       } else {
         None
       }
@@ -60,16 +65,20 @@ object NotificationCenterManagerMarkdown {
 
   def clearNotification(noteRef: NoteRef, notificationId: String): Try[NoOp.type] = {
     updateMarkdown(noteRef) { lines =>
-      val updated = lines.filter(!_.endsWith(s" ^$notificationId"))
-      if (updated.size < lines.size) {
-        if (updated.headOption.contains(ClearAll) && updated.size <= 4) {
-          Some(updated.drop(1).mkString("", "\n", "\n"))
-        } else {
-          Some(updated.mkString("", "\n", "\n"))
-        }
+      linesUpdater(lines, notificationId)
+    }
+  }
+
+  private def linesUpdater(lines: List[String], notificationId: String): Option[String] = {
+    val updated = lines.filter(!_.endsWith(s" ^$notificationId"))
+    if (updated.size < lines.size) {
+      if (updated.headOption.contains(ClearAll) && updated.size <= 4) {
+        Some(updated.drop(1).mkString("", "\n", "\n"))
       } else {
-        None
+        Some(updated.mkString("", "\n", "\n"))
       }
+    } else {
+      None
     }
   }
 
