@@ -1,6 +1,7 @@
 package me.micseydel.dsl.cast
 
 import akka.actor.typed.scaladsl.Behaviors
+import me.micseydel.dsl.SpiritRef.TinkerIO
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
@@ -44,16 +45,12 @@ object TimeKeeper {
     }
   }
 
-
-//  private
-  case class TimerFired[M](replyTo: SpiritRef[M], message: M) extends Message
+  private case class TimerFired[M](replyTo: SpiritRef[M], message: M) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(0, 255, 0), "⏰").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     Behaviors.withTimers { timers =>
-      // startTimerAtFixedRate - send at fixed rate, e.g. every 5 seconds
-
       Behaviors.receiveMessage {
         case RemindMeIn(delay, replyTo, message, key) =>
           timers.startSingleTimer(
@@ -90,7 +87,7 @@ object TimeKeeper {
 
         case TimerFired(replyTo, message) =>
           context.actorContext.log.debug("Sending {} message to replyTo {}", message, replyTo)
-          replyTo !! message
+          replyTo ->!! TinkerIO("⏰", message)
           Behaviors.same
 
         case Cancel(key) =>

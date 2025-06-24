@@ -1,16 +1,17 @@
 package me.micseydel.dsl.cast
 
-import akka.actor.{ActorPath, Cancellable}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
-import cats.data.NonEmptyList
-import me.micseydel.Common
+import akka.actor.{ActorPath, Cancellable}
+import cats.data.{NonEmptyList, Validated}
+import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.TinkerBrain.{PersistedMessage, SentMessage, TranscriptionBroadcast}
+import me.micseydel.dsl.cast.TinkerBrain._
+import me.micseydel.dsl.cast.TinkerBrainJsonProtocol.{SentMessageJsonFormat, TranscriptionBroadcastJsonFormat}
 import me.micseydel.dsl.cast.TinkerBrainUtil.{cleanerUri, graphForLast3Days, toURIish}
-import me.micseydel.dsl.{Sender, SpiritRef, Tinker, TinkerClock, TinkerClockImpl, TinkerColor, Tinkerer}
+import me.micseydel.dsl._
 import me.micseydel.model.NotedTranscription
-import me.micseydel.prototyping.WebSocketMessageActor.{SendClientMessage, SendFrame, SendTranscriptionFrame, TinkerEdge}
+import me.micseydel.prototyping.WebSocketMessageActor.{SendClientMessage, SendFrame, TinkerEdge}
 import me.micseydel.prototyping.{TinkerNode, WebSocketMessageActor}
 import me.micseydel.util.{FileSystemUtil, TimeUtil}
 import org.slf4j.Logger
@@ -41,37 +42,41 @@ object TinkerBrain {
     def participants: Set[String] = (receivers + sender).map(cleanerUri)
 
     def edges: List[TinkerEdge] = receivers.map(receiver => TinkerEdge(cleanerUri(sender), cleanerUri(receiver))).toList
+
+    def ioKind: Option[IOKind]
   }
 
-  final case class SentMessage(approxSentTime: ZonedDateTime, messageType: String, sender: String, receiver: String) extends PersistedMessage {
+  final case class SentMessage(approxSentTime: ZonedDateTime, messageType: String, sender: String, receiver: String, ioKind: Option[IOKind]) extends PersistedMessage {
     override def time: ZonedDateTime = approxSentTime
 
     override def receivers: Set[String] = Set(receiver)
   }
 
   object SentMessage {
-    def apply(approxSentTime: ZonedDateTime, messageType: String, sender: Sender, receiver: ActorRef[_]): SentMessage = {
+    def apply(approxSentTime: ZonedDateTime, messageType: String, sender: Sender, receiver: ActorRef[_], ioKind: Option[IOKind]): SentMessage = {
       new SentMessage(
         approxSentTime,
         messageType,
         toURIish(sender.path.toSerializationFormat),
-        toURIish(receiver.path.toSerializationFormat)
+        toURIish(receiver.path.toSerializationFormat),
+        ioKind
       )
     }
   }
 
-  final case class TranscriptionBroadcast(approxSentTime: ZonedDateTime, messageType: String, sender: String, receivers: Set[String], notedTranscription: NotedTranscription) extends PersistedMessage {
+  final case class TranscriptionBroadcast(approxSentTime: ZonedDateTime, messageType: String, sender: String, receivers: Set[String]) extends PersistedMessage {
     override def time: ZonedDateTime = approxSentTime
+
+    override def ioKind: Option[IOKind] = None
   }
 
   object TranscriptionBroadcast {
-    def apply(approxSentTime: ZonedDateTime, messageType: String, sender: Sender, spirits: Set[SpiritRef[NotedTranscription]], notedTranscription: NotedTranscription): TranscriptionBroadcast = {
+    def apply(approxSentTime: ZonedDateTime, messageType: String, sender: Sender, spirits: Set[SpiritRef[NotedTranscription]]): TranscriptionBroadcast = {
       new TranscriptionBroadcast(
         approxSentTime,
         messageType,
         toURIish(sender.path.toSerializationFormat),
-        spirits.map(_.path.toSerializationFormat).map(toURIish),
-        notedTranscription
+        spirits.map(_.path.toSerializationFormat).map(toURIish)
       )
     }
   }
@@ -82,19 +87,26 @@ object TinkerBrain {
   //  final case class ApplicationStarted() extends Message
 
   case class RegisterClient(replyTo: WebSocketMessageActor.Client) extends Message
+  
+  //
+  sealed trait IOKind {
+    def kind: String
+  }
+  case class Input(kind: String) extends IOKind
+  case class Output(kind: String) extends IOKind
 
   // behaviors
 
   def apply(jsonPath: Path, tinkerers: Map[ActorPath, Tinkerer[_]]): Behavior[Message] = Behaviors.setup { context =>
     context.log.info(s"Starting persistence for message tracking")
 
-    import TinkerBrainJsonProtocol.PersistedMessageJsonFormat
+    implicit val persistedMessageJsonFormat: RootJsonFormat[PersistedMessage] = TinkerBrainJsonProtocol.persistedMessageJsonFormat()(SentMessageJsonFormat, TranscriptionBroadcastJsonFormat)
 
     def appendToJsonl(message: PersistedMessage): Unit = {
       // FIXME: use logging instead!
       val filenameWithoutExtension = s"tinker_cast_messages_${TimeUtil.zonedDateTimeToISO8601Date(message.time)}"
       val fullPath = jsonPath.resolve(filenameWithoutExtension + ".jsonl")
-      val jsonLine = message.toJson(TinkerBrainJsonProtocol.PersistedMessageJsonFormat).compactPrint
+      val jsonLine = message.toJson.compactPrint
       FileSystemUtil.appendToPath(fullPath, jsonLine)
     }
 
@@ -119,11 +131,11 @@ object TinkerBrain {
     context.log.debug(s"Received TinkerBrain message $message in systemStarting state")
 
     message match {
-      case sm@SentMessage(_, _, _, _) =>
+      case sm@SentMessage(_, _, _, _, _) =>
         appendToJsonl(sm)
         Behaviors.same
 
-      case tb@TranscriptionBroadcast(approxSentTime, messageType, sender, receivers, _) =>
+      case tb@TranscriptionBroadcast(approxSentTime, messageType, sender, receivers) =>
         appendToJsonl(tb)
         Behaviors.same
 
@@ -176,19 +188,25 @@ object TinkerBrain {
     context.log.debug(s"Received TinkerBrain message $message in systemStarted state")
 
     message match {
-      case sm@SentMessage(_, _, sender, receiver) =>
+      case sm@SentMessage(_, _, sender, receiver, maybeIOFrame) =>
         appendToJsonl(sm)
         //        val singleMemberSet = Set(TinkerEdge(cleanerUri(sender), cleanerUri(receiver)))
-        batcher ! RealtimeFrameBatcher.Receive(WebSocketMessageActor.SendFrame(sm.edges.distinct))
 
-      case tb@TranscriptionBroadcast(approxSentTime, messageType, sender, receivers, notedTranscription) =>
-        receivers.foreach { receiver =>
-          appendToJsonl(SentMessage(approxSentTime, messageType, sender, receiver))
+        val wrapped = maybeIOFrame match {
+          case Some(Input(kind)) => WebSocketMessageActor.SendInputFrame(sm.edges.distinct.toSet, kind)
+          case Some(Output(kind)) => WebSocketMessageActor.SendOutputFrame(sm.edges.distinct.toSet, kind)
+          case None => WebSocketMessageActor.SendFrame(sm.edges.distinct)
         }
 
-        batcher ! RealtimeFrameBatcher.Receive(WebSocketMessageActor.SendTranscriptionFrame(
-          tb.edges.toSet,
-          notedTranscription
+        batcher ! RealtimeFrameBatcher.Receive(wrapped)
+
+      case tb@TranscriptionBroadcast(approxSentTime, messageType, sender, receivers) =>
+        receivers.foreach { receiver =>
+          appendToJsonl(SentMessage(approxSentTime, messageType, sender, receiver, None))
+        }
+
+        batcher ! RealtimeFrameBatcher.Receive(WebSocketMessageActor.SendFrame(
+          tb.edges.distinct
         ))
 
       case SpiritCast(_) =>
@@ -431,9 +449,7 @@ private object TinkerBrainUtil {
         ZonedDateTime.now(),
         classOf[NotedTranscription].getName,
         sender,
-        spirits,
-        nt
-      )
+        spirits)
       spirits.foreach(_ !!!! nt)
     }
   }
@@ -471,9 +487,9 @@ private object RealtimeFrameBatcher {
             context.log.info(s"Received a SendFrame while idle, batching with batch window $batchWindow and scheduling a burst")
             val cancellable: Cancellable = context.scheduleOnce(batchWindow, context.self, Burst())
             batching(batchWindow, webSocketMessageActor)(cancellable, NonEmptyList.of(sf))
-          case stf@WebSocketMessageActor.SendTranscriptionFrame(_, _) =>
-            context.log.info(s"Received a SendTranscriptionFrame while idle, sending immediately")
-            webSocketMessageActor ! stf
+          case sf@(WebSocketMessageActor.SendInputFrame(_, _) | WebSocketMessageActor.SendOutputFrame(_, _)) =>
+            context.log.info(s"Received a Send(Input|Output)Frame while idle, sending immediately")
+            webSocketMessageActor ! sf
             Behaviors.same
           case WebSocketMessageActor.SendHeartbeat() | WebSocketMessageActor.SendGraph(_, _, _) =>
             context.log.warn(s"Received $toForward but should have only been sent types SendFrame and SendTranscriptionFrame, ignoring")
@@ -525,7 +541,7 @@ private object RealtimeFrameBatcher {
             case SendFrame(newEdges) =>
               helper(theRest, accumulator.union(newEdges.toSet))
 
-            case SendTranscriptionFrame(_, _) =>
+            case WebSocketMessageActor.SendInputFrame(_, _) | WebSocketMessageActor.SendOutputFrame(_, _) =>
               (SendFrame(accumulator.toList), NonEmptyList.fromList(listBuffer))
 
             case unexpected@(WebSocketMessageActor.SendHeartbeat() | WebSocketMessageActor.SendGraph(_, _, _)) =>
@@ -541,14 +557,14 @@ private object RealtimeFrameBatcher {
       case (SendFrame(edges), tail) =>
         helper(tail, edges.toSet)
 
-      case (stf@SendTranscriptionFrame(_, _), tail) =>
+      case (sf@(WebSocketMessageActor.SendInputFrame(_, _) | WebSocketMessageActor.SendOutputFrame(_, _)), tail) =>
         val maybeRemainder: Option[NonEmptyList[SendClientMessage]] = tail match {
           case Nil =>
             None
           case head :: theRest =>
             Some(NonEmptyList.of(head, theRest.toIndexedSeq: _*))
         }
-        (stf, maybeRemainder)
+        (sf, maybeRemainder)
 
       case (unexpected@(WebSocketMessageActor.SendHeartbeat() | WebSocketMessageActor.SendGraph(_, _, _)), _) =>
         throw new RuntimeException(s"Really did not expect $unexpected right now, should have already filtered it out")
@@ -564,37 +580,159 @@ object TinkerBrainJsonProtocol extends DefaultJsonProtocol {
 
   import me.micseydel.Common.ZonedDateTimeJsonFormat
 
-  implicit val sentMessageFormat: JsonFormat[SentMessage] = jsonFormat4(SentMessage.apply(_: ZonedDateTime, _: String, _: String, _: String))
-  import NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat
-
-  implicit val transcriptionBroadcastFormat: JsonFormat[TranscriptionBroadcast] =
-    jsonFormat5(TranscriptionBroadcast.apply(
-      _: ZonedDateTime,
-      _: String,
-      _: String,
-      _: Set[String],
-      _: NotedTranscription
-    ))
-
-  implicit object PersistedMessageJsonFormat extends RootJsonFormat[PersistedMessage] {
-    def write(m: PersistedMessage): JsValue = {
-      val (jsObj, typ) = m match {
-        case s: SentMessage => (s.toJson.asJsObject, "SentMessage")
-        case s: TranscriptionBroadcast => (s.toJson.asJsObject, "TranscriptionBroadcast")
+  implicit object MaybeIOMessageJsonFormat extends RootJsonFormat[Option[IOKind]] {
+    def write(m: Option[IOKind]): JsValue = {
+      m match {
+        case Some(Input(value)) => JsObject("type" -> JsString("input"), "kind" -> JsString(value))
+        case Some(Output(value)) => JsObject("type" -> JsString("output"), "kind" -> JsString(value))
+        case None => JsNull
       }
-      JsObject(jsObj.fields + ("type" -> JsString(typ)))
     }
 
-    def read(value: JsValue): PersistedMessage = {
-      value.asJsObject.getFields("type") match {
-        case Seq(JsString("TranscriptionBroadcast")) => value.convertTo[TranscriptionBroadcast]
-        case Seq(JsString("SentMessage")) => value.convertTo[SentMessage]
-        // FIXME SentMessage fallback, remove after it runs
-        case Seq() => value.convertTo[SentMessage]
-        case other => throw DeserializationException(s"Unknown type, expected ReceivedMessage or SentMessage (in a Seq) but got $other")
+    def read(value: JsValue): Option[IOKind] = {
+      value match {
+        case JsNull => None
+        case JsObject(map) =>
+          for {
+            jsKind <- map.get("kind")
+            ioType <- map.get("type")
+          } yield {
+            (jsKind, ioType) match {
+              case (JsString(kind), JsString("input")) => Input(kind)
+              case (JsString(kind), JsString("output")) => Output(kind)
+              case other =>
+                throw DeserializationException(s"Unknown type or missing kind $other")
+            }
+          }
+        case other =>
+          throw DeserializationException(s"Expected an object with {king, type} keys, got: $other")
       }
     }
   }
 
-  implicit val messageListJsonFormat: RootJsonFormat[List[SentMessage]] = listFormat(sentMessageFormat)
+  implicit object SentMessageJsonFormat extends RootJsonFormat[SentMessage] {
+
+    def write(m: SentMessage): JsValue = {
+      JsObject(
+        "approxSentTime" -> m.approxSentTime.toJson,
+        "messageType" -> m.messageType.toJson,
+        "sender" -> m.sender.toJson,
+        "receiver" -> m.receiver.toJson
+      )
+    }
+
+    def read(value: JsValue): SentMessage = {
+      val validatedApproxSentTime = value.asJsObject.getFields("approxSentTime") match {
+        case Seq(t) => t.convertTo[ZonedDateTime].validNel
+        case other => s"Expected a ZonedDateTime for approxSentTime but got $other".invalidNel
+      }
+
+      val validatedMessageType = value.asJsObject.getFields("messageType") match {
+        case Seq(JsString(value)) => value.validNel
+        case other => s"Expected a String for messageType but got $other".invalidNel
+      }
+
+      val validatedSender = value.asJsObject.getFields("sender") match {
+        case Seq(JsString(value)) => value.validNel
+        case other => s"Expected a sender but got $other".invalidNel
+      }
+
+      val validatedReceiver = value.asJsObject.getFields("receiver") match {
+        case Seq(t) => t.convertTo[String].validNel
+        case other => s"Expected a sender but got $other".invalidNel
+      }
+
+      val validatedIoKind = value.asJsObject.getFields("ioKind") match {
+        case Seq(t) => t.convertTo[Option[IOKind]].validNel
+        case Seq() => None.validNel
+        case other => s"Expected a sender but got $other".invalidNel
+      }
+
+      validatedApproxSentTime.andThen { approxSentTime =>
+        validatedMessageType.andThen { messageType =>
+          validatedSender.andThen { sender =>
+            validatedReceiver.andThen { receiver =>
+              validatedIoKind.andThen { ioKind =>
+                SentMessage(approxSentTime, messageType, sender, receiver, ioKind).validNel
+              }
+            }
+          }
+        }
+      } match {
+        case Validated.Valid(a: SentMessage) => a
+        case Validated.Invalid(e) => throw DeserializationException(s"$value: $e")
+      }
+    }
+  }
+
+  implicit object TranscriptionBroadcastJsonFormat extends RootJsonFormat[TranscriptionBroadcast] {
+
+    def write(m: TranscriptionBroadcast): JsValue = {
+      JsObject(
+        "approxSentTime" -> m.approxSentTime.toJson,
+        "messageType" -> m.messageType.toJson,
+        "sender" -> m.sender.toJson,
+        "receivers" -> m.receivers.toJson
+      )
+    }
+
+    def read(value: JsValue): TranscriptionBroadcast = {
+      val validatedApproxSentTime = value.asJsObject.getFields("approxSentTime") match {
+        case Seq(t) => t.convertTo[ZonedDateTime].validNel
+        case other => s"Expected a ZonedDateTime for approxSentTime but got $other".invalidNel
+      }
+
+      val validatedMessageType = value.asJsObject.getFields("messageType") match {
+        case Seq(JsString(value)) => value.validNel
+        case other => s"Expected a String for messageType but got $other".invalidNel
+      }
+
+      val validatedSender = value.asJsObject.getFields("sender") match {
+        case Seq(JsString(value)) => value.validNel
+        case other => s"Expected a sender but got $other".invalidNel
+      }
+
+      val validatedReceivers = value.asJsObject.getFields("receivers") match {
+        case Seq(t) => t.convertTo[Set[String]].validNel
+        case other => s"Expected a sender but got $other".invalidNel
+      }
+
+      validatedApproxSentTime.andThen { approxSentTime =>
+        validatedMessageType.andThen { messageType =>
+          validatedSender.andThen { sender =>
+            validatedReceivers.andThen { receivers =>
+              TranscriptionBroadcast(approxSentTime, messageType, sender, receivers).validNel
+            }
+          }
+        }
+      } match {
+        case Validated.Valid(a: TranscriptionBroadcast) => a
+        case Validated.Invalid(e) => throw DeserializationException(s"$e")
+      }
+    }
+  }
+
+  def persistedMessageJsonFormat()(implicit sentMessageJsonFormat: RootJsonFormat[SentMessage], transcriptionBroadcastJsonFormat: RootJsonFormat[TranscriptionBroadcast]): RootJsonFormat[PersistedMessage] = {
+    implicit object PersistedMessageJsonFormat extends RootJsonFormat[PersistedMessage] {
+      def write(m: PersistedMessage): JsValue = {
+        val (jsObj, typ) = m match {
+          case s: SentMessage => (s.toJson.asJsObject, "SentMessage")
+          case s: TranscriptionBroadcast => (s.toJson.asJsObject, "TranscriptionBroadcast")
+        }
+        JsObject(jsObj.fields + ("type" -> JsString(typ)))
+      }
+
+      def read(value: JsValue): PersistedMessage = {
+        value.asJsObject.getFields("type") match {
+          case Seq(JsString("TranscriptionBroadcast")) => value.convertTo[TranscriptionBroadcast](transcriptionBroadcastJsonFormat)
+          case Seq(JsString("SentMessage")) => value.convertTo[SentMessage](sentMessageJsonFormat)
+          case other => throw DeserializationException(s"Unknown type, expected ReceivedMessage or SentMessage (in a Seq) but got $other")
+        }
+      }
+    }
+
+    PersistedMessageJsonFormat
+  }
+
+  implicit val messageListJsonFormat: RootJsonFormat[List[SentMessage]] = listFormat(SentMessageJsonFormat)
 }
