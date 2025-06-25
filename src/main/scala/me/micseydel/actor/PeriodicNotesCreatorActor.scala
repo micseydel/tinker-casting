@@ -4,18 +4,17 @@ import cats.data.Validated.{Invalid, Valid}
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
-import me.micseydel.actor.DailyNoteActor.TheDayHasPassed
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist, FileReadException}
+import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist}
 
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.{Duration, LocalDate, ZonedDateTime}
 import scala.util.{Failure, Success}
 
 object PeriodicNotesCreatorActor {
@@ -90,12 +89,8 @@ object DailyNotesManager {
     Tinker.receiveMessage {
       case ItsMidnight(dayForNote) =>
         dailyNoteLookup :?> dayForNote match {
-          case (potentiallyUpdatedLookup, _) =>
-            potentiallyUpdatedLookup :?> dayForNote.minusDays(1) match {
-              case (potentiallyEvenMoreUpdatedLookup, yesterdaysDailyNoteActor) =>
-                yesterdaysDailyNoteActor !! TheDayHasPassed
-                behavior(potentiallyEvenMoreUpdatedLookup)
-            }
+          case (updated, _) =>
+            behavior(updated)
         }
     }
   }
@@ -104,9 +99,9 @@ object DailyNotesManager {
     //noinspection AccessorLikeMethodIsEmptyParen
     def getTemplate(): ValidatedNel[String, String] = {
       noteRef.readMarkdownSafer() match {
-        case Contents(s) => s.validNel
+        case Contents(Success(s)) => s.validNel
         case NoteRef.FileDoesNotExist => s"Note ${noteRef.noteId} did not exist".invalidNel
-        case FileReadException(exception) => Common.getStackTraceString(exception).invalidNel
+        case Contents(Failure(exception)) => Common.getStackTraceString(exception).invalidNel
       }
     }
   }
@@ -117,32 +112,30 @@ object DailyNoteActor {
   sealed trait Message
 
   final case class Create(template: ValidatedNel[String, String]) extends Message
-  final case object TheDayHasPassed extends Message
+  final case class ItsMidnight(day: LocalDate) extends Message
 
   def apply(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(forDay.toString, rgb(255, 222, 71), "•", Some("periodic_notes/daily")) { (context, noteRef) =>
+    implicit val c: TinkerContext[_] = context
     context.actorContext.log.info(s"Starting DailyNoteActor for day $forDay")
+    context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
     behavior(forDay, noteRef)
   }
 
   private def behavior(forDay: LocalDate, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
       case Create(Valid(template)) =>
-        val substitutedTemplate = template // FIXME HACKS so the Templater plugin can be used in a pinch
-          .replace("<% \"---\" %>", "---")
-          .replace("<% tp.date.now(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay))
-          .replace("<% moment().format(\"dddd, D MMMM YYYY (DDD)\") %>", VerboseDayFormatter.format(forDay))
-          .replace("<% tp.date.yesterday(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.minusDays(1)))
-          .replace("<% tp.date.tomorrow(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.plusDays(1)))
-
         noteRef.readMarkdownSafer() match {
-          case Contents(_) =>
-            context.actorContext.log.info(s"NOT creating daily note for $forDay, note already exists")
-
           case FileDoesNotExist =>
             context.actorContext.log.info(s"Creating daily note for $forDay")
-            noteRef.setMarkdown(substitutedTemplate)
+            noteRef.setMarkdown(substitutedTemplate(template, forDay)) match {
+              case Failure(exception) => context.actorContext.log.error("Failed to set Markdown", exception)
+              case Success(_) =>
+            }
 
-          case FileReadException(exception) =>
+          case Contents(Success(_)) =>
+            context.actorContext.log.info(s"NOT creating daily note for $forDay, note already exists")
+
+          case Contents(Failure(exception)) =>
             context.actorContext.log.error(s"Daily note creation for $forDay failed", exception)
         }
 
@@ -152,10 +145,58 @@ object DailyNoteActor {
         context.actorContext.log.warn(s"Failed to create daily template for day $forDay: $msg")
         Tinker.steadily
 
-      case TheDayHasPassed =>
-        context.actorContext.log.info(s"The day $forDay has passed")
+      case ItsMidnight(newDay) =>
+        context.actorContext.log.info(s"Actor for $forDay can tell it's now $newDay")
+        val daysSinceThisDay = Duration.between(forDay, newDay).toDays
+
+        noteRef.readNote().flatMap { note =>
+          note.yamlFrontMatter.flatMap { yaml =>
+            val maybeAliases = yaml.get("aliases")
+            maybeAliases match {
+              case Some(aliases: java.util.List[String] @unchecked) =>
+                daysSinceThisDay match {
+                  case 0 =>
+                    context.actorContext.log.warn(s"Did not expect to receive an ItsMidnight message the same day as creation ($forDay)")
+                    Success(note)
+                  case 1 =>
+                    val removed = aliases.remove(Today)
+                    if (!removed) context.actorContext.log.warn(s"Tried to remove Today from $forDay aliases, but found: $aliases")
+                    aliases.add(Yesterday)
+                    // FIXME: test mutable stuff
+                    noteRef.setTo(note)
+                  case 2 =>
+                    val removed = aliases.remove(Yesterday)
+                    if (!removed) context.actorContext.log.warn(s"Tried to remove Yesterday from $forDay aliases, but found: $aliases")
+                    noteRef.setTo(note)
+                  case other =>
+                    context.actorContext.log.debug(s"Day $forDay ignoring midnight ping after $other days")
+                    Success(note)
+                }
+
+              case other =>
+                context.actorContext.log.warn(s"expected to find aliases:List[String], but found $other (${maybeAliases.getClass})")
+                Success(note) // logging handled above
+            }
+          }
+        } match {
+          case Failure(exception) => context.actorContext.log.error(s"Something went wrong trying to fetch aliases from $forDay", exception)
+          case Success(_) =>
+        }
+
         Tinker.steadily
     }
+  }
+
+  private val Yesterday = "Yesterday"
+  private val Today = "Today"
+
+  private def substitutedTemplate(template: String, forDay: LocalDate): String = {
+    template // FIXME HACKS so the Templater plugin can be used in a pinch
+      .replace("<% \"---\" %>", "---")
+      .replace("<% tp.date.now(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay))
+      .replace("<% moment().format(\"dddd, D MMMM YYYY (DDD)\") %>", VerboseDayFormatter.format(forDay))
+      .replace("<% tp.date.yesterday(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.minusDays(1)))
+      .replace("<% tp.date.tomorrow(\"YYYY-MM-DD\") %>", IsoDateFormatter.format(forDay.plusDays(1)))
   }
 
   private val VerboseDayFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy (DDD)")

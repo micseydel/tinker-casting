@@ -174,7 +174,7 @@ case class Note private[vault] (
   def yamlFrontMatter: Try[Map[String, Any]] = maybeFrontmatter match {
     case Some(frontmatter) =>
       Try {
-        val Yaml = new Yaml()
+        val Yaml = new Yaml() // not thread safe
         val javaMap: java.util.Map[String, Any] = Yaml.load(frontmatter)
         val scalaMap: Map[String, Any] = CollectionConverters.asScala(javaMap).toMap
         scalaMap

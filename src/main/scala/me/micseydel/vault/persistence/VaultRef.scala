@@ -4,8 +4,9 @@ import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor
 import me.micseydel.dsl.TinkerContext
 import me.micseydel.util.FileSystemUtil
-import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist, FileReadException, FileReadResult}
+import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist, FileReadResult}
 import me.micseydel.vault.{Note, NoteId, VaultPath}
+import org.yaml.snakeyaml.Yaml
 import spray.json._
 
 import java.io.FileNotFoundException
@@ -60,8 +61,7 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
   def readMarkdownSafer(): FileReadResult = {
     readMarkdown() match {
       case Failure(_: FileNotFoundException) => FileDoesNotExist
-      case Failure(exception) => FileReadException(exception)
-      case Success(contents) => Contents(contents)
+      case tried => Contents(tried)
     }
   }
 
@@ -99,13 +99,20 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
         Note(f(markdown), frontmatter)
     }
   }
+
+  def setFrontMatter(frontmatter: AnyRef): Try[Note] = {
+    upsert {
+      case Note(markdown, _) =>
+        val Yaml = new Yaml() // not thread safe
+        Note(markdown, Some(Yaml.dump(frontmatter)))
+    }
+  }
 }
 
 object NoteRef {
   sealed trait FileReadResult
-  case class Contents(s: String) extends FileReadResult
+  case class Contents(s: Try[String]) extends FileReadResult
   case object FileDoesNotExist extends FileReadResult
-  case class FileReadException(exception: Throwable) extends FileReadResult
 }
 
 
