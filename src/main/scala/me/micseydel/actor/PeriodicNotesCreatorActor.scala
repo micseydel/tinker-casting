@@ -81,7 +81,11 @@ object DailyNotesManager {
       actor
     }
 
-    behavior(dailyNoteLookup)
+    // without this, it doesn't exist at midnight yet to receive its own midnight trigger for Today->Yesterday aliasing
+    dailyNoteLookup :?> context.system.clock.now() match {
+      case (warmedUpLookup, _) =>
+        behavior(warmedUpLookup)
+    }
   }
 
   private def behavior(dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
