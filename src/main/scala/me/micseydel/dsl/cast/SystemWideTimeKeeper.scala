@@ -38,7 +38,7 @@ object SystemWideTimeKeeper {
           }
         }.toLocalDate
 
-        context.log.info(s"Notifying ${subscribers.size} subscribers that it's midnight")
+        context.log.info(s"Notifying ${subscribers.size} subscribers that it's midnight: $subscribers")
         implicit val sender: Sender = Sender(context.self.path)
 
         for (subscriber <- subscribers) {

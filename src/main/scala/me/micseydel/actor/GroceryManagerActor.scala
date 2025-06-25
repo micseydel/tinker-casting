@@ -90,7 +90,7 @@ object GroceryListMOCActor {
           case Validated.Valid(document: Document) =>
             val latestArchiveNote = document.latestArchive
             val latestDate = LocalDate.parse(latestArchiveNote.dropRight(1).takeRight(10)).atStartOfDay(ZoneId.systemDefault()) // by convention 😬
-            context.actorContext.log.info(s"Received ${emails.size} emails, read wikilinks list from [[${noteRef.noteId}]] with latestArchiveNote [[$latestArchiveNote]], latestDate $latestDate")
+            context.actorContext.log.info(s"Received ${emails.size} emails, read wikilinks list from ${noteRef.noteId} with latestArchiveNote [[$latestArchiveNote]], latestDate $latestDate")
 
             doTurnOverFor(emails, latestDate) match {
               case Some(day) =>

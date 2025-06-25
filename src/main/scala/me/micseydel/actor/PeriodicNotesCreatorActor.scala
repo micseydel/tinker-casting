@@ -146,6 +146,7 @@ object DailyNoteActor {
         Tinker.steadily
 
       case ItsMidnight(newDay) =>
+        // FIXME: why is this not triggered?
         context.actorContext.log.info(s"Actor for $forDay can tell it's now $newDay")
         val daysSinceThisDay = Duration.between(forDay, newDay).toDays
 
