@@ -35,6 +35,14 @@ class AppStateMachine {
                 case 'frame':
                     this.updateGraph(message as FrameData);
                     break;
+                case 'input_frame':
+                    console.log("input frame!: " + data);
+                    this.updateGraph(message as FrameData);
+                    break;
+                case 'output_frame':
+                    console.log("output frame!: " + data);
+                    this.updateGraph(message as FrameData);
+                    break;
                 case 'transcription_frame':
                     this.handleTranscription(message as SendTranscriptionFrame);
                     break;
