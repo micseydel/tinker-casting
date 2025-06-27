@@ -55,41 +55,59 @@ export class VisualGraph {
         const edgeGroup: d3.Selection<SVGGElement, unknown, null, any> = svg.append("g");
         const nodeGroup: d3.Selection<SVGGElement, unknown, null, any> = svg.append("g");
 
-        const pinSomeNodes = false
+        const pinSomeNodes = true;
         if (pinSomeNodes) {
+            var hackyCounter = 0; // FIXME: is there a better way to do this?
             nodes.forEach(node => {
 
-                if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/Gossiper") {
-                    node.fx = width / 2;
-                    node.fy = height / 2;
+                // inputs
+                if (node.id.endsWith("Chronicler")) {
+                    node.fx = 25;
+                    node.fy = 25;
                 }
-                if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/Applications/CatsHelper") {
-                    node.fx = width / 2 - 400; // left of the Gossiper
-                    node.fy = height / 2;
+                if (node.id.endsWith("Gossiper")) {
+                    node.fx = 25;
+                    node.fy = 100;
+                }
+                if (node.id === "AkkaActor/system/TinkerCast/Applications/GmailTestActor/GmailActor") {
+                    node.fx = 50;
+                    node.fy = 200;
+                }
+                if (node.id.endsWith("PurpleAirActor")) {
+                    node.fx = 25;
+                    node.fy = 300;
+                }
+                if (node.id.endsWith("CO2_Monitor")) {
+                    node.fx = 25;
+                    node.fy = 400;
+                }
+                if (node.id.endsWith("AirGradientActor")) {
+                    node.fx = 25;
+                    node.fy = 500;
                 }
 
-                if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/Applications/CatsHelper/CatTranscriptionListener") {
-                    node.fx = width / 2 - 400;
-                    node.fy = height / 2 + 50;
-                }
 
-                if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/Applications/CentralNervousSystemMaintenance/Halto") {
-                    node.fx = width / 2 + 200; // right
-                    node.fy = height / 2 - 200; // and above
+                // outputs
+                if (node.id === "AkkaActor/system/TinkerCast/NotificationCenterManager/Chime") {
+                    node.fx = width - 50;
+                    node.fy = 100;
                 }
-
-                if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/HueControl") {
-                    node.fx = width / 2 - 200; // left
-                    node.fy = height / 2 - 200; // and above
+                if (node.id.endsWith("NotificationCenterManager")) {
+                    node.fx = width - 50;
+                    node.fy = 200;
                 }
-
-                // if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/Applications/CentralNervousSystemMaintenance/Halto") {  // Replace with the specific node's ID or condition
-                //     node.fx = 200;
-                //     node.fy = 150;
-                // } else if (node.id === "AkkaActor/system/TinkerCast/Orchestrator/Gossiper") {
-                //     node.fx = 1000;
-                //     node.fy = 200;
-                // }
+                if (node.id.endsWith("WyzeApiActor")) {
+                    node.fx = width - 50;
+                    node.fy = 300;
+                }
+                if (node.id.startsWith("AkkaActor/system/TinkerCast/NotificationCenterManager/HueControl/HueLightKeeper-") && !node.id.endsWith("TimeKeeper")) {
+                    // FIXME: Hacky
+                    // console.log(`${node.id}`)
+                    
+                    node.fx = width - 50;
+                    node.fy = 400 + hackyCounter;
+                    hackyCounter += 50;
+                }
             });
 
         }
@@ -149,7 +167,7 @@ export class VisualGraph {
             tooltip.transition()
                 .duration(200)
                 .style("opacity", .9);
-            tooltip.html(`${uriToActorAndSupervisor(d.id)}`)
+        tooltip.html(`${uriToActorAndSupervisor(d.id)}`)
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY - 28) + "px");
 
