@@ -36,7 +36,7 @@ object RemindMeListenerActor {
 
   private val JsonName = "reminders_tinkering"
 
-  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer[Message]("Reminders", Yellow, "⚠️") { (context, noteRef) =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer[Message]("Reminders", Yellow, "📫") { (context, noteRef) =>
     Tinker.withTypedJson(JsonName, StateJsonProtocol.stateFormat) { jsonRef =>
         implicit val c: TinkerContext[_] = context
         context.actorContext.log.info(s"Starting RemindMeListenerActor(note=${noteRef.noteId}, json=$JsonName): sending Gossiper.SubscribeHybrid")
@@ -48,7 +48,7 @@ object RemindMeListenerActor {
     }
   }
 
-  private def behavior(noteRef: NoteRef, jsonRef: TypedJsonRef[State])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(Yellow, "⚠️").receive { (context, message) =>
+  private def behavior(noteRef: NoteRef, jsonRef: TypedJsonRef[State])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val tc: TinkerClock = context.system.clock
     implicit val c: TinkerContext[_] = context
     val replyTo = Some(SpiritId)

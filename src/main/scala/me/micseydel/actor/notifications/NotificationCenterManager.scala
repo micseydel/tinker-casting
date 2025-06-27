@@ -98,7 +98,7 @@ object NotificationCenterManager {
     }
 
   private def finishInitializing(abilities: NotificationCenterAbilities)(implicit Tinker: Tinker): Ability[Message] =
-    Tinkerer(rgb(205, 205, 0), "❗️").initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) {
+    Tinkerer(rgb(223, 55, 7), "❗️").initializedWithTypedJson(JsonName, NotificationCenterManagerJsonFormat.notificationCenterStateJsonFormat) {
       case (context, jsonRef) =>
         val notificationCenterActor: SpiritRef[NotificationCenterActor.Message] = context.cast(NotificationCenterActor(context.self), "NotificationCenterActor")
         val upcomingNotificationsManager: SpiritRef[UpcomingNotificationsManager.Message] = context.cast(UpcomingNotificationsManager(context.self), "UpcomingNotificationsManager")
