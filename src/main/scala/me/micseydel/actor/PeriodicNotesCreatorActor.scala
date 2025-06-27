@@ -157,6 +157,7 @@ object DailyNoteActor {
         context.actorContext.log.info(s"Actor for $forDay can tell it's now $newDay (with daysBetween=$daysBetween)")
 
         noteRef.getNoteAndAliases().flatMap { case (note, aliases) =>
+          // FIXME: this code should not discard non-alias frontmatter!
           daysBetween match {
             case 0 =>
               context.actorContext.log.warn(s"Did not expect to receive an ItsMidnight message the same day as creation ($forDay)")
