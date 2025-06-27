@@ -62,6 +62,11 @@ object TimeUtil {
     FiniteDuration(Duration.between(from, to).toMillis, TimeUnit.MILLISECONDS)
   }
 
+  def daysBetween(firstDay: LocalDate, secondDay: LocalDate): Long = {
+    // FYI Duration.between(forDay, newDay) -> `java.time.temporal.UnsupportedTemporalTypeException: Unsupported unit: Seconds`
+    ChronoUnit.DAYS.between(firstDay, secondDay)
+  }
+
   def daysSince(from: LocalDate)(implicit tinkerClock: TinkerClock): Long = {
     ChronoUnit.DAYS.between(from, tinkerClock.now())
   }

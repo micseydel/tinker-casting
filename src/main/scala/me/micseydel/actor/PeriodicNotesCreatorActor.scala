@@ -1,5 +1,6 @@
 package me.micseydel.actor
 
+import scala.jdk.CollectionConverters._
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
@@ -9,13 +10,15 @@ import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.vault.{Note, NoteId, VaultPath}
+import me.micseydel.vault.persistence.{BasicNoteRef, NoteRef}
 import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist}
 
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, LocalDate, ZonedDateTime}
-import scala.util.{Failure, Success}
+import java.util
+import scala.util.{Failure, Success, Try}
 
 object PeriodicNotesCreatorActor {
   sealed trait Message
@@ -150,39 +153,26 @@ object DailyNoteActor {
         Tinker.steadily
 
       case ItsMidnight(newDay) =>
-        context.actorContext.log.info(s"Actor for $forDay can tell it's now $newDay")
-        
-        // FYI Duration.between(forDay, newDay) -> `java.time.temporal.UnsupportedTemporalTypeException: Unsupported unit: Seconds`
-        val daysSinceThisDay = ChronoUnit.DAYS.between(forDay, newDay)
+        val daysBetween = TimeUtil.daysBetween(forDay, newDay)
+        context.actorContext.log.info(s"Actor for $forDay can tell it's now $newDay (with daysBetween=$daysBetween)")
 
-        noteRef.readNote().flatMap { note =>
-          note.yamlFrontMatter.flatMap { yaml =>
-            val maybeAliases = yaml.get("aliases")
-            maybeAliases match {
-              case Some(aliases: java.util.List[String] @unchecked) =>
-                daysSinceThisDay match {
-                  case 0 =>
-                    context.actorContext.log.warn(s"Did not expect to receive an ItsMidnight message the same day as creation ($forDay)")
-                    Success(note)
-                  case 1 =>
-                    val removed = aliases.remove(Today)
-                    if (!removed) context.actorContext.log.warn(s"Tried to remove Today from $forDay aliases, but found: $aliases")
-                    aliases.add(Yesterday)
-                    // FIXME: test mutable stuff
-                    noteRef.setTo(note)
-                  case 2 =>
-                    val removed = aliases.remove(Yesterday)
-                    if (!removed) context.actorContext.log.warn(s"Tried to remove Yesterday from $forDay aliases, but found: $aliases")
-                    noteRef.setTo(note)
-                  case other =>
-                    context.actorContext.log.debug(s"Day $forDay ignoring midnight ping after $other days")
-                    Success(note)
-                }
-
-              case other =>
-                context.actorContext.log.warn(s"expected to find aliases:List[String], but found $other (${maybeAliases.getClass})")
-                Success(note) // logging handled above
-            }
+        noteRef.getNoteAndAliases().flatMap { case (note, aliases) =>
+          daysBetween match {
+            case 0 =>
+              context.actorContext.log.warn(s"Did not expect to receive an ItsMidnight message the same day as creation ($forDay)")
+              Success(note)
+            case 1 =>
+              val removed = aliases.remove(Today)
+              if (!removed) context.actorContext.log.warn(s"Tried to remove Today from $forDay aliases, but found: $aliases")
+              aliases.add(Yesterday)
+              noteRef.setFrontMatter(Map("aliases" -> aliases).asJava)
+            case 2 =>
+              val removed = aliases.remove(Yesterday)
+              if (!removed) context.actorContext.log.warn(s"Tried to remove Yesterday from $forDay aliases, but found: $aliases")
+              noteRef.setFrontMatter(Map("aliases" -> aliases).asJava)
+            case other =>
+              context.actorContext.log.debug(s"Day $forDay ignoring midnight ping after $other days")
+              Success(note)
           }
         } match {
           case Failure(exception) => context.actorContext.log.error(s"Something went wrong trying to fetch aliases from $forDay", exception)
@@ -195,6 +185,19 @@ object DailyNoteActor {
 
   private val Yesterday = "Yesterday"
   private val Today = "Today"
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def getNoteAndAliases(): Try[(Note, util.List[String])] = {
+      noteRef.readNote().flatMap { note =>
+        note.yamlFrontMatter.flatMap { yaml =>
+          yaml.get("aliases") match {
+            case Some(aliases: java.util.List[String] @unchecked) => Success(note -> aliases)
+            case other => Failure(new RuntimeException(s"Expected a java.util.List[String] containing aliases in an option, found $other"))
+          }
+        }
+      }
+    }
+  }
 
   private def substitutedTemplate(template: String, forDay: LocalDate): String = {
     template // FIXME HACKS so the Templater plugin can be used in a pinch
