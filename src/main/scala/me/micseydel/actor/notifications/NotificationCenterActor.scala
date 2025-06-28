@@ -16,7 +16,7 @@ object NotificationCenterActor {
   private[notifications] case class ClearNotification(id: String) extends Message
 
   private val NoteName = "Notification Center"
-  def apply(completeNotification: SpiritRef[NotificationCenterManager.CompleteNotification])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(205, 205, 0), "❗️", ReceiveNotePing) { (context, noteRef) =>
+  def apply(completeNotification: SpiritRef[NotificationCenterManager.CompleteNotification])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(205, 205, 0), "📢", ReceiveNotePing) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
