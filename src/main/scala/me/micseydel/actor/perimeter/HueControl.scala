@@ -7,14 +7,12 @@ import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.perimeter.HueControl._
 import me.micseydel.actor.perimeter.hue.HueNoteRef
-import me.micseydel.dsl.SpiritRef.TinkerIO
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.Light.AllList
 import me.micseydel.model._
-import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.Duration
@@ -106,7 +104,7 @@ object HueControl {
 
       case DoALightShow() =>
         for (lightKeeper <- lightKeepersByName.values) {
-          lightKeeper !!-> HueLightKeeper.DoALightShow()
+          lightKeeper !! HueLightKeeper.DoALightShow()
         }
 
         Tinker.steadily
@@ -122,7 +120,7 @@ object HueControl {
 
         lightKeepersByLight.get(light) match {
           case Some(actorRef) =>
-            actorRef !!-> HueLightKeeper.SetBrightness(brightnessPct)
+            actorRef !! HueLightKeeper.SetBrightness(brightnessPct)
           case None =>
             context.actorContext.log.error(s"Light $light not in lightKeepersByLight; keys = ${lightKeepersByLight.keySet}")
         }
@@ -132,14 +130,14 @@ object HueControl {
       case SetAllBrightness(pct) =>
         context.actorContext.log.info(s"Setting all lights to $pct%")
         for (light <- AllList) {
-          context.self !!-> SetBrightness(light, pct)
+          context.self !! SetBrightness(light, pct)
         }
         Tinker.steadily
 
       case FlashTheLight(light) =>
         lightKeepersByLight.get(light) match {
           case Some(actorRef) =>
-            actorRef !!-> HueLightKeeper.FlashTheLight
+            actorRef !! HueLightKeeper.FlashTheLight
           case None =>
             context.actorContext.log.error(s"Light $light not in lightKeepersByLight; keys = ${lightKeepersByLight.keySet}")
         }
@@ -150,7 +148,7 @@ object HueControl {
         lightKeepersByLight.get(light) match {
           case Some(ref) =>
             context.actorContext.log.info(s"Telling light $light to set itself to $lightState")
-            ref !!-> HueLightKeeper.SetLight(lightState)
+            ref !! HueLightKeeper.SetLight(lightState)
           case None =>
             context.actorContext.log.error(s"Light $light not in lightKeepersByLight; keys = ${lightKeepersByLight.keySet}")
         }
@@ -162,12 +160,6 @@ object HueControl {
           context.self !! HueControl.SetLight(light, state)
         }
         Tinker.steadily
-    }
-  }
-
-  private implicit class RichSpiritRef[T](val spiritRef: SpiritRef[T]) extends AnyVal {
-    def !!->(message: T)(implicit tc: TinkerContext[_]): Unit = {
-      spiritRef !!-> TinkerIO("💡", message)
     }
   }
 }

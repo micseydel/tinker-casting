@@ -6,7 +6,6 @@ import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor._
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper
-import me.micseydel.dsl.SpiritRef.TinkerIO
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper
@@ -141,7 +140,7 @@ object Chronicler {
 
           // tell the actor who will tell the listeners
           // (Gossiper has separate Base / Large listeners / keys)
-          gossiper ->!! TinkerIO("🗣️", Gossiper.Receive(notedTranscription))
+          gossiper !! Gossiper.Receive(notedTranscription)
           // tinkerbrain is just for tracking purposes
           //        tinkerBrain ! TinkerBrain.Transcription(notedTranscription)
 

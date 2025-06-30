@@ -17,7 +17,6 @@ import me.micseydel.Common
 import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.GmailActor.Email
-import me.micseydel.dsl.SpiritRef.TinkerIO
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
@@ -128,8 +127,7 @@ object GmailActor {
           case Failure(exception) => context.actorContext.log.error("Failed to fetch Gmail", exception)
           case Success(newEmails) =>
             context.actorContext.log.info(s"Fetched ${newEmails.size} emails; sending to subscribers $subscribers")
-            // FIXME: should use *!* for broadcast, but would have to create ->*!* or something
-            subscribers.foreach(_ ->!! TinkerIO("⏰", newEmails.sortBy(_.sentAt)))
+            subscribers.foreach(_ !! newEmails.sortBy(_.sentAt))
         }
 
         Behaviors.same

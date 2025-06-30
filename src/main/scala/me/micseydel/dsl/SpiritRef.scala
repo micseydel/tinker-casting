@@ -2,9 +2,7 @@ package me.micseydel.dsl
 
 import akka.actor.ActorPath
 import akka.actor.typed.ActorRef
-import me.micseydel.dsl.SpiritRef.TinkerIO
 import me.micseydel.dsl.cast.TinkerBrain
-import me.micseydel.dsl.cast.TinkerBrain.{Input, Output}
 
 trait SpiritRef[-T] {
   def underlying: ActorRef[T]
@@ -26,16 +24,6 @@ trait SpiritRef[-T] {
    */
   def !!!!(message: T): Unit
 
-  /**
-   * For indicating an external input has entered the system.
-   */
-  def ->!!(tinkerInput: TinkerIO[T])(implicit tinkerContext: TinkerContext[_]): Unit
-
-  /**
-   * For indicating an external side effect.
-   */
-  def !!->(tinkerInput: TinkerIO[T])(implicit tinkerContext: TinkerContext[_]): Unit
-
   // FIXME: other kinds of message sending
   // send (tracked), send on behalf of,
   // !? - Query or ask for information, expecting a quick response.
@@ -49,10 +37,6 @@ trait SpiritRef[-T] {
   def narrow[U <: T]: SpiritRef[U] = this.asInstanceOf[SpiritRef[U]]
 
   def path: ActorPath = underlying.path
-}
-
-object SpiritRef {
-  case class TinkerIO[+T](kind: String, message: T)
 }
 
 class SpiritRefImpl[-T](
@@ -69,8 +53,7 @@ class SpiritRefImpl[-T](
         tinkerClock.now(),
         message.getClass.getName,
         sender,
-        underlying,
-        None
+        underlying
       )
     }
 
@@ -87,42 +70,6 @@ class SpiritRefImpl[-T](
    */
   override def !!!!(message: T): Unit = {
     underlying ! message
-  }
-
-  /**
-   * For indicating an external input has entered the system.
-   */
-  override def ->!!(tinkerInput: TinkerIO[T])(implicit tinkerContext: TinkerContext[_]): Unit = {
-    val sender: Sender = tinkerContext.sender
-    if (!sender.path.toSerializationFormat.contains("TinkerBrain")) {
-      tinkerBrain ! TinkerBrain.SentMessage(
-        tinkerClock.now(),
-        tinkerInput.message.getClass.getName,
-        sender,
-        underlying,
-        Some(Input(tinkerInput.kind))
-      )
-
-      underlying ! tinkerInput.message
-    }
-  }
-
-  /**
-   * For indicating an external side effect.
-   */
-  override def !!->(tinkerInput: TinkerIO[T])(implicit tinkerContext: TinkerContext[_]): Unit = {
-    val sender: Sender = tinkerContext.sender
-    if (!sender.path.toSerializationFormat.contains("TinkerBrain")) {
-      tinkerBrain ! TinkerBrain.SentMessage(
-        tinkerClock.now(),
-        tinkerInput.message.getClass.getName,
-        sender,
-        underlying,
-        Some(Output(tinkerInput.kind))
-      )
-
-      underlying ! tinkerInput.message
-    }
   }
 }
 

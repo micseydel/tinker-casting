@@ -4,7 +4,6 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.actor.notifications.NotificationCenterManager._
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
-import me.micseydel.dsl.SpiritRef.TinkerIO
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
@@ -136,7 +135,7 @@ object NotificationCenterManager {
               case HueCommand(command) =>
                 hueControl !! command
               case Chime(message) =>
-                chime !!-> TinkerIO("🎐", message) // FIXME: it's silly for hue and chime to be different
+                chime !! message
             }
           }
 

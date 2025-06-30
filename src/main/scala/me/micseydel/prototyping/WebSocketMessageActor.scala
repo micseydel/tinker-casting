@@ -31,8 +31,7 @@ object WebSocketMessageActor {
     }
   }
   case class SendFrame(edges: List[TinkerEdge]) extends SendClientMessage("frame")
-  case class SendInputFrame(edges: Set[TinkerEdge], kind: String) extends SendClientMessage("input_frame")
-  case class SendOutputFrame(edges: Set[TinkerEdge], kind: String) extends SendClientMessage("output_frame")
+  case class SendTranscriptionFrame(edges: Set[TinkerEdge], notedTranscription: NotedTranscription) extends SendClientMessage("transcription_frame")
   case class SendHeartbeat() extends SendClientMessage("heartbeat")
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
@@ -130,14 +129,13 @@ object WebSocketMessageActor {
 
             replyTo ! TextMessage((sg.copy(priorFrames = cleanup(priorFrames).reverse): SendClientMessage).toJson.compactPrint)
             Behaviors.same
-
-
-          case sf@(SendInputFrame(_, _) | SendOutputFrame(_, _)) =>
-            context.log.info(s"Sending IO frame ${sf.getClass}")
+          case SendTranscriptionFrame(edges, notedTranscription) =>
+            val wordCount = notedTranscription.capture.whisperResult.whisperResultContent.text.wordCount
+            context.log.info(s"Sending SendTranscriptionFrame with ${edges.size} edges and word count $wordCount")
             replyTo ! forClient
+            // FIXME: ideally would add the transcription frames interleaved with the graph... OH
             behavior(replyTo, graph)
             Behaviors.same
-
           case SendFrame(edges) =>
             context.log.info(s"Sending a frame with ${edges.size} edges")
             replyTo ! forClient
@@ -154,6 +152,30 @@ object WebSocketMessageActor {
           context.self ! SendHeartbeat()
           context.scheduleOnce(10.seconds, context.self, Heartbeat())
           Behaviors.same
+
+//      case Heartbeat() =>
+//        val currentTime = Common.zonedDateTimeToISO8601(ZonedDateTime.now())
+//        context.log.info(s"Sending current time $currentTime and scheduling another heartbeat")
+//
+//        val (nextFrame, remainingFrames) = frames match {
+//          case Nil =>
+//            context.log.info("Ran out of frames, starting over")
+//            val head :: tail = Frames.frames
+//            (head, tail)
+//
+//          case nextFrame :: remainingFrames =>
+//            (nextFrame, remainingFrames)
+//        }
+//
+//        val sending = //currentTime + " " +
+//          nextFrame
+//        context.log.info(s"Sending $sending, updating behavior with ${remainingFrames.size} remaining frames")
+//        replyTo ! TextMessage(sending)
+//
+//        // new client can kinda screw this up but whatever it's no biggie
+//        context.scheduleOnce(1.seconds, context.self, Heartbeat())
+//
+//        behavior(replyTo, remainingFrames)
     }
   }
 }
@@ -177,8 +199,7 @@ object WebSocketMessageJsonProtocol extends DefaultJsonProtocol {
 
   implicit val tinkerEdgeFormat: JsonFormat[TinkerEdge] = jsonFormat2(TinkerEdge)
   implicit val sendGraphFormat: JsonFormat[SendGraph] = jsonFormat3(SendGraph)
-  implicit val sendInputFrameFormat: JsonFormat[SendInputFrame] = jsonFormat2(SendInputFrame)
-  implicit val sendOutputFrameFormat: JsonFormat[SendOutputFrame] = jsonFormat2(SendOutputFrame)
+  implicit val sendTranscriptionFrameFormat: JsonFormat[SendTranscriptionFrame] = jsonFormat2(SendTranscriptionFrame)
   implicit val sendFrameFormat: JsonFormat[SendFrame] = jsonFormat1(SendFrame)
   implicit val sendHeartbeatFormat: JsonFormat[SendHeartbeat] = jsonFormat0(SendHeartbeat)
 
@@ -186,8 +207,7 @@ object WebSocketMessageJsonProtocol extends DefaultJsonProtocol {
     def write(m: SendClientMessage): JsValue = {
       val (jsObj, typ) = m match {
         case s: SendGraph => (s.toJson.asJsObject, s.messageType)
-        case s: SendInputFrame => (s.toJson.asJsObject, s.messageType)
-        case s: SendOutputFrame => (s.toJson.asJsObject, s.messageType)
+        case s: SendTranscriptionFrame => (s.toJson.asJsObject, s.messageType)
         case s: SendFrame => (s.toJson.asJsObject, s.messageType)
         case s: SendHeartbeat => (s.toJson.asJsObject, s.messageType)
       }
