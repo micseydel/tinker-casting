@@ -6,7 +6,7 @@ import me.micseydel.dsl.TinkerContext
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist, FileReadResult}
 import me.micseydel.vault.{Note, NoteId, VaultPath}
-import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.{DumperOptions, Yaml}
 import spray.json._
 
 import java.io.FileNotFoundException
@@ -103,7 +103,11 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
   def setFrontMatter(frontmatter: AnyRef): Try[Note] = {
     upsert {
       case Note(markdown, _) =>
-        val Yaml = new Yaml() // not thread safe
+        val options = new DumperOptions();
+        options.setIndent(4);
+        options.setPrettyFlow(true);
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        val Yaml = new Yaml(options) // needs to be kept in its own thread
         Note(markdown, Some(Yaml.dump(frontmatter)))
     }
   }

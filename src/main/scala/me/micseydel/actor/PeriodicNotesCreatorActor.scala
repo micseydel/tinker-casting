@@ -164,9 +164,15 @@ object DailyNoteActor {
               Success(note)
             case 1 =>
               val removed = aliases.remove(Today)
-              if (!removed) context.actorContext.log.warn(s"Tried to remove Today from $forDay aliases, but found: $aliases")
-              aliases.add(Yesterday)
-              noteRef.setFrontMatter(Map("aliases" -> aliases).asJava)
+              if (removed) {
+                aliases.add(Yesterday)
+                context.actorContext.log.info(s"Replaced alias Today with Yesterday")
+                noteRef.setFrontMatter(Map("aliases" -> aliases).asJava)
+              } else {
+                // FIXME: probably change to info
+                context.actorContext.log.warn(s"Tried to remove Today from $forDay aliases, but found: $aliases")
+                Success(note)
+              }
             case 2 =>
               val removed = aliases.remove(Yesterday)
               if (!removed) context.actorContext.log.warn(s"Tried to remove Yesterday from $forDay aliases, but found: $aliases")
