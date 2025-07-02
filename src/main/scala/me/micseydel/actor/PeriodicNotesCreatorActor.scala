@@ -13,6 +13,7 @@ import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist}
 import me.micseydel.{Common, NoOp}
 
+import java.io.FileNotFoundException
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.{LocalDate, ZonedDateTime}
@@ -172,6 +173,7 @@ object DailyNoteActor {
         Tinker.steadily
 
       case NewDay(currentDay) =>
+        context.actorContext.log.info(s"Tidying yaml for $forDay (on $currentDay)")
         noteRef.tidyYamlAliases(currentDay)(context.system.clock) match {
           case Failure(exception) => context.actorContext.log.warn(s"Tidying aliases on $currentDay for $forDay failed", exception)
           case Success(_) =>
@@ -213,6 +215,8 @@ object DailyNoteActor {
               Success(NoOp)
             }
           }
+      }.recoverWith {
+        case _: FileNotFoundException => Success(NoOp)
       }
     }
 
