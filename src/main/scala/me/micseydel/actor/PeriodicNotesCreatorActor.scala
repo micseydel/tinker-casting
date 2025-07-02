@@ -1,23 +1,22 @@
 package me.micseydel.actor
 
-import scala.jdk.CollectionConverters._
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
-import me.micseydel.Common
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.{Note, NoteId, VaultPath}
-import me.micseydel.vault.persistence.{BasicNoteRef, NoteRef}
+import me.micseydel.vault.Note
+import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist}
+import me.micseydel.{Common, NoOp}
 
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.time.{Duration, LocalDate, ZonedDateTime}
-import java.util
+import java.time.{LocalDate, ZonedDateTime}
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 object PeriodicNotesCreatorActor {
@@ -80,14 +79,28 @@ object DailyNotesManager {
     context.actorContext.log.info(s"Starting DailyNotesManager for day $templateName")
     val dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message] = LookUpSpiritByDay[DailyNoteActor.Message] { (context, captureDate) =>
       val actor: SpiritRef[DailyNoteActor.Message] = context.cast(DailyNoteActor(captureDate), TimeUtil.localDateTimeToISO8601Date(captureDate))
-      actor !! DailyNoteActor.Create(noteRef.getTemplate())
+
+      noteRef.getTemplate() match {
+        case Valid(template) =>
+          actor !! DailyNoteActor.ReceiveTemplate(template)
+        case Invalid(e) =>
+          context.actorContext.log.warn(s"Something went wrong getting the template from disk for creating $captureDate: $e")
+      }
+
       actor
     }
 
-    // without this, it doesn't exist at midnight yet to receive its own midnight trigger for Today->Yesterday aliasing
-    dailyNoteLookup :?> context.system.clock.now() match {
-      case (warmedUpLookup, _) =>
-        behavior(warmedUpLookup)
+    val today = context.system.clock.now()
+    dailyNoteLookup :?> today match {
+      case (dailyNoteLookupWithToday, _) =>
+        dailyNoteLookupWithToday :?> today.minusDays(1) match {
+          case (dailyNoteLookupWithYesterday, _) =>
+            dailyNoteLookupWithYesterday :?> today.minusDays(2) match {
+              case (warmedUpLookup, _) =>
+                // this warmup covers today, yesterday and the day before (including on app start)
+                behavior(warmedUpLookup)
+            }
+        }
     }
   }
 
@@ -118,25 +131,35 @@ object DailyNotesManager {
 object DailyNoteActor {
   sealed trait Message
 
-  final case class Create(template: ValidatedNel[String, String]) extends Message
-  final case class ItsMidnight(day: LocalDate) extends Message
+  final case class ReceiveTemplate(template: String) extends Message
+  private case class NewDay(day: LocalDate) extends Message
 
   def apply(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(forDay.toString, rgb(255, 222, 71), "•", Some("periodic_notes/daily")) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
     context.actorContext.log.info(s"Starting DailyNoteActor for day $forDay")
-    context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
+    context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(NewDay))
+    noteRef.tidyYamlAliases(forDay)(context.system.clock) match {
+      case Failure(exception) => context.actorContext.log.warn(s"Something went wrong tidying yaml for a prior day on actor (app?) startup", exception)
+      case Success(_) =>
+    }
+
     behavior(forDay, noteRef)
   }
 
   private def behavior(forDay: LocalDate, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
-      case Create(Valid(template)) =>
+      case ReceiveTemplate(template) =>
         noteRef.readMarkdownSafer() match {
           case FileDoesNotExist =>
             context.actorContext.log.info(s"Creating daily note for $forDay")
-            noteRef.setMarkdown(substitutedTemplate(template, forDay)) match {
+            noteRef.createNote(template, forDay) match {
               case Failure(exception) => context.actorContext.log.error("Failed to set Markdown", exception)
               case Success(_) =>
+            }
+
+            if (context.system.clock.today().isAfter(forDay)) {
+              context.actorContext.log.warn(s"Tidying aliases for $forDay, it seems this note was created late?")
+              noteRef.tidyYamlAliases(forDay)(context.system.clock)
             }
 
           case Contents(Success(_)) =>
@@ -148,41 +171,9 @@ object DailyNoteActor {
 
         Tinker.steadily
 
-      case Create(Invalid(msg)) =>
-        context.actorContext.log.warn(s"Failed to create daily template for day $forDay: $msg")
-        Tinker.steadily
-
-      case ItsMidnight(newDay) =>
-        val daysBetween = TimeUtil.daysBetween(forDay, newDay)
-        context.actorContext.log.info(s"Actor for $forDay can tell it's now $newDay (with daysBetween=$daysBetween)")
-
-        noteRef.getNoteAndAliases().flatMap { case (note, aliases) =>
-          // FIXME: this code should not discard non-alias frontmatter!
-          daysBetween match {
-            case 0 =>
-              context.actorContext.log.warn(s"Did not expect to receive an ItsMidnight message the same day as creation ($forDay)")
-              Success(note)
-            case 1 =>
-              val removed = aliases.remove(Today)
-              if (removed) {
-                aliases.add(Yesterday)
-                context.actorContext.log.info(s"Replaced alias Today with Yesterday")
-                noteRef.setFrontMatter(Map("aliases" -> aliases).asJava)
-              } else {
-                // FIXME: probably change to info
-                context.actorContext.log.warn(s"Tried to remove Today from $forDay aliases, but found: $aliases")
-                Success(note)
-              }
-            case 2 =>
-              val removed = aliases.remove(Yesterday)
-              if (!removed) context.actorContext.log.warn(s"Tried to remove Yesterday from $forDay aliases, but found: $aliases")
-              noteRef.setFrontMatter(Map("aliases" -> aliases).asJava)
-            case other =>
-              context.actorContext.log.debug(s"Day $forDay ignoring midnight ping after $other days")
-              Success(note)
-          }
-        } match {
-          case Failure(exception) => context.actorContext.log.error(s"Something went wrong trying to fetch aliases from $forDay", exception)
+      case NewDay(currentDay) =>
+        noteRef.tidyYamlAliases(currentDay)(context.system.clock) match {
+          case Failure(exception) => context.actorContext.log.warn(s"Tidying aliases on $currentDay for $forDay failed", exception)
           case Success(_) =>
         }
 
@@ -194,14 +185,52 @@ object DailyNoteActor {
   private val Today = "Today"
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def getNoteAndAliases(): Try[(Note, util.List[String])] = {
-      noteRef.readNote().flatMap { note =>
-        note.yamlFrontMatter.flatMap { yaml =>
-          yaml.get("aliases") match {
-            case Some(aliases: java.util.List[String] @unchecked) => Success(note -> aliases)
-            case other => Failure(new RuntimeException(s"Expected a java.util.List[String] containing aliases in an option, found $other"))
+    def createNote(template: String, forDay: LocalDate): Try[NoOp.type] =
+      noteRef.setMarkdown(substitutedTemplate(template, forDay))
+
+    def tidyYamlAliases(forDay: LocalDate)(implicit clock: TinkerClock): Try[NoOp.type] = {
+      noteRef.readNote().flatMap {
+        case note@Note(markdown, _) =>
+          note.yamlFrontMatter.flatMap { frontMatter =>
+            val updated: java.util.Map[String, Object] = new java.util.HashMap[String, Object]()
+
+            val doUpdate = frontMatter.map {
+              case ("aliases", aliases: java.util.List[String] @unchecked) =>
+                if (tidyAliasesList(aliases, forDay)) {
+                  updated.put("aliases", aliases.asInstanceOf[Object])
+                  true
+                } else false
+              case (key, value) =>
+                updated.put(key, value.asInstanceOf[Object])
+                false
+            }.exists(identity)
+
+            if (doUpdate) {
+              noteRef
+                .setTo(Note(markdown, updated.asScala.toMap))
+                .map(_ => NoOp)
+            } else {
+              Success(NoOp)
+            }
           }
-        }
+      }
+    }
+
+    private def tidyAliasesList(aliasesToTidy: java.util.List[String], forDay: LocalDate)(implicit clock: TinkerClock): Boolean = {
+      val daysBetween = TimeUtil.daysBetween(forDay, clock.today())
+      daysBetween match {
+        case 1 => // [[Yesterday]]
+          val removed = aliasesToTidy.remove(Today)
+          if (removed) {
+            // if we removed "Today" as an alias, create "Yesterday" alias
+            aliasesToTidy.add(Yesterday)
+          }
+          removed
+        case 2 => // day before yesterday
+          // just make sure the alias is gone
+          aliasesToTidy.remove(Yesterday)
+        case _ =>
+          false
       }
     }
   }
@@ -245,21 +274,4 @@ object MillisFromMidnight {
   def midnightFor(zonedDateTime: ZonedDateTime): ZonedDateTime = {
     zonedDateTime.withHour(0).withMinute(0).withSecond(0).withNano(0)
   }
-
-  // manual testing
-
-//  def main(args: Array[String]): Unit = {
-//    val twoHundredMillisInNanos = 200.millis.toNanos // 200000000
-//
-//    val midnight = ZonedDateTime.of(2023, 12, 24, 0, 0, 0, 0, ZonedDateTime.now().getZone)
-//
-//    val justBeforeMidnight = MillisFromMidnight(midnight.minusNanos(twoHundredMillisInNanos))
-//    val justAfterMidnight = MillisFromMidnight(midnight.plusNanos(twoHundredMillisInNanos))
-//
-//    println(s"justBeforeMidnight: $justBeforeMidnight")
-//    println(s"Midnight: ${MillisFromMidnight(midnight)}")
-//    println(s"justAfterMidnight: $justAfterMidnight")
-//
-//    println(MillisFromMidnight(ZonedDateTime.parse("2023-12-24T23:59:59.965142-08:00[America/Los_Angeles]")))
-//  }
 }
