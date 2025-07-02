@@ -92,6 +92,8 @@ class LookUpSpiritByDay[S] private(
 
   def :?>(localDate: LocalDate)(implicit tinkerContext: TinkerContext[_]): (LookUpSpiritByDay[S], SpiritRef[S]) = lookup(localDate)
 
+  override def toString: String = s"LookUpSpiritByDay($map)"
+
   //
 
   private def lookup(localDate: LocalDate)(implicit tinkerContext: TinkerContext[_]): (LookUpSpiritByDay[S], SpiritRef[S]) = {

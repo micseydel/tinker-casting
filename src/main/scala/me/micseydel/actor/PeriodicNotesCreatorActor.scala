@@ -41,7 +41,7 @@ object PeriodicNotesCreatorActor {
         behavior(dailyNotesManager)
 
       case Validated.Invalid(e) =>
-        context.actorContext.log.warn(s"PeriodicNotesCreatorActor failed, invalid dailiy template: $e")
+        context.actorContext.log.warn(s"PeriodicNotesCreatorActor failed, invalid daily template: $e")
         Tinker.ignore
     }
   }
@@ -98,7 +98,7 @@ object DailyNotesManager {
           case (dailyNoteLookupWithYesterday, _) =>
             dailyNoteLookupWithYesterday :?> today.minusDays(2) match {
               case (warmedUpLookup, _) =>
-                // this warmup covers today, yesterday and the day before (including on app start)
+                context.actorContext.log.info(s"Cache warmed up with today and prior two days: $warmedUpLookup")
                 behavior(warmedUpLookup)
             }
         }
