@@ -170,7 +170,8 @@ object RemindMeListenerActor {
   // util
 
   private def isAMatch(text: String): Boolean = {
-    text.toLowerCase.contains("remind me") || text.toLowerCase.contains("set a reminder")
+    text.toLowerCase.contains("remind me") || text.toLowerCase.contains("set a reminder") ||
+      text.toLowerCase.startsWith("reminded me") // infrequent mis-transcription
   }
 
   private implicit class RichState(val jsonRef: TypedJsonRef[State]) extends AnyVal {
