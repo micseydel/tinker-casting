@@ -45,6 +45,13 @@ object PromptFromFileManagerActor {
             "llama3"
         }
 
+        noteRef.append(
+          s"""# Ollama ($model)
+            |
+            |> [!abstract] Details
+            |> Started at ${context.system.clock.now()}
+            |""".stripMargin)
+
         context.actorContext.log.info("Spawning an anonymous FetchChatResponse actor")
         context.castAnonymous(FetchChatResponseActor(hostAndPort, note.markdown, model, context.messageAdapter(ReceivePromptResponse)))
 
@@ -72,7 +79,7 @@ object PromptFromFileManagerActor {
 
       case ReceivePromptResponse(ChatResponseResult(text, _)) =>
         context.actorContext.log.info(s"Received prompt reply!")
-        noteRef.append(s"\n# Ollama response (per $model)\n\n$text\n")
+        noteRef.append(s"\n## Response\n\n$text\n")
         Tinker.steadily
 
       case ReceivePromptResponse(ChatResponseFailure(msg, maybeException)) =>
