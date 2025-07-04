@@ -39,6 +39,7 @@ object Gossiper {
 
   //  final case class SubscribeFast(subscriber: SpiritRef[NotedTranscription]) extends Subscription
   final case class SubscribeHybrid(subscriber: SpiritRef[NotedTranscription]) extends Subscription
+  final case class SubscribeTurbo(subscriber: SpiritRef[NotedTranscription]) extends Subscription
 
   //
 
@@ -52,7 +53,7 @@ object Gossiper {
         case Success(value) => value
       }
 
-      behavior(Set.empty, Set.empty, Map.empty, generatedMarkdown)(Tinker, noteRef)
+      behavior(Set.empty, Set.empty, Set.empty, Map.empty, generatedMarkdown)(Tinker, noteRef)
     }
 
   /**
@@ -61,6 +62,7 @@ object Gossiper {
   private def behavior(
                         accurateListeners: Set[SpiritRef[NotedTranscription]],
                         fastListeners: Set[SpiritRef[NotedTranscription]],
+                        turboListeners: Set[SpiritRef[NotedTranscription]],
                         votesMapping: Map[NoteId, Map[String, NonEmptyList[Vote]]],
                         generatedMarkdown: Boolean
                       )(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
@@ -111,8 +113,8 @@ object Gossiper {
             context.actorContext.log.info(s"Sending ${notedTranscription.noteId} to ${accurateListeners.size} listeners (large, accurate model)")
             accurateListeners *!* notedTranscription
           case TurboModel =>
-            // FIXME
-            context.actorContext.log.debug(s"ignoring TurboModel for ${noteRef.noteId}")
+            context.actorContext.log.info(s"Sending ${notedTranscription.noteId} to ${accurateListeners.size} listeners (turbo, compromise model)")
+            turboListeners *!* notedTranscription
           case BaseModel =>
             context.actorContext.log.info(s"Sending ${notedTranscription.noteId} to ${fastListeners.size} listeners (base, fast model)")
             fastListeners *!* notedTranscription
@@ -122,11 +124,15 @@ object Gossiper {
 
       case SubscribeAccurate(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to accurate subscribers")
-        behavior(accurateListeners + subscriber, fastListeners, votesMapping, generatedMarkdown)
+        behavior(accurateListeners + subscriber, fastListeners, turboListeners, votesMapping, generatedMarkdown)
 
       case SubscribeHybrid(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to both fast and accurate subscribers")
-        behavior(accurateListeners + subscriber, fastListeners + subscriber, votesMapping, generatedMarkdown)
+        behavior(accurateListeners + subscriber, fastListeners + subscriber, turboListeners, votesMapping, generatedMarkdown)
+
+      case SubscribeTurbo(subscriber) =>
+        context.actorContext.log.debug(s"Adding ${subscriber.path} to turbo")
+        behavior(accurateListeners, fastListeners, turboListeners + subscriber, votesMapping, generatedMarkdown)
 
       // experiment; voting on *notes* may generalize well, but requires receivers to interpret arbitrarily
       case SubmitVote(newVote) =>
@@ -135,7 +141,7 @@ object Gossiper {
         votesMapping.get(newVote.noteId) match {
           case None =>
             val updatedVotes = votesMapping.updated(newVote.noteId, Map(normalizedUri -> NonEmptyList.of(newVote)))
-            behavior(accurateListeners, fastListeners, updatedVotes, generatedMarkdown)
+            behavior(accurateListeners, fastListeners, turboListeners, updatedVotes, generatedMarkdown)
           case Some(voterToVotesMap) =>
             voterToVotesMap.get(normalizedUri) match {
               case None =>
@@ -147,7 +153,7 @@ object Gossiper {
                 }
 
                 val updatedVotes: Map[String, NonEmptyList[Vote]] = voterToVotesMap.updated(normalizedUri, NonEmptyList.of(newVote))
-                behavior(accurateListeners, fastListeners, votesMapping.updated(newVote.noteId, updatedVotes), generatedMarkdown)
+                behavior(accurateListeners, fastListeners, turboListeners, votesMapping.updated(newVote.noteId, updatedVotes), generatedMarkdown)
 
               case Some(votes) =>
                 val latestVote = votes.head
@@ -164,7 +170,7 @@ object Gossiper {
                   val updatedVotesMap = voterToVotesMap.updated(normalizedUri, updatedVotesListForVoter)
                   val updatedVotesMapping = votesMapping.updated(newVote.noteId, updatedVotesMap)
 
-                  behavior(accurateListeners, fastListeners, updatedVotesMapping, generatedMarkdown)
+                  behavior(accurateListeners, fastListeners, turboListeners, updatedVotesMapping, generatedMarkdown)
                 }
             }
         }
