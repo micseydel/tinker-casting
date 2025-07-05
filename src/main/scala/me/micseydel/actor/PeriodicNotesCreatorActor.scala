@@ -139,7 +139,7 @@ object DailyNoteActor {
     implicit val c: TinkerContext[_] = context
     context.actorContext.log.info(s"Starting DailyNoteActor for day $forDay")
     context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(NewDay))
-    noteRef.tidyYamlAliases(forDay)(context.system.clock) match {
+    noteRef.tidyYamlAliases(forDay, context.system.clock.today()) match {
       case Failure(exception) => context.actorContext.log.warn(s"Something went wrong tidying yaml for a prior day on actor (app?) startup", exception)
       case Success(_) =>
     }
@@ -160,7 +160,7 @@ object DailyNoteActor {
 
             if (context.system.clock.today().isAfter(forDay)) {
               context.actorContext.log.warn(s"Tidying aliases for $forDay, it seems this note was created late?")
-              noteRef.tidyYamlAliases(forDay)(context.system.clock)
+              noteRef.tidyYamlAliases(forDay, context.system.clock.today())
             }
 
           case Contents(Success(_)) =>
@@ -174,7 +174,7 @@ object DailyNoteActor {
 
       case NewDay(currentDay) =>
         context.actorContext.log.info(s"Tidying yaml for $forDay (on $currentDay)")
-        noteRef.tidyYamlAliases(currentDay)(context.system.clock) match {
+        noteRef.tidyYamlAliases(currentDay, context.system.clock.today()) match {
           case Failure(exception) => context.actorContext.log.warn(s"Tidying aliases on $currentDay for $forDay failed", exception)
           case Success(_) =>
         }
@@ -190,7 +190,7 @@ object DailyNoteActor {
     def createNote(template: String, forDay: LocalDate): Try[NoOp.type] =
       noteRef.setMarkdown(substitutedTemplate(template, forDay))
 
-    def tidyYamlAliases(forDay: LocalDate)(implicit clock: TinkerClock): Try[NoOp.type] = {
+    def tidyYamlAliases(forDay: LocalDate, currentDay: LocalDate): Try[NoOp.type] = {
       noteRef.readNote().flatMap {
         case note@Note(markdown, _) =>
           note.yamlFrontMatter.flatMap { frontMatter =>
@@ -198,7 +198,7 @@ object DailyNoteActor {
 
             val doUpdate = frontMatter.map {
               case ("aliases", aliases: java.util.List[String] @unchecked) =>
-                if (tidyAliasesList(aliases, forDay)) {
+                if (tidyAliasesList(aliases, forDay, currentDay)) {
                   updated.put("aliases", aliases.asInstanceOf[Object])
                   true
                 } else false
@@ -220,8 +220,8 @@ object DailyNoteActor {
       }
     }
 
-    private def tidyAliasesList(aliasesToTidy: java.util.List[String], forDay: LocalDate)(implicit clock: TinkerClock): Boolean = {
-      val daysBetween = TimeUtil.daysBetween(forDay, clock.today())
+    private def tidyAliasesList(aliasesToTidy: java.util.List[String], forDay: LocalDate, currentDay: LocalDate): Boolean = {
+      val daysBetween = TimeUtil.daysBetween(forDay, currentDay)
       daysBetween match {
         case 1 => // [[Yesterday]]
           val removed = aliasesToTidy.remove(Today)
