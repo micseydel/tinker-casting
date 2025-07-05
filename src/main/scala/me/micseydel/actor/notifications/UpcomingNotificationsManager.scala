@@ -42,7 +42,7 @@ object UpcomingNotificationsManager {
 
       import NotificationCenterManagerJsonFormat.notificationJsonFormat
 
-      val rememberingTimeKeeper: SpiritRef[RememberingTimeKeeper.PostInitMessage[TimeForNotification]] = context.cast(RememberingTimeKeeper(
+      val rememberingTimeKeeper: SpiritRef[RememberingTimeKeeper.Message[TimeForNotification]] = context.cast(RememberingTimeKeeper(
         context.self.narrow[TimeForNotification],
         TimeForNotificationJsonFormat.apply,
         "upcoming_notifications_queued"
@@ -53,7 +53,7 @@ object UpcomingNotificationsManager {
 
   private def behavior(
                         notificationCenterManager: SpiritRef[NotificationCenterManager.Message],
-                        rememberingTimeKeeper: SpiritRef[RememberingTimeKeeper.PostInitMessage[TimeForNotification]],
+                        rememberingTimeKeeper: SpiritRef[RememberingTimeKeeper.Message[TimeForNotification]],
                         noteRef: NoteRef
                       )(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context

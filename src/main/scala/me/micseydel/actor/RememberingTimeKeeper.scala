@@ -3,7 +3,7 @@ package me.micseydel.actor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.{Sender, SpiritRef, Tinker, TinkerClock, Tinkerer}
+import me.micseydel.dsl._
 import me.micseydel.vault.persistence.TypedJsonRef
 import spray.json.{DefaultJsonProtocol, JsonFormat}
 
@@ -11,16 +11,14 @@ import java.time.Duration._
 import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object RememberingTimeKeeper {
   sealed trait Message[M]
 
-  sealed trait PostInitMessage[M] extends Message[M]
+  case class RemindMeIn[M](delay: FiniteDuration, message: M, timerKey: String) extends Message[M]
 
-  case class RemindMeIn[M](delay: FiniteDuration, message: M, timerKey: String) extends PostInitMessage[M]
-
-  case class Cancel[M](timerKey: String) extends PostInitMessage[M]
+  case class Cancel[M](timerKey: String) extends Message[M]
 
   def RemindMeAt[M](zonedDateTime: ZonedDateTime, message: M, timerKey: String)(implicit tinkerClock: TinkerClock): RemindMeIn[M] = {
     val delay = FiniteDuration(between(tinkerClock.now(), zonedDateTime).toSeconds, TimeUnit.SECONDS)
@@ -35,7 +33,7 @@ object RememberingTimeKeeper {
     Tinkerer(rgb(100, 200, 10), "🔮").initializedWithTypedJson(filename, StateJsonFormat(jsonFormat)) { case (context, typedJsonRef) =>
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-      context.actorContext.log.info(s"[initializing] Reading $filename json from disk, re-creating any non-expired timers and then writing non-expired back to disk...")
+      context.actorContext.log.info(s"Reading $filename json from disk, re-creating any non-expired timers and then writing non-expired back to disk...")
 
       implicit val sender: Sender = context.sender
       val latestState: State[M] = typedJsonRef.updateOrSetDefault(State.empty) {
@@ -63,16 +61,16 @@ object RememberingTimeKeeper {
     context.actorContext.log.info("Updating JSON persistent state")
 
     message match {
-      case postInitMessage: PostInitMessage[_] =>
+      case message: Message[_] =>
         implicit val clock: TinkerClock = context.system.clock
-        val latestState: State[M] = jsonRef.updateOrSetDefault(State.empty)(_.integrate(postInitMessage)) match {
+        val latestState: State[M] = jsonRef.updateOrSetDefault(State.empty)(_.integrate(message)) match {
           case Failure(exception) => throw exception
           case Success(state) => state
         }
 
-        context.actorContext.log.info(s"Integrated $postInitMessage, latest state $latestState")
+        context.actorContext.log.info(s"Integrated $message, latest state $latestState")
 
-        postInitMessage match {
+        message match {
           case RemindMeIn(delay, messageToForward, timerKey) =>
             context.actorContext.log.info(s"Using delay ${delay.toSeconds} seconds for $timerKey")
             timeKeeper !!! TimeKeeper.RemindMeIn(delay, replyTo, messageToForward, Some(timerKey))
@@ -91,7 +89,7 @@ object RememberingTimeKeeper {
   case class Pending[M](when: ZonedDateTime, key: String, message: M)
 
   case class State[M](entries: Map[String, Pending[M]]) {
-    def integrate(command: PostInitMessage[M])(implicit tinkerClock: TinkerClock): State[M] = {
+    def integrate(command: Message[M])(implicit tinkerClock: TinkerClock): State[M] = {
       State[M](command match {
         case RemindMeIn(delay, message, timerKey) =>
           entries.updated(timerKey, Pending(
