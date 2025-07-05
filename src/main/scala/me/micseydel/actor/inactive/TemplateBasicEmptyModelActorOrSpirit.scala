@@ -8,7 +8,7 @@ import me.micseydel.dsl.Tinker.Ability
 object TemplateBasicEmptyModelActorOrSpirit {
   sealed trait Message
 
-  def spirit()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     Tinker.unhandled
   }
 
