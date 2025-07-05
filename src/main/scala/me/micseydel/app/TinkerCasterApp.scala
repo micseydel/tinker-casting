@@ -88,6 +88,12 @@ object UserTinkerCast {
     val periodicNotesCreatorActor: SpiritRef[PeriodicNotesCreatorActor.Message] =
       context.cast(PeriodicNotesCreatorActor(), "PeriodicNotesCreatorActor")
 
+    @unused // internally driven by time
+    val recurringResponsibilityManager = context.cast(RecurringResponsibilityManager(), "RecurringResponsibilityManager")
+
+    @unused // driven internally by a note
+    val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
+
     Tinker.receiveMessage {
       case ReceiveMqttEvent(topic, payload) =>
         context.actorContext.log.warn(s"Unexpected topic $topic message, payload ${payload.length} bytes")
