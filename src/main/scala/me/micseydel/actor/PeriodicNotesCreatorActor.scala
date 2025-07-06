@@ -174,7 +174,7 @@ object DailyNoteActor {
 
       case NewDay(currentDay) =>
         context.actorContext.log.info(s"Tidying yaml for $forDay (on $currentDay)")
-        noteRef.tidyYamlAliases(currentDay, context.system.clock.today()) match {
+        noteRef.tidyYamlAliases(forDay, currentDay) match {
           case Failure(exception) => context.actorContext.log.warn(s"Tidying aliases on $currentDay for $forDay failed", exception)
           case Success(_) =>
         }
