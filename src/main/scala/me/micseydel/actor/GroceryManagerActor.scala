@@ -97,7 +97,7 @@ object GroceryListMOCActor {
                 context.actorContext.log.info(s"Turn over detected after $latestDate, for $day")
                 archivalSpiritRefs.get(day) match {
                   case Some(existing) =>
-                    context.actorContext.log.warn(s"$day was already created, which is a little surprise")
+                    context.actorContext.log.debug(s"$day was already created")
                     currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(existing)
                     Tinker.steadily
                   case None =>
@@ -214,7 +214,7 @@ object CurrentGroceryNoteActor {
         noteRef.readMarkdown().map { markdown =>
           val (turningOver, keeping) = markdown.split("\n").partition(_.startsWith("- [x] "))
           if (turningOver.isEmpty) {
-            context.actorContext.log.warn(s"Got a turn over request for $archivalNote but no checkboxes were marked")
+            context.actorContext.log.info(s"Got a turn over request for $archivalNote but no checkboxes were marked")
           } else {
             context.actorContext.log.info(s"Turning over ${turningOver.length} items")
             // this should be a transaction https://github.com/micseydel/tinker-casting/issues/22
