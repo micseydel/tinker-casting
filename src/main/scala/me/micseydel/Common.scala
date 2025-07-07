@@ -56,8 +56,8 @@ object Common {
 
   private def isAsciiLetterOrDigit(char: Char): Boolean = {
     char.isDigit ||
-      (char > 'a' && char < 'z') ||
-      (char > 'A' && char < 'Z')
+      (char >= 'a' && char <= 'z') ||
+      (char >= 'A' && char <= 'Z')
   }
 
   /**

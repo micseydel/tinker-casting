@@ -88,10 +88,11 @@ object RecurringResponsibilityActor {
                 val triggerDay = latestEntry.plusDays(intervalDays)
                 if (triggerDay.isBefore(Today)) {
                   // it should have already triggered
+                  context.actorContext.log.warn(s"Trigger day $triggerDay is before today ($Today) so sending TimerUp to self")
                   context.self !! TimerUp
                 } else {
-                  val triggerInDays = TimeUtil.daysBetween(triggerDay, Today).toInt.days
-                  context.actorContext.log.info(s"Will trigger in $triggerInDays days")
+                  val triggerInDays = TimeUtil.daysBetween(Today, triggerDay).toInt.days
+                  context.actorContext.log.info(s"Will trigger in $triggerInDays days (trigger day $triggerDay, latest entry $latestEntry)")
                   timeKeeper !! TimeKeeper.RemindMeIn(triggerInDays, context.self, TimerUp, Some(TimerUp))
                 }
                 Success(NoOp)
@@ -113,11 +114,11 @@ object RecurringResponsibilityActor {
       case TimerUp =>
         context.system.notifier !! NewNotification(Notification(
           context.system.clock.now(),
-          s"Recurring responsibility ${noteRef.noteId} eligible since ${context.system.clock.today()}",
+          s"${noteRef.noteId} eligible since ${context.system.clock.today()}",
           None,
           NotificationId(MessageDigest.getInstance("SHA-256")
             .digest(noteRef.noteId.id.getBytes("UTF-8"))
-            .take(10)
+            .take(7)
             .map("%02x".format(_)).mkString),
           Nil, // FIXME: specify side-effects in the yaml?
           None
