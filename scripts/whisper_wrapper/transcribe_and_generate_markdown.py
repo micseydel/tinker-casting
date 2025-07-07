@@ -83,7 +83,7 @@ def segments_to_markdown(segments, audio_path: str) -> str:
 def files_to_transcribe(audio_file_dir):
     for in_file in os.listdir(audio_file_dir):
         ext = os.path.splitext(in_file)[1].lower()
-        if ext in {".mp3", ".wav", ".mp4", ".aac", ".m4a", ".mov"}:
+        if ext in {".mp3", ".wav", ".mp4", ".aac", ".m4a", ".mov", ".webm"}:
             # audio path
 
             markdown_filename = os.path.splitext(in_file)[0] + ".md"
