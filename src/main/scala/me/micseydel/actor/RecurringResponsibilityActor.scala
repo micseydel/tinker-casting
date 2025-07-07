@@ -81,6 +81,9 @@ object RecurringResponsibilityActor {
                 timeKeeper !! TimeKeeper.RemindMeIn(intervalDays.days, context.self, TimerUp, Some(TimerUp))
                 Success(NoOp)
 
+              case (false, Some(Today)) =>
+                Success(NoOp) // just ignore this
+
               case (false, Some(latestEntry)) =>
                 val triggerDay = latestEntry.plusDays(intervalDays)
                 if (triggerDay.isBefore(Today)) {
