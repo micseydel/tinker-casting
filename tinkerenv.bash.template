@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # replace this with the path to your Obsidian vault
-export vaultRoot="/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion"
+export vaultRoot="/Users/TinkerCaster/vaults/tinker-starter-vault"
 
 # if whisperLarge is on the local network, make sure to name this appropriately
 export whisperEventReceiverHost="localhost"
