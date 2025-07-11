@@ -71,7 +71,7 @@ private object LitterGraphHelper {
 
       val extras = if (needsAudit.nonEmpty) {
         val auditLines = needsAudit.map { case (forDay, auditType) =>
-          s"- $forDay: $auditType"
+          s"- [[Litter boxes sifting ($forDay)]]: $auditType"
         }.mkString("\n")
 
         s"""
