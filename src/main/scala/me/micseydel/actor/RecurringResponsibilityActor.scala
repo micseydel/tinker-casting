@@ -78,6 +78,8 @@ object RecurringResponsibilityActor {
             ((markedAsDone, doc.latestEntry) match {
               case (false, None) =>
                 // start the interval from today
+                val triggerDay = Today.plusDays(intervalDays)
+                context.actorContext.log.info(s"Scheduling trigger day $triggerDay")
                 timeKeeper !! TimeKeeper.RemindMeIn(intervalDays.days, context.self, TimerUp, Some(TimerUp))
                 Success(NoOp)
 
@@ -98,9 +100,13 @@ object RecurringResponsibilityActor {
                 Success(NoOp)
 
               case (true, Some(Today)) =>
+                context.actorContext.log.info("Button was pushed but there's already an entry for today, clearing button")
                 noteRef.resetButton()
 
               case (true, _) =>
+                val nextTrigger = Today.plusDays(intervalDays)
+                timeKeeper !! TimeKeeper.RemindMeIn(intervalDays.days, context.self, TimerUp, Some(TimerUp))
+                context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 noteRef.prepend(Today)
 
             }) match {
@@ -112,17 +118,23 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case TimerUp =>
+        val notificationId = MessageDigest.getInstance("SHA-256")
+          .digest(noteRef.noteId.id.getBytes("UTF-8"))
+          .take(7)
+          .map("%02x".format(_)).mkString
+        context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
+
         context.system.notifier !! NewNotification(Notification(
           context.system.clock.now(),
           s"${noteRef.noteId} eligible since ${context.system.clock.today()}",
           None,
-          NotificationId(MessageDigest.getInstance("SHA-256")
-            .digest(noteRef.noteId.id.getBytes("UTF-8"))
-            .take(7)
-            .map("%02x".format(_)).mkString),
+          NotificationId(notificationId),
           Nil, // FIXME: specify side-effects in the yaml?
           None
         ))
+
+        // FIXME: reschedule to badger once a day? configure?
+
         Tinker.steadily
     }
   }
