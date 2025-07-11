@@ -69,6 +69,7 @@ run / connectInput := true
 
 scalacOptions += "-Wconf:cat=other-match-analysis:error"
 scalacOptions += "-deprecation"
+scalacOptions += "-Xsource:3"
 
 version := "0.2"
 

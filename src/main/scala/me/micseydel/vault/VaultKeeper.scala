@@ -149,11 +149,11 @@ object LinkIdJsonProtocol extends DefaultJsonProtocol {
   implicit def noteIdFormat: JsonFormat[NoteId] = jsonFormat1(NoteId)
 }
 
-case class HeadingId private (heading: String, noteId: NoteId) extends LinkId {
+case class HeadingId (heading: String, noteId: NoteId) extends LinkId {
   override def asString: String = s"${noteId.id}#^$heading"
 }
 
-case class Note private[vault] (
+case class Note(
                                  markdown: String,
                                  // FIXME https://github.com/jcazevedo/moultingyaml
                                  maybeFrontmatter: Option[String]
