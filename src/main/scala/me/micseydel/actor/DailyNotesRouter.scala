@@ -44,7 +44,7 @@ object DailyNotesRouter {
         case 1 => 0.7
         case 2 => 0.3
         case other =>
-          context.actorContext.log.warn(s"$other days since $captureDate")
+          if (other > daysBack) context.actorContext.log.warn(s"$other days since $captureDate")
           0.1
       }
 

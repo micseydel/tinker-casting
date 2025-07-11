@@ -26,13 +26,13 @@ object LitterCharts {
   case class LitterSummaryForDay(forDay: LocalDate, peeClumps: Int, poops: Int, auditStatus: AuditStatus)
 
   implicit object AuditStatusFormat extends JsonFormat[AuditStatus] {
-    def write(obj: AuditStatus): JsValue = JsString(obj.toString.toLowerCase)
+    def write(obj: AuditStatus): JsValue = JsString(obj.toString)
 
     def read(json: JsValue): AuditStatus = json match {
       case JsString("AuditCompleted") => AuditCompleted
       case JsString("AuditNotCompleted") => AuditNotCompleted
       case JsString("HasInbox") => HasInbox
-      case other => deserializationError(s"Expected a valid sleep level {AuditCompleted, AuditNotCompleted, HasInbox} but got $other")
+      case other => deserializationError(s"Expected a AuditStatus: {AuditCompleted, AuditNotCompleted, HasInbox} but got $other")
     }
   }
 }
