@@ -50,7 +50,7 @@ object LitterBoxReportActor {
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
     val last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(Last21DaysLitterGraphActor(), "Last21DaysLitterGraphActor")
 
-    implicit val litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message] = context.cast(LitterPipelineExperiment(), "LitterPipelineExperiment")
+//    implicit val litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message] = context.cast(LitterPipelineExperiment(), "LitterPipelineExperiment")
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last21DaysLitterGraphActor), 30), "DailyNotesRouter")
 
     Tinker.receiveMessage {
@@ -66,23 +66,23 @@ object LitterBoxReportActor {
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker, litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message]): (String, Ability[EventCapture]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
     noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
 
-      noteRef.readMarkdown() match {
-        case Success(markdown) =>
-          litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, markdown) // FIXME: delete
-
-        case Failure(exception: FileNotFoundException) =>
-          context.actorContext.log.debug(s"Creating non-existing note [[$noteName]]", exception)
-
-        case Failure(exception) =>
-          context.actorContext.log.warn(s"Something went wrong reading [[$noteName]]", exception)
-      }
+//      noteRef.readMarkdown() match {
+//        case Success(markdown) =>
+//          litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, markdown) // FIXME: delete
+//
+//        case Failure(exception: FileNotFoundException) =>
+//          context.actorContext.log.debug(s"Creating non-existing note [[$noteName]]", exception)
+//
+//        case Failure(exception) =>
+//          context.actorContext.log.warn(s"Something went wrong reading [[$noteName]]", exception)
+//      }
 
       noteRef.getDocument(forDay) match {
         case Invalid(e) => context.actorContext.log.warn(s"Something unexpected happened: $e")
@@ -107,7 +107,8 @@ private[kitties] object DailyAbility {
 
         validatedUpdatedDocument match {
           case Validated.Valid(document: Document) =>
-            litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, document.toMarkdown)
+            // FIXME: delete
+//            litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, document.toMarkdown)
 
             val summaryForDay = documentToSummary(document, forDay) // FIXME: observation.when.toLocalDate?
 
