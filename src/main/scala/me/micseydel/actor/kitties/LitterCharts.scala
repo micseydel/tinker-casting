@@ -3,13 +3,12 @@ package me.micseydel.actor.kitties
 import me.micseydel.NoOp
 import me.micseydel.actor.MonthlyNotesRouter
 import me.micseydel.actor.MonthlyNotesRouter.Month
-import me.micseydel.actor.kitties.LitterCharts.LitterSummaryForDay
+import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, LitterSummaryForDay}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
-import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json._
@@ -19,7 +18,23 @@ import java.time.LocalDate
 import scala.util.{Failure, Success, Try}
 
 object LitterCharts {
-  case class LitterSummaryForDay(forDay: LocalDate, peeClumps: Int, poops: Int)
+  sealed trait AuditStatus
+  case object AuditCompleted extends AuditStatus
+  case object AuditNotCompleted extends AuditStatus
+  case object HasInbox extends AuditStatus
+
+  case class LitterSummaryForDay(forDay: LocalDate, peeClumps: Int, poops: Int, auditStatus: AuditStatus)
+
+  implicit object AuditStatusFormat extends JsonFormat[AuditStatus] {
+    def write(obj: AuditStatus): JsValue = JsString(obj.toString.toLowerCase)
+
+    def read(json: JsValue): AuditStatus = json match {
+      case JsString("AuditCompleted") => AuditCompleted
+      case JsString("AuditNotCompleted") => AuditNotCompleted
+      case JsString("HasInbox") => HasInbox
+      case other => deserializationError(s"Expected a valid sleep level {AuditCompleted, AuditNotCompleted, HasInbox} but got $other")
+    }
+  }
 }
 
 private object LitterGraphHelper {
@@ -40,8 +55,10 @@ private object LitterGraphHelper {
 
     def toMarkdown: String = {
       val sorted = summaries.toList.sortBy(_._1)
-      val xaxis = sorted.map(_._1)
-      val yaxis = sorted.map(_._2)
+      val xaxis: List[LocalDate] = sorted.map(_._1)
+      val yaxis: List[LitterSummaryForDay] = sorted.map(_._2)
+
+      val needsAudit = yaxis.filter(_.auditStatus != AuditCompleted).map(s => s.forDay -> s.auditStatus)
 
       val labels: List[String] = xaxis.zipWithIndex.map { case (day, i) => if (i % 2 == 0) day.toString else "" }
 
@@ -50,7 +67,22 @@ private object LitterGraphHelper {
         IntSeries("#2", yaxis.map(_.poops))
       )
 
-      ObsidianCharts.chart(labels, series)
+      val chart = ObsidianCharts.chart(labels, series)
+
+      val extras = if (needsAudit.nonEmpty) {
+        val auditLines = needsAudit.map { case (forDay, auditType) =>
+          s"- $forDay: $auditType"
+        }.mkString("\n")
+
+        s"""
+           |# Needs auditing
+           |
+           |$auditLines""".stripMargin
+      } else {
+        ""
+      }
+
+      s"""$chart$extras"""
     }
   }
 
@@ -58,7 +90,7 @@ private object LitterGraphHelper {
 
     import me.micseydel.Common.CommonJsonProtocol.LocalDateTypeJsonFormat
 
-    implicit val litterSummaryForDayJsonFormat: RootJsonFormat[LitterCharts.LitterSummaryForDay] = jsonFormat3(LitterSummaryForDay)
+    implicit val litterSummaryForDayJsonFormat: RootJsonFormat[LitterCharts.LitterSummaryForDay] = jsonFormat4(LitterSummaryForDay)
     implicit val documentMapFormat: RootJsonFormat[Map[LocalDate, LitterCharts.LitterSummaryForDay]] = mapFormat[LocalDate, LitterSummaryForDay]
 
     implicit val documentJsonFormat: RootJsonFormat[Document] = jsonFormat1(Document)
