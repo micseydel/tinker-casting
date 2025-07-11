@@ -1,11 +1,12 @@
 package me.micseydel.actor.kitties
 
-import cats.data.Validated.{Invalid, catchOnly}
+import cats.data.Validated.Invalid
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import me.micseydel.Common
 import me.micseydel.actor.DailyNotesRouter
 import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation}
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
+import me.micseydel.actor.kitties.LitterCharts.LitterSummaryForDay
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
@@ -45,9 +46,11 @@ object LitterBoxReportActor {
   private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
 
-    implicit val litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message] =
-      context.cast(LitterPipelineExperiment(), "LitterPipelineExperiment")
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _)), "DailyNotesRouter")
+    val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
+    val last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(Last21DaysLitterGraphActor(), "Last21DaysLitterGraphActor")
+
+    implicit val litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message] = context.cast(LitterPipelineExperiment(), "LitterPipelineExperiment")
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last21DaysLitterGraphActor), 30), "DailyNotesRouter")
 
     Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
@@ -62,7 +65,7 @@ object LitterBoxReportActor {
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String)(implicit Tinker: Tinker, litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message]): (String, Ability[EventCapture]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker, litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message]): (String, Ability[EventCapture]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
@@ -80,12 +83,27 @@ private[kitties] object DailyAbility {
           context.actorContext.log.warn(s"Something went wrong reading [[$noteName]]", exception)
       }
 
+      noteRef.getDocument(forDay) match {
+        case Invalid(e) => context.actorContext.log.warn(s"Something unexpected happened: $e")
+        case Validated.Valid(Document(report, _)) =>
+          val (pee, poo) = report.summary
+          val summary = LitterSummaryForDay(forDay, pee, poo)
+          monthlyLitterGraphActor !! summary
+          last21DaysLitterGraphActor !! summary
+      }
+
       Tinker.receiveMessage { observation =>
         val validatedUpdatedDocument: ValidatedNel[String, Document] = noteRef.addEventCapture(observation)(context.actorContext.log)
 
         validatedUpdatedDocument match {
           case Validated.Valid(document: Document) =>
             litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, document.toMarkdown)
+
+            val (pee, poop) = document.toSummary
+
+            monthlyLitterGraphActor !! LitterSummaryForDay(observation.when.toLocalDate, pee, poop)
+            last21DaysLitterGraphActor !! LitterSummaryForDay(observation.when.toLocalDate, pee, poop)
+
           case Invalid(e) =>
             context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
         }
@@ -148,7 +166,7 @@ private[kitties] object DailyAbility {
       }
     }
 
-    private def getDocument(forDay: LocalDate): ValidatedNel[String, Document] = {
+    def getDocument(forDay: LocalDate): ValidatedNel[String, Document] = {
       noteRef.readMarkdown() match {
         case Success(markdown) =>
           MarkdownWithoutJsonExperiment(markdown, forDay)
@@ -172,7 +190,7 @@ case class Document(report: Report, inbox: List[String]) {
     case Document(Report(Nil), _) =>
       inboxMd
     case Document(report: Report, _) =>
-      s"""${report.summary}
+      s"""${report.markdownSummary}
          |
          |$inboxMd
          |
@@ -185,6 +203,15 @@ case class Document(report: Report, inbox: List[String]) {
   def appendToInbox(string: String): Document = this.copy(inbox = string :: inbox)
 
   private def inboxMd: String = ("# Inbox" :: "" :: inbox.map("- " + _).reverse).mkString("\n")
+
+  def toSummary: (Int, Int) = {
+    report.datapoints.map(_.siftedContents.multiset).foldRight((0, 0)) { case (toAdd, (peeSoFar, pooSoFar)) =>
+      (
+        peeSoFar + toAdd.getOrElse(Urination, 0),
+        pooSoFar + toAdd.getOrElse(Defecation, 0)
+      )
+    }
+  }
 }
 
 
@@ -288,17 +315,16 @@ object MarkdownWithoutJsonExperiment {
     def nonEmpty: Boolean = datapoints.nonEmpty
 
     def toMarkdown: String = {
-      s"""$summary
+      s"""$markdownSummary
          |
          |$events
          |""".stripMargin
     }
 
-    private[kitties] def summary: String = {
+    private[kitties] def markdownSummary: String = {
       def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
 
-      val totalPee = total(Urination)
-      val totalPoo = total(Defecation)
+      val (totalPee, totalPoo) = summary
       s"""# Summary
          |
          |- Total pee: $totalPee
@@ -320,6 +346,15 @@ object MarkdownWithoutJsonExperiment {
 
     def append(datapoint: DataPoint): Report = {
       this.copy(datapoints = (datapoint :: datapoints).distinct.sortBy(_.zonedDateTime))
+    }
+
+    def summary: (Int, Int) = {
+      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
+
+      val totalPee = total(Urination)
+      val totalPoo = total(Defecation)
+
+      (totalPee, totalPoo)
     }
   }
 
@@ -345,9 +380,9 @@ object MarkdownWithoutJsonExperiment {
       }
 
       validated match {
-        case Validated.Valid(datapoint) =>
+        case Validated.Valid(datapoint: DataPoint) =>
           ParseSuccessDatapoint(datapoint)
-        case Validated.Invalid(reasons) =>
+        case Validated.Invalid(reasons: NonEmptyList[String]) =>
           ParseFailure(line, reasons, Nil)
       }
     }

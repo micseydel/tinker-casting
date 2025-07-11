@@ -103,4 +103,6 @@ object TimeUtil {
     val minutes = mins % 60
     s"$hours hours and $minutes minutes"
   }
+
+  val IsoMonthFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
 }

@@ -70,8 +70,8 @@ object AirGradientActor {
                         pollingIntervalMinutes: Long
 //                        , subscribers: List[SpiritRef[RawSensorData]]
                       )(implicit Tinker: Tinker, noteRef: NoteRef,
-                                                                     dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
-                                                                     apiPoller: SpiritRef[AirGradientPollingActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
+                        dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
+                        apiPoller: SpiritRef[AirGradientPollingActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
 //      case Subscribe(subscriber) =>

@@ -3,7 +3,7 @@ package me.micseydel
 import cats.data.ValidatedNel
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.dsl.TinkerClock
-import spray.json.{DeserializationException, JsNull, JsNumber, JsString, JsValue, JsonFormat, RootJsonFormat}
+import spray.json.{DefaultJsonProtocol, DeserializationException, JsNull, JsNumber, JsString, JsValue, JsonFormat, RootJsonFormat}
 
 import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
@@ -115,6 +115,17 @@ object Common {
     def read(value: JsValue): Path = value match {
       case JsString(s) => Path.of(s)
       case _ => throw DeserializationException("Expected a string")
+    }
+  }
+
+  object CommonJsonProtocol extends DefaultJsonProtocol {
+    implicit object LocalDateTypeJsonFormat extends RootJsonFormat[LocalDate] {
+      def write(e: LocalDate): JsString = JsString(e.toString)
+
+      def read(value: JsValue): LocalDate = value match {
+        case JsString(s) => LocalDate.parse(s)
+        case _ => throw DeserializationException(s"An ISO local date")
+      }
     }
   }
 

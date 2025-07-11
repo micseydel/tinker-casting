@@ -36,9 +36,9 @@ object DailyNotesRouter {
     apply[DailyMarkdownFromPersistedMessagesActor.Message[T]](abilityForDay)
   }
 
-  def apply[M](abilityGenerator: (LocalDate, TinkerColor, String) => (String, Ability[M]))(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinkerer(Purple, "☸️").setup { context =>
+  def apply[M](abilityGenerator: (LocalDate, TinkerColor, String) => (String, Ability[M]), daysBack: Int = 3)(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinkerer(Purple, "☸️").setup { context =>
     context.actorContext.log.info(s"Creating spirit lookup")
-    val freshLokUpSpiritByDay = LookUpSpiritByDay[M] { (context, captureDate) =>
+    val freshLookUpSpiritByDay = LookUpSpiritByKey[LocalDate, M] { (context, captureDate) =>
       val opaqacity = TimeUtil.daysSince(captureDate)(context.system.clock) match {
         case 0 => 1.0
         case 1 => 0.7
@@ -54,11 +54,11 @@ object DailyNotesRouter {
     }
 
     val today = context.system.clock.today()
-    val lastThreeDays = Seq(0, 1, 2).map(daysAgo => today.minusDays(daysAgo))
+    val lastDaysBack = (0 until daysBack).map(daysAgo => today.minusDays(daysAgo))
 
     implicit val c: TinkerContext[_] = context
     // FIXME: HACK HACK HACK there should be a step between casting an actor and describing it in the tinkerbrain graph view
-    val lookUpSpiritByDay = lastThreeDays.foldRight(freshLokUpSpiritByDay) { (day, lookup)=>
+    val lookUpSpiritByDay = lastDaysBack.foldRight(freshLookUpSpiritByDay) { (day, lookup) =>
       lookup :?> day match {
         case (updatedLookup, _) =>
           updatedLookup
@@ -70,7 +70,7 @@ object DailyNotesRouter {
 
   // behavior
 
-  private def generic[M](lookUpSpiritByDay: LookUpSpiritByDay[M])(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinker.receive { (context, message) =>
+  private def generic[M](lookUpSpiritByDay: LookUpSpiritByKey[LocalDate, M])(implicit Tinker: Tinker): Ability[Envelope[M]] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[Envelope[M]] = context
     message match {
       case Envelope(message, captureTime) =>
@@ -80,36 +80,5 @@ object DailyNotesRouter {
         spirit !! message
         generic(potentiallyUpdatedLookup)
     }
-  }
-}
-
-class LookUpSpiritByDay[S] private(
-                                            map: Map[LocalDate, SpiritRef[S]],
-                                            caster: (TinkerContext[_], LocalDate) => SpiritRef[S]
-                                          ) {
-
-  def :?>(zonedDateTime: ZonedDateTime)(implicit tinkerContext: TinkerContext[_]): (LookUpSpiritByDay[S], SpiritRef[S]) = lookup(zonedDateTime.toLocalDate)
-
-  def :?>(localDate: LocalDate)(implicit tinkerContext: TinkerContext[_]): (LookUpSpiritByDay[S], SpiritRef[S]) = lookup(localDate)
-
-  override def toString: String = s"LookUpSpiritByDay($map)"
-
-  //
-
-  private def lookup(localDate: LocalDate)(implicit tinkerContext: TinkerContext[_]): (LookUpSpiritByDay[S], SpiritRef[S]) = {
-    map.get(localDate) match {
-      case Some(existing) =>
-        (this, existing)
-
-      case None =>
-        val fresh = caster(tinkerContext, localDate)
-        (new LookUpSpiritByDay(map.updated(localDate, fresh), caster), fresh)
-    }
-  }
-}
-
-object LookUpSpiritByDay {
-  def apply[S](caster: (TinkerContext[_], LocalDate) => SpiritRef[S]): LookUpSpiritByDay[S] = {
-    new LookUpSpiritByDay[S](Map.empty, caster)
   }
 }

@@ -78,7 +78,7 @@ object DailyNotesManager {
   def apply(templateName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(templateName, TinkerColor.random(), "🏛️") { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
     context.actorContext.log.info(s"Starting DailyNotesManager for day $templateName")
-    val dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message] = LookUpSpiritByDay[DailyNoteActor.Message] { (context, captureDate) =>
+    val dailyNoteLookup: LookUpSpiritByKey[LocalDate, DailyNoteActor.Message] = LookUpSpiritByKey[LocalDate, DailyNoteActor.Message] { (context, captureDate) =>
       val actor: SpiritRef[DailyNoteActor.Message] = context.cast(DailyNoteActor(captureDate), TimeUtil.localDateTimeToISO8601Date(captureDate))
 
       noteRef.getTemplate() match {
@@ -91,7 +91,7 @@ object DailyNotesManager {
       actor
     }
 
-    val today = context.system.clock.now()
+    val today = context.system.clock.today()
     dailyNoteLookup :?> today match {
       case (dailyNoteLookupWithToday, _) =>
         dailyNoteLookupWithToday :?> today.minusDays(1) match {
@@ -105,7 +105,7 @@ object DailyNotesManager {
     }
   }
 
-  private def behavior(dailyNoteLookup: LookUpSpiritByDay[DailyNoteActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  private def behavior(dailyNoteLookup: LookUpSpiritByKey[LocalDate, DailyNoteActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ItsMidnight(dayForNote) =>

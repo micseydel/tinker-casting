@@ -60,14 +60,7 @@ object LitterPipelineExperiment {
   case class State(map: Map[LocalDate, String])
 
   object StateJsonProtocol extends DefaultJsonProtocol {
-    implicit object LocalDateTypeJsonFormat extends RootJsonFormat[LocalDate] {
-      def write(e: LocalDate): JsString = JsString(e.toString)
-
-      def read(value: JsValue): LocalDate = value match {
-        case JsString(s) => LocalDate.parse(s)
-        case _ => throw DeserializationException(s"An ISO local date")
-      }
-    }
+    import me.micseydel.Common.CommonJsonProtocol.LocalDateTypeJsonFormat
 
     implicit val stateMapFormat: RootJsonFormat[Map[LocalDate, String]] = mapFormat[LocalDate, String]
     implicit val eventFormat: RootJsonFormat[State] = jsonFormat1(State)
