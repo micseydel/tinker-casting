@@ -12,8 +12,12 @@ object CentralNervousSystemMaintenance {
 //    @unused // driven internally by its own casting
 //    val halto = context.cast(Halto(fitbitActor, config.ntfyKeys), "Halto")
 
-    @unused // sources events via EventReceiver
+    // sources events via EventReceiver
+
+    @unused
     val heartRateMonitor = context.cast(HeartRateMonitorActor(), "HeartRateMonitorActor")
+    @unused
+    val pupilMonitorActor = context.cast(PupilMonitorActor(), "PupilMonitorActor")
 
     Tinker.ignore
   }

@@ -5,10 +5,37 @@ To try this out using Python 3.10:
 - pip install -r requirements.txt
 """
 
+from time import time
+import json
+
 import pypupilext as pp
 
 import numpy as np
 import cv2 as cv
+
+import requests
+
+
+HEADERS = {
+    "Content-Type": "application/json"
+}
+
+def send_to_server(capture_time, outline_confidence, diameter):
+    url = "http://localhost:5003/event" # FIXME
+    data = {
+        "eventType": "Pupil",
+        "payload": json.dumps({
+            "captureTime": capture_time,
+            "confidence": outline_confidence,
+            "diameter": diameter,
+        })
+    }
+
+    response = requests.post(url, json=data, headers=HEADERS)
+
+    if response.status_code != 202:
+        print(f"Expected status code 202 but got {response.status_code} and ${response.text}")
+
 
 algorithm = pp.PuRe()
 
@@ -31,8 +58,11 @@ try:
 
         pupil = algorithm.runWithConfidence(gray)
 
-        print(pupil.diameter())
-        print(pupil.outline_confidence)
+        capture_time = time()
+
+        print(capture_time, pupil.outline_confidence, pupil.diameter())
+
+        send_to_server(capture_time, pupil.outline_confidence, pupil.diameter())
 
         # Display the resulting frame
         # cv.imshow('frame', gray)
