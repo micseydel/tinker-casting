@@ -11,8 +11,10 @@ sbt-dist/bin/sbt-launch.jar
 queued_temp_files
 py3.10_venv/
 py310_venv
+py310venv
 py3.11_venv
 py311_venv
+*.whl
 scripts/.rasa/
 scripts/models/
 **.pyc

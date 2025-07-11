@@ -1,0 +1,10 @@
+numpy==1.26.4
+matplotlib==3.8.4
+pandas==2.2.2
+
+opencv-python==4.10.0.84
+
+# must download https://github.com/openPupil/PyPupilEXT/releases/download/v0.0.1-beta/PyPupilEXT-0.0.1-cp310-cp310-macosx_14_0_universal2.whl
+# then rename to PyPupilEXT-0.0.1-cp310-none-any.whl:
+#     cp PyPupilEXT-0.0.1-cp310-cp310-macosx_14_0_universal2.whl PyPupilEXT-0.0.1-cp310-none-any.whl
+PyPupilEXT-0.0.1-cp310-none-any.whl
