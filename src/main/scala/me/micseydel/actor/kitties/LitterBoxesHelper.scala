@@ -31,7 +31,7 @@ object LitterBoxesHelper {
 
   final case class PostHocLitterObservation(event: PostHocLitterObservationEvent, ref: NoteId) extends EventCapture
   final case class ObservedCatUsingLitter(event: LitterUsedEvent, ref: NoteId) extends EventCapture
-  final case class LitterSifted(event: LitterSiftedEvent, ref: NoteId) extends EventCapture
+  final case class LitterSifted(event: LitterSiftedEvent, ref: NoteId, raw: Option[String]) extends EventCapture
 
   private case class TimeHasPassed() extends Message
 
@@ -64,7 +64,7 @@ object LitterBoxesHelper {
     implicit val c: TinkerContext[_] = context
     message match {
       // FIXME: need to set a timer for clumping situations
-      case capture@LitterSifted(LitterSiftedEvent(when, _, _), _) =>
+      case capture@LitterSifted(LitterSiftedEvent(when, _, _), _, _) =>
         justSiftingReport !! LitterBoxReportActor.LitterSiftedObservation(capture)
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(capture), when.toLocalDate)
         Tinker.steadily
@@ -117,7 +117,7 @@ object LitterBoxesHelper {
       (when, s"Observed $litterBoxChoice isClean=$isClean", ref)
     case ObservedCatUsingLitter(LitterUsedEvent(when, litterBoxChoice, cat), ref) =>
       (when, s"Observed cat $cat used $litterBoxChoice", ref)
-    case LitterSifted(LitterSiftedEvent(when, litterBoxChoice, contents), ref) =>
+    case LitterSifted(LitterSiftedEvent(when, litterBoxChoice, contents), ref, _) =>
       (when, s"Sifted $litterBoxChoice and found ${contents.multiset}", ref)
   }.map { case (when, line, ref) =>
     MarkdownUtil.listLineWithTimestampAndRef(when, line, ref)
@@ -197,7 +197,7 @@ object LitterBoxesHelper {
 
           (state, ref, when)
 
-        case LitterSifted(LitterSiftedEvent(when, LitterBox, _), ref) =>
+        case LitterSifted(LitterSiftedEvent(when, LitterBox, _), ref, _) =>
           (Clean, ref, when)
       }
     }
@@ -213,7 +213,7 @@ case object LitterBoxesEventCaptureListJsonProtocol extends DefaultJsonProtocol 
   implicit val linkIdFormat: JsonFormat[NoteId] = LinkIdJsonProtocol.noteIdFormat
   implicit val postHocLitterObservationFormat: RootJsonFormat[PostHocLitterObservation] = jsonFormat2(PostHocLitterObservation)
   implicit val observedCatUsingLitterFormat: RootJsonFormat[ObservedCatUsingLitter] = jsonFormat2(ObservedCatUsingLitter)
-  implicit val litterSiftedFormat: RootJsonFormat[LitterSifted] = jsonFormat2(LitterSifted)
+  implicit val litterSiftedFormat: RootJsonFormat[LitterSifted] = jsonFormat3(LitterSifted)
 
   // copy from CatsHelper.scala
   implicit object EventCaptureJsonFormat extends RootJsonFormat[EventCapture] {

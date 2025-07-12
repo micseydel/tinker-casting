@@ -150,8 +150,8 @@ private[kitties] object DailyAbility {
 
     private def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): ValidatedNel[String, Document] = {
       val datapoint = observation.capture match {
-        case LitterSifted(LitterSiftedEvent(when, _, contents), ref) =>
-          DataPoint(when, contents, ref)
+        case LitterSifted(LitterSiftedEvent(when, _, contents), ref, maybeRaw) =>
+          DataPoint(when, contents, ref, maybeRaw.toList.map(c => s"    - $c"))
       }
       getDocument(observation.capture.when.toLocalDate) match {
         case v@Validated.Valid((_, document: Document)) =>

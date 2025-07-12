@@ -144,9 +144,9 @@ object CatsHelper {
 
         Tinker.steadily
 
-      case observation@LitterSifted(event@LitterSiftedEvent(when, litterBoxChoice, _), _, ref, _) =>
+      case observation@LitterSifted(event@LitterSiftedEvent(when, litterBoxChoice, _), raw, ref, _) =>
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(observation), when.toLocalDate)
-        litterBoxesHelper !! LitterBoxesHelper.LitterSifted(event, ref)
+        litterBoxesHelper !! LitterBoxesHelper.LitterSifted(event, ref, Some(raw))
         catNotificationsManager !! CatNotificationsManager.LitterClean(litterBoxChoice, ref)
         Tinker.steadily
 
