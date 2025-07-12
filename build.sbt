@@ -54,14 +54,14 @@ fork := true
 lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
-      organization    := "com.example",
+      organization    := "me.micseydel",
       scalaVersion    := "2.13.8"
     )),
-    name := "akka-http-quickstart-scala",
+    name := "tinker-casting",
     libraryDependencies ++= additionalLibraryDependencies
   )
 
-// for `sbt "runMain me.micseydel.KaizenCasterApp"` to be able to use CLI
+// for `sbt "runMain ..."` to be able to use CLI
 //connectInput / run := true
 
 //connectInput in run := true // deprecated
