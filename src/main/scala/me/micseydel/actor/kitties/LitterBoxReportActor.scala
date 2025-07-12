@@ -50,7 +50,6 @@ object LitterBoxReportActor {
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
     val last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(Last21DaysLitterGraphActor(), "Last21DaysLitterGraphActor")
 
-//    implicit val litterPipelineExperiment: SpiritRef[LitterPipelineExperiment.Message] = context.cast(LitterPipelineExperiment(), "LitterPipelineExperiment")
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last21DaysLitterGraphActor), 30), "DailyNotesRouter")
 
     Tinker.receiveMessage {
@@ -72,17 +71,6 @@ private[kitties] object DailyAbility {
 
     noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
-
-//      noteRef.readMarkdown() match {
-//        case Success(markdown) =>
-//          litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, markdown) // FIXME: delete
-//
-//        case Failure(exception: FileNotFoundException) =>
-//          context.actorContext.log.debug(s"Creating non-existing note [[$noteName]]", exception)
-//
-//        case Failure(exception) =>
-//          context.actorContext.log.warn(s"Something went wrong reading [[$noteName]]", exception)
-//      }
 
       noteRef.getDocument(forDay) match {
         case Invalid(e) => context.actorContext.log.warn(s"Something unexpected happened: $e")
@@ -107,11 +95,7 @@ private[kitties] object DailyAbility {
 
         validatedUpdatedDocument match {
           case Validated.Valid(document: Document) =>
-            // FIXME: delete
-//            litterPipelineExperiment !! LitterPipelineExperiment.ReceiveNote(forDay, document.toMarkdown)
-
-            val summaryForDay = documentToSummary(document, forDay) // FIXME: observation.when.toLocalDate?
-
+            val summaryForDay = documentToSummary(document, forDay)
             monthlyLitterGraphActor !! summaryForDay
             last21DaysLitterGraphActor !! summaryForDay
 
@@ -220,9 +204,6 @@ private[kitties] object DailyAbility {
   }
 }
 
-// FIXME: the inbox should be composed of these instead of just strings
-case class InboxItem(text: String, when: ZonedDateTime, noteId: NoteId)
-
 case class Document(report: Report, inbox: List[String]) {
   def toMarkdown: String = this match {
     case Document(Report(Nil, _), Nil) =>
@@ -254,46 +235,6 @@ case class Document(report: Report, inbox: List[String]) {
       )
     }
   }
-}
-
-
-case object LitterBoxEventCaptureListJsonProtocol extends DefaultJsonProtocol {
-
-  implicit val linkIdFormat: JsonFormat[NoteId] = LinkIdJsonProtocol.noteIdFormat
-
-  //    implicit val postHocLitterObservationFormat: RootJsonFormat[PostHocLitterObservation] = jsonFormat2(PostHocLitterObservation)
-  //    implicit val observedCatUsingLitterFormat: RootJsonFormat[ObservedCatUsingLitter] = jsonFormat2(ObservedCatUsingLitter)
-
-  import LitterBoxesEventCaptureListJsonProtocol.litterSiftedFormat
-  import me.micseydel.Common.ZonedDateTimeJsonFormat
-
-  implicit val litterSiftedObservationFormat: RootJsonFormat[LitterSiftedObservation] = jsonFormat1(LitterSiftedObservation)
-  implicit val addToInboxFormat: RootJsonFormat[AddToInbox] = jsonFormat2(AddToInbox)
-
-  // copy from CatsHelper.scala
-  implicit object ReportEventCaptureJsonFormat extends RootJsonFormat[EventCapture] {
-    def write(m: EventCapture): JsValue = {
-      val (jsObj, typ) = m match {
-        //          case p: PostHocLitterObservation => (p.toJson.asJsObject, "PostHocLitterObservation")
-        //          case o: ObservedCatUsingLitter => (o.toJson.asJsObject, "ObservedCatUsingLitter")
-        case l: LitterSiftedObservation => (l.toJson.asJsObject, "LitterSiftedObservation")
-        case ati: AddToInbox => (ati.toJson.asJsObject, "AddToInbox")
-      }
-      JsObject(jsObj.fields + ("type" -> JsString(typ)))
-    }
-
-    def read(value: JsValue): EventCapture = {
-      value.asJsObject.getFields("type") match {
-        //          case Seq(JsString("PostHocLitterObservation")) => value.convertTo[PostHocLitterObservation]
-        //          case Seq(JsString("ObservedCatUsingLitter")) => value.convertTo[ObservedCatUsingLitter]
-        case Seq(JsString("LitterSiftedObservation")) => value.convertTo[LitterSiftedObservation]
-        case other => throw new DeserializationException(s"Unknown type: $other")
-      }
-    }
-  }
-
-  //
-  val messageListFormat: RootJsonFormat[List[EventCapture]] = listFormat(ReportEventCaptureJsonFormat)
 }
 
 object MarkdownWithoutJsonExperiment {
