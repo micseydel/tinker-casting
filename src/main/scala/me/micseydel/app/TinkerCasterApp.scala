@@ -5,6 +5,7 @@ import me.micseydel.actor._
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
+import me.micseydel.actor.tasks.RecurringResponsibilityManager
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability

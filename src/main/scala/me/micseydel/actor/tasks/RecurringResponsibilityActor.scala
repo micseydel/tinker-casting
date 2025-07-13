@@ -1,16 +1,14 @@
-package me.micseydel.actor
+package me.micseydel.actor.tasks
 
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
-import cats.implicits.catsSyntaxValidatedId
+import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
-import me.micseydel.util.{MarkdownUtil, TimeUtil}
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.{Common, NoOp}
 
 import java.io.FileNotFoundException
 import java.security.MessageDigest
@@ -18,33 +16,6 @@ import java.time.LocalDate
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 
-object RecurringResponsibilityManager {
-  sealed trait Message
-
-  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Recurring responsibilities (MOC)", TinkerColor.random(), "⛑️") { (context, noteRef) =>
-    noteRef.readListOfWikiLinks() match {
-      case Validated.Invalid(e) =>
-        context.actorContext.log.warn(s"Something went wrong setting up ${noteRef.noteId}: $e")
-        Tinker.ignore
-      case Validated.Valid(recurringResponsibilities: NonEmptyList[String]) =>
-        val specificResponsibilityTrackers = recurringResponsibilities.map { recurringResponsibility =>
-          context.actorContext.log.info(s"Casting $recurringResponsibility")
-          context.cast(RecurringResponsibilityActor(recurringResponsibility), Common.tryToCleanForActorName(recurringResponsibility))
-        }
-        Tinker.ignore
-    }
-  }
-
-  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def readListOfWikiLinks(): ValidatedNel[String, NonEmptyList[String]] = {
-      noteRef.readMarkdown().map(MarkdownUtil.readListOfWikiLinks) match {
-        case Failure(exception) => s"Something went wrong reading from disk: ${Common.getStackTraceString(exception)}".invalidNel
-        case Success(result) =>
-          result
-      }
-    }
-  }
-}
 
 object RecurringResponsibilityActor {
   sealed trait Message
@@ -101,13 +72,13 @@ object RecurringResponsibilityActor {
 
               case (true, Some(Today)) =>
                 context.actorContext.log.info("Button was pushed but there's already an entry for today, clearing button")
-                noteRef.resetButton()
+                noteRef.resetButton(Some(Today.plusDays(intervalDays)))
 
               case (true, _) =>
                 val nextTrigger = Today.plusDays(intervalDays)
                 timeKeeper !! TimeKeeper.RemindMeIn(intervalDays.days, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
-                noteRef.prepend(Today)
+                noteRef.prepend(Today, Some(nextTrigger))
 
             }) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong updating Markdown", exception)
@@ -148,21 +119,25 @@ object RecurringResponsibilityActor {
   }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def resetButton(): Try[NoOp.type] = {
-      setDocumentMarkdown(None)
+    def resetButton(nextTrigger: Option[LocalDate]): Try[NoOp.type] = {
+      setDocumentMarkdown(None, nextTrigger)
     }
 
-    def prepend(day: LocalDate): Try[NoOp.type] = {
+    def prepend(day: LocalDate, nextTrigger: Option[LocalDate]): Try[NoOp.type] = {
       val itemToPrepend = s"[[${noteRef.noteId.id} ($day)]]"
-      setDocumentMarkdown(Some(itemToPrepend))
+      setDocumentMarkdown(Some(itemToPrepend), nextTrigger)
     }
 
-    private def setDocumentMarkdown(prependWith: Option[String]): Try[NoOp.type]= {
+    private def setDocumentMarkdown(prependWith: Option[String], nextTrigger: Option[LocalDate]): Try[NoOp.type] = {
       getDocument().flatMap { document =>
-        val newMarkdown = "- [ ] Mark as done\n" +
-          (prependWith.toList ::: document.itemsAfterDone) // FIXME: lazy
-            .map("- " + _)
-            .mkString("\n")
+        val lines = List(
+          List("- [ ] Mark as done"),
+          nextTrigger.map(_.toString).toList.map(day => s"    - Next trigger: [[$day]]"),
+          prependWith.toList.map("- " + _),
+          document.itemsAfterDone.map("- " + _)
+        ).flatten
+
+        val newMarkdown = lines.mkString("\n")
         noteRef.setMarkdown(newMarkdown)
       }
     }
@@ -171,7 +146,8 @@ object RecurringResponsibilityActor {
       noteRef.readNote().flatMap { note =>
         // FIXME: better error handling
         note.yamlFrontMatter.map(_("interval_days").asInstanceOf[Int]).map { intervalDays =>
-          val lines = note.markdown.split("\n")
+          // ignore any lines that are indented (comments
+          val lines = note.markdown.split("\n").filterNot(_.startsWith(" "))
 
           // FIXME: how best to check for lines.head containing "mark as complete"? just assuming for now
           val linesAfterDone: List[String] = lines.toList.drop(1)
@@ -179,7 +155,7 @@ object RecurringResponsibilityActor {
           Document(
             intervalDays,
             note.markdown.startsWith("- [x]"),
-            linesAfterDone.map(_.drop(2)) // drop the list part
+            linesAfterDone.map(_.drop(2)) // drop the Markdown list characters
           )
         }
       }

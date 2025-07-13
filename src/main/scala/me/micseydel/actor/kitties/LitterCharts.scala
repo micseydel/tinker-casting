@@ -58,7 +58,9 @@ private object LitterGraphHelper {
       val xaxis: List[LocalDate] = sorted.map(_._1)
       val yaxis: List[LitterSummaryForDay] = sorted.map(_._2)
 
-      val needsAudit = yaxis.filter(_.auditStatus != AuditCompleted).map(s => s.forDay -> s.auditStatus)
+      val needsAudit = yaxis
+        .filter(_.auditStatus != AuditCompleted)
+        .map(s => s.forDay -> s.auditStatus)
 
       val labels: List[String] = xaxis.zipWithIndex.map { case (day, i) => if (i % 2 == 0) day.toString else "" }
 
@@ -86,7 +88,7 @@ private object LitterGraphHelper {
     }
   }
 
-  object DocumentJsonProtocol extends DefaultJsonProtocol {
+  private object DocumentJsonProtocol extends DefaultJsonProtocol {
 
     import me.micseydel.Common.CommonJsonProtocol.LocalDateTypeJsonFormat
 

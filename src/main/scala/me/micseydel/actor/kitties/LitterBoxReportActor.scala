@@ -3,7 +3,6 @@ package me.micseydel.actor.kitties
 import cats.data.Validated.Invalid
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
-import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.DailyNotesRouter
 import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation}
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
@@ -15,12 +14,11 @@ import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.model._
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
+import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
+import me.micseydel.{Common, NoOp}
 import org.slf4j.Logger
-import spray.json._
 
-import java.io.FileNotFoundException
 import java.time.{LocalDate, ZonedDateTime}
 import scala.annotation.tailrec
 import scala.util.{Failure, Success}
