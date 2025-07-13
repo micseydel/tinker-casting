@@ -46,9 +46,9 @@ object LitterBoxReportActor {
     implicit val c: TinkerContext[_] = context
 
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
-    val last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(Last21DaysLitterGraphActor(), "Last21DaysLitterGraphActor")
+    val last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(Last30DaysLitterGraphActor(), "Last30DaysLitterGraphActor")
 
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last21DaysLitterGraphActor), 30), "DailyNotesRouter")
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor), 30), "DailyNotesRouter")
 
     Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
@@ -63,7 +63,7 @@ object LitterBoxReportActor {
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last21DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
@@ -72,20 +72,15 @@ private[kitties] object DailyAbility {
 
       noteRef.getDocument(forDay) match {
         case Invalid(e) => context.actorContext.log.warn(s"Something unexpected happened: $e")
-        case Validated.Valid((stale, document: Document)) =>
-          if (stale) {
-            context.actorContext.log.info(s"$forDay detected as stale, updating the note and listeners")
-            val summary = documentToSummary(document, forDay)
-            monthlyLitterGraphActor !! summary
-            last21DaysLitterGraphActor !! summary
-            noteRef.setMarkdown(document.toMarkdown) match {
-              case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
-              case Success(NoOp) =>
-            }
-          } else {
-            context.actorContext.log.info(s"$forDay is up to date!")
+        case Validated.Valid((document: Document)) =>
+          val summary = documentToSummary(document, forDay)
+          context.actorContext.log.info(s"$forDay updating the note and listeners with summary $summary")
+          monthlyLitterGraphActor !! summary
+          last30DaysLitterGraphActor !! summary
+          noteRef.setMarkdown(document.toMarkdown) match {
+            case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
+            case Success(NoOp) =>
           }
-
       }
 
       Tinker.receiveMessage { observation =>
@@ -95,7 +90,7 @@ private[kitties] object DailyAbility {
           case Validated.Valid(document: Document) =>
             val summaryForDay = documentToSummary(document, forDay)
             monthlyLitterGraphActor !! summaryForDay
-            last21DaysLitterGraphActor !! summaryForDay
+            last30DaysLitterGraphActor !! summaryForDay
 
           case Invalid(e) =>
             context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
@@ -136,7 +131,7 @@ private[kitties] object DailyAbility {
           DataPoint(when, contents, ref, maybeRaw.toList.map(c => s"    - $c"))
       }
       getDocument(observation.capture.when.toLocalDate) match {
-        case v@Validated.Valid((_, document: Document)) =>
+        case v@Validated.Valid((document: Document)) =>
           val updatedDocument = document.append(datapoint)
           val updatedMarkdown = updatedDocument.toMarkdown
           noteRef.setMarkdown(updatedMarkdown) match {
@@ -164,7 +159,7 @@ private[kitties] object DailyAbility {
 
     private def addToInbox(toAdd: AddToInbox)(implicit log: Logger): ValidatedNel[String, Document] = {
       getDocument(toAdd.when.toLocalDate) match {
-        case Validated.Valid((_, document: Document)) =>
+        case Validated.Valid((document: Document)) =>
           val updatedDocument = document.appendToInbox(toAdd.string)
           noteRef.setMarkdown(updatedDocument.toMarkdown) match {
             case Failure(exception) => Common.getStackTraceString(exception).invalidNel
@@ -187,13 +182,10 @@ private[kitties] object DailyAbility {
       }
     }
 
-    def getDocument(forDay: LocalDate): ValidatedNel[String, (Boolean, Document)] = {
+    def getDocument(forDay: LocalDate): ValidatedNel[String, Document] = {
       noteRef.readMarkdown() match {
         case Success(markdown) =>
-          MarkdownWithoutJsonExperiment(markdown, forDay).andThen { document =>
-            val changed = document.toMarkdown.trim != markdown.trim
-            (changed -> document).validNel
-          }
+          MarkdownWithoutJsonExperiment(markdown, forDay)
 
         case Failure(exception) =>
           Invalid(Common.getStackTraceString(exception)).toValidatedNel

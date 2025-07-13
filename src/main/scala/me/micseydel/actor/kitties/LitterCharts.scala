@@ -8,7 +8,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.IntSeries
+import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries, Series}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json._
@@ -53,8 +53,9 @@ private object LitterGraphHelper {
       }
     }
 
-    def toMarkdown: String = {
-      val sorted = summaries.toList.sortBy(_._1)
+    def toMarkdown(limitDays: Int = 30): String = {
+      val sorted = summaries.toList
+        .sortBy(_._1)
       val xaxis: List[LocalDate] = sorted.map(_._1)
       val yaxis: List[LitterSummaryForDay] = sorted.map(_._2)
 
@@ -62,11 +63,16 @@ private object LitterGraphHelper {
         .filter(_.auditStatus != AuditCompleted)
         .map(s => s.forDay -> s.auditStatus)
 
-      val labels: List[String] = xaxis.zipWithIndex.map { case (day, i) => if (i % 2 == 0) day.toString else "" }
+      val labels: List[String] = xaxis.takeRight(limitDays).zipWithIndex.map { case (day, i) => if (i % 2 == 0) day.toString else "" }
 
-      val series = List(
-        IntSeries("#1", yaxis.map(_.peeClumps)),
-        IntSeries("#2", yaxis.map(_.poops))
+      val number1s: List[Int] = yaxis.map(_.peeClumps)
+      val number2s: List[Int] = yaxis.map(_.poops)
+
+      val series: List[Series[_]] = List(
+        IntSeries("#1", number1s.takeRight(limitDays)),
+        IntSeries("#2", number2s.takeRight(limitDays))//,
+//        DoubleSeries("avg #1", runningAverage(number1s).takeRight(limitDays)),
+//        DoubleSeries("avg #2", runningAverage(number2s).takeRight(limitDays))
       )
 
       val chart = ObsidianCharts.chart(labels, series)
@@ -85,6 +91,13 @@ private object LitterGraphHelper {
       }
 
       s"""$chart$extras"""
+    }
+
+    private def runningAverage(elements: List[Int], lookback: Int = 7): List[Double] = {
+      elements.indices.map { i =>
+        val window = elements.slice(Math.max(0, i - lookback + 1), i + 1)
+        window.sum.toDouble / window.length
+      }.toList
     }
   }
 
@@ -110,8 +123,8 @@ private object LitterGraphHelper {
       )
     }
 
-    def setDocument(document: Document): Try[NoOp.type] = {
-      noteRef.setTo(Note(document.toMarkdown, Some(document.toJson.toString))).map(_ => NoOp)
+    def setDocument(document: Document, daysBack: Int): Try[NoOp.type] = {
+      noteRef.setTo(Note(document.toMarkdown(daysBack), Some(document.toJson.toString))).map(_ => NoOp)
     }
   }
 }
@@ -148,11 +161,12 @@ object MonthlyAbility {
                 case (false, _) =>
                   Success(NoOp)
                 case (true, updatedDocument) =>
-                  noteRef.setDocument(updatedDocument)
+                  noteRef.setDocument(updatedDocument, 30)
+                  // FIXME: dynamic days in month?
               }
             case None =>
               val document = LitterGraphHelper.Document(Map(summary.forDay -> summary))
-              noteRef.setDocument(document)
+              noteRef.setDocument(document, 30)
           } match {
             case Failure(exception) => context.actorContext.log.error(s"Failed to process summary for ${summary.forDay}", exception)
             case Success(NoOp) =>
@@ -165,11 +179,11 @@ object MonthlyAbility {
 }
 
 
-object Last21DaysLitterGraphActor {
+object Last30DaysLitterGraphActor {
   import LitterGraphHelper.RichNoteRef
 
   def apply()(implicit Tinker: Tinker): Ability[LitterSummaryForDay] = {
-    val noteName = s"Litter Sifting Chart (last 21 days or so)"
+    val noteName = s"Litter Sifting Chart (last 30 days)"
     NoteMakingTinkerer(noteName, TinkerColor.random(), "~") { case (context, noteRef) =>
       Tinker.receiveMessage { summary: LitterSummaryForDay =>
         noteRef.readDocument().flatMap {
@@ -195,6 +209,12 @@ object Last21DaysLitterGraphActor {
 
   private def setDocumentTruncated(noteRef: NoteRef, document: LitterGraphHelper.Document): Try[NoOp.type] = {
     val latestDay = document.summaries.keys.max
-    noteRef.setDocument(LitterGraphHelper.Document(document.summaries.filter(_._1.isAfter(latestDay.minusDays(21)))))
+    val daysBack = 30
+    noteRef.setDocument(LitterGraphHelper.Document(
+      // keep the stored state small
+      document.summaries.filter(_._1.isAfter(latestDay.minusDays(daysBack)))),
+      // this one adjusts what shows up in the chart
+      daysBack
+    )
   }
 }
