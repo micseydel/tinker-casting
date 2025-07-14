@@ -1,8 +1,9 @@
 package me.micseydel.actor
 
 import akka.actor.typed.{ActorRef, Behavior}
-import com.softwaremill.quicklens._
+import com.softwaremill.quicklens.*
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.AudioNoteCapturer.AcceptableFileExts
 import me.micseydel.actor.EventReceiver.TranscriptionCompleted
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
 import me.micseydel.dsl.Tinker.Ability
@@ -11,12 +12,12 @@ import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResult
-import me.micseydel.model.WhisperResultJsonProtocol._
+import me.micseydel.model.WhisperResultJsonProtocol.*
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
-import spray.json._
+import spray.json.*
 
 import java.io.File
 import java.nio.file.{Path, Paths}
@@ -160,12 +161,12 @@ object AudioNoteCapturer {
         val seconds: Double = Common.getWavLength(audioPath.toString)
         if (seconds > 58 && seconds < 61) {
           context.actorContext.log.debug(s"wavPath $audioPath is $seconds seconds long, waiting to see if it's partial")
-          if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] because seconds (58 < $seconds < 61), entering preventingRedundancy\n")
+          if (generateMarkdown) noteRef.setMarkdown(s"- \\[${(context.system.clock.now())}] because seconds (58 < $seconds < 61), entering preventingRedundancy\n")
           preventingRedundancy(vaultRoot, chronicler, timerKey, timeKeeper, triggerTranscriptionForWavPath, generateMarkdown)
         } else {
           context.actorContext.log.debug(s"wavPath $audioPath is $seconds seconds long, triggering transcription")
           triggerTranscriptionForWavPath(audioPath)
-          if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] last triggered transcription for created path ${audioPath.getFileName.toString}\n")
+          if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] last triggered transcription for created path ${audioPath.getFileName.toString}\n")
           Tinker.steadily
         }
 
@@ -174,7 +175,7 @@ object AudioNoteCapturer {
 
         triggerTranscriptionForWavPath(modifiedPath)
 
-        if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] last ==RE==triggered transcription for ==MODIFIED== path ${modifiedPath.getFileName.toString}\n")
+        if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] last ==RE==triggered transcription for ==MODIFIED== path ${modifiedPath.getFileName.toString}\n")
 
         Tinker.steadily
 
@@ -186,7 +187,7 @@ object AudioNoteCapturer {
         Tinker.steadily
 
       case TranscriptionEvent(payload) =>
-        onTranscriptionEvent("idle", payload, chronicler, noteRef, generateMarkdown) match {
+        AudioNoteCapturerHelpers.onTranscriptionEvent("idle", payload, chronicler, noteRef, generateMarkdown) match {
           case Failure(exception) => throw exception
           case Success(NoOp) =>
         }
@@ -202,7 +203,7 @@ object AudioNoteCapturer {
     implicit val c: TinkerContext[_] = context
     message match {
       case TranscriptionEvent(payload) =>
-        onTranscriptionEvent("preventingRedundancy", payload, chronicler, noteRef, generateMarkdown) match {
+        AudioNoteCapturerHelpers.onTranscriptionEvent("preventingRedundancy", payload, chronicler, noteRef, generateMarkdown) match {
           case Failure(exception) => throw exception
           case Success(NoOp) =>
         }
@@ -213,7 +214,7 @@ object AudioNoteCapturer {
           context.actorContext.log.info(s"Detected updated path $path")
           triggerTranscriptionForWavPath(path)
           timeKeeper ! UntrackedTimeKeeper.Cancel(timerKey)
-          if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] [preventingRedundancy] detected a tmp path update, switching to idle")
+          if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] [preventingRedundancy] detected a tmp path update, switching to idle")
           idle(vaultRoot, chronicler, timerKey, timeKeeper, triggerTranscriptionForWavPath, generateMarkdown)
         } else {
           context.actorContext.log.warn(s"Ignoring path update $path")
@@ -224,7 +225,7 @@ object AudioNoteCapturer {
         Try(Common.getWavLength(wavPath.toString)) match {
           case Failure(exception: UnsupportedAudioFileException) =>
             context.actorContext.log.error(s"Failed to get wav length for $wavPath", exception)
-            if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] Failed to get wav length for $wavPath")
+            if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] Failed to get wav length for $wavPath")
             Tinker.steadily
           case Failure(exception) =>
             context.actorContext.log.error(s"Unknown error for $wavPath", exception)
@@ -235,13 +236,13 @@ object AudioNoteCapturer {
             if (Math.abs(durationSeconds / 60 % 60 - 50) < 2) {
               context.actorContext.log.info(s"Setting a ~1-minute (75s) timer because durationSeconds looked suspicious...")
               timeKeeper ! UntrackedTimeKeeper.RemindMeIn(75.seconds, context.self.underlying, AudioPathUpdatedEvent(PathCreatedEvent(wavPath)), timerKey)
-              if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] setting a timer for ${wavPath.toString} and switching to idle")
+              if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] setting a timer for ${wavPath.toString} and switching to idle")
               Tinker.steadily
             } else {
               context.actorContext.log.info(s"$wavPath modification treating as created (durationSeconds=$durationSeconds)")
               triggerTranscriptionForWavPath(wavPath)
               timeKeeper ! UntrackedTimeKeeper.Cancel(timerKey)
-              if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] Triggered for ${wavPath.toString}, switching to idle (no redundancyPrevention)")
+              if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] Triggered for ${wavPath.toString}, switching to idle (no redundancyPrevention)")
               idle(vaultRoot, chronicler, timerKey, timeKeeper, triggerTranscriptionForWavPath, generateMarkdown)
             }
         }
@@ -258,36 +259,9 @@ object AudioNoteCapturer {
 
   //
 
-  private def onTranscriptionEvent(state: String, payload: String, chronicler: ActorRef[Chronicler.Message], noteRef: NoteRef, generateMarkdown: Boolean)(implicit context: TinkerContext[_]): Try[NoOp.type] = {
-    val whisperResultEvent = try {
-      payload.parseJson.convertTo[WhisperResult]
-    } catch {
-      case e: DeserializationException =>
-        context.actorContext.log.error(s"Deserialization failed for payload $payload", e)
-        throw e
-    }
-
-    if (!whisperResultEvent.whisperResultMetadata.vaultPath.toLowerCase.split("\\.").exists(AcceptableFileExts.contains)) {
-      context.actorContext.log.warn(s"Whisper result filename ${whisperResultEvent.whisperResultMetadata.vaultPath} expected to end with $AcceptableFileExts!")
-    }
-
-    context.actorContext.log.info(s"[$state] Transcription completed for ${whisperResultEvent.whisperResultMetadata.vaultPath}")
-    chronicler ! Chronicler.TranscriptionCompletedEvent(fixWhisper(whisperResultEvent))
-    if (generateMarkdown) noteRef.setMarkdown(s"- \\[${now(context.system.clock)}] last received $whisperResultEvent\n")
-    else Success(NoOp)
-  }
-
   case class NoticedAudioNote(wavPath: Path, captureTime: ZonedDateTime, lengthSeconds: Double, transcriptionStartedTime: ZonedDateTime) {
     def transcriptionNoteName: String = s"Transcription for ${wavPath.getFileName.toString}"
   }
-
-  private def fixWhisper(whisperResultEvent: WhisperResult): WhisperResult = {
-    whisperResultEvent
-      .modify(_.whisperResultContent.text)
-      .using(_.replace("f***ing", "fucking"))
-  }
-
-  private def now(clock: TinkerClock): String = TimeUtil.zonedDateTimeToISO8601(clock.now())
 
   private case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: Option[String], whisperBase: Option[String], generateMarkdown: Boolean, whisperTurbo: Option[String])
 
@@ -303,5 +277,32 @@ object AudioNoteCapturer {
         } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase, generateMarkdown, whisperTurbo)
       }
     }
+  }
+}
+
+private object AudioNoteCapturerHelpers {
+  def fixWhisper(whisperResultEvent: WhisperResult): WhisperResult = {
+    whisperResultEvent
+      .modify(_.whisperResultContent.text)
+      .using(_.replace("f***ing", "fucking"))
+  }
+
+  def onTranscriptionEvent(state: String, payload: String, chronicler: ActorRef[Chronicler.Message], noteRef: NoteRef, generateMarkdown: Boolean)(implicit context: TinkerContext[_]): Try[NoOp.type] = {
+    val whisperResultEvent = try {
+      payload.parseJson.convertTo[WhisperResult]
+    } catch {
+      case e: DeserializationException =>
+        context.actorContext.log.error(s"Deserialization failed for payload $payload", e)
+        throw e
+    }
+
+    if (!whisperResultEvent.whisperResultMetadata.vaultPath.toLowerCase.split("\\.").exists(AcceptableFileExts.contains)) {
+      context.actorContext.log.warn(s"Whisper result filename ${whisperResultEvent.whisperResultMetadata.vaultPath} expected to end with $AcceptableFileExts!")
+    }
+
+    context.actorContext.log.info(s"[$state] Transcription completed for ${whisperResultEvent.whisperResultMetadata.vaultPath}")
+    chronicler ! Chronicler.TranscriptionCompletedEvent(AudioNoteCapturerHelpers.fixWhisper(whisperResultEvent))
+    if (generateMarkdown) noteRef.setMarkdown(s"- \\[${context.system.clock.now()}] last received $whisperResultEvent\n")
+    else Success(NoOp)
   }
 }

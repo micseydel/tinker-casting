@@ -72,6 +72,7 @@ object GroceryListMOCActor {
     implicit val nr: NoteRef = noteRef
     noteRef.readValidatedDocument() match {
       case Validated.Valid(Document(nextNote, _, _, Config(senderEquals, subjectContains))) =>
+        context.actorContext.log.info(s"Starting with nextNote=$nextNote, senderEquals=$senderEquals, subjectContains=$subjectContains")
         implicit val currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message] = context.cast(CurrentGroceryNoteActor(nextNote), Common.tryToCleanForActorName(nextNote))
         implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[LocalDate] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
         behavior(Map.empty)
