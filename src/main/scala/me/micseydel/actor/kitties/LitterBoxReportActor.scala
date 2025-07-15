@@ -71,8 +71,14 @@ private[kitties] object DailyAbility {
       implicit val tc: TinkerContext[_] = context
 
       noteRef.getDocument(forDay) match {
-        case Invalid(e) => context.actorContext.log.warn(s"Something unexpected happened: $e")
-        case Validated.Valid((document: Document)) =>
+        case Invalid(e) =>
+          e.toList match {
+            case List(justOne) if justOne.contains("No such file or directory") =>
+              // refactor, but this is normal and expected
+            case other =>
+              context.actorContext.log.warn(s"Something unexpected happened: $other")
+          }
+        case Validated.Valid(document: Document) =>
           val summary = documentToSummary(document, forDay)
           context.actorContext.log.info(s"$forDay updating the note and listeners with summary $summary")
           monthlyLitterGraphActor !! summary

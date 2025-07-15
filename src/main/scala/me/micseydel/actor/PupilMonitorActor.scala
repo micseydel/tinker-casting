@@ -44,7 +44,7 @@ object PupilMonitorActor {
         behavior(Nil)
 
       case ReceivePing(_) =>
-        context.actorContext.log.warn(s"noteRef.checkBoxIsChecked()? ${noteRef.checkBoxIsChecked()}")
+        context.actorContext.log.info(s"noteRef.checkBoxIsChecked()? ${noteRef.checkBoxIsChecked()}")
 //        if (noteRef.checkBoxIsChecked()) {
 //          noteRef.setMarkdown(
 //            s"""- [ ] Click to re-generate chart
