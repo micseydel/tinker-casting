@@ -11,6 +11,7 @@ import com.google.api.client.googleapis.auth.oauth2.{GoogleAuthorizationCodeFlow
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.store.FileDataStoreFactory
+import com.google.api.services.calendar.CalendarScopes
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
@@ -20,7 +21,7 @@ import me.micseydel.actor.GmailActor.Email
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl._
+import me.micseydel.dsl.*
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
@@ -28,9 +29,9 @@ import java.io.{File, FileInputStream, InputStreamReader}
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.{Base64, Collections}
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContextExecutor, Future}
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.{Failure, Success, Try}
 
 object GmailActor {
@@ -181,7 +182,7 @@ private object TinkerGmailService {
   def createGmailService(config: GmailConfig): Gmail = {
     val credential = GmailAuth.authenticate(config.credentialsPath, config.tokensPath)
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
-      .setApplicationName("Gmail Actor Service")
+      .setApplicationName("Gmail Actor Service") // FIXME: ApplicationName
       .build()
   }
 
@@ -270,7 +271,17 @@ object GmailAuth {
       httpTransport,
       jsonFactory,
       clientSecrets,
-      Collections.singletonList("https://www.googleapis.com/auth/gmail.readonly")
+      List(
+        "https://www.googleapis.com/auth/gmail.readonly",
+        CalendarScopes.CALENDAR_READONLY,
+        CalendarScopes.CALENDAR_ACLS_READONLY,
+        CalendarScopes.CALENDAR_CALENDARLIST_READONLY,
+        CalendarScopes.CALENDAR_CALENDARS_READONLY,
+        CalendarScopes.CALENDAR_EVENTS_OWNED_READONLY,
+        CalendarScopes.CALENDAR_EVENTS_PUBLIC_READONLY,
+        CalendarScopes.CALENDAR_EVENTS_READONLY,
+        CalendarScopes.CALENDAR_SETTINGS_READONLY
+      ).asJava
     ).setDataStoreFactory(new FileDataStoreFactory(new File(tokensDir)))
       .setAccessType("offline")
       .build()
