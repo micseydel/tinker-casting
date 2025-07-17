@@ -2,7 +2,7 @@ package me.micseydel.actor
 
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
-import me.micseydel.actor.GmailActor.Email
+import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer

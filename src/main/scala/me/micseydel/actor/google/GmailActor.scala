@@ -1,4 +1,4 @@
-package me.micseydel.actor
+package me.micseydel.actor.google
 
 import akka.actor.typed.scaladsl.Behaviors
 import cats.data.Validated.{Invalid, Valid}
@@ -17,18 +17,18 @@ import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
 import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.GmailActor.Email
+import me.micseydel.actor.google.GmailActor.Email
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.*
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.{File, FileInputStream, InputStreamReader}
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
-import java.util.{Base64, Collections}
+import java.util.Base64
 import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.jdk.CollectionConverters.*
@@ -137,9 +137,9 @@ object GmailActor {
 
   //
 
-  private case class Document(pollingMinutes: Int, gmailConfig: GmailConfig, checkboxIsChecked: Boolean)
+  private[google] case class Document(pollingMinutes: Int, gmailConfig: GmailConfig, checkboxIsChecked: Boolean)
 
-  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+  private[google] implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def getDocument(): ValidatedNel[String, Document] = {
       noteRef.read() match {
         case Failure(exception) => throw exception

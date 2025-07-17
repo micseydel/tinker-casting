@@ -1,5 +1,6 @@
 package me.micseydel.actor
 
+import me.micseydel.actor.google.GmailActor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}

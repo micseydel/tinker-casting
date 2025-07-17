@@ -2,8 +2,8 @@ package me.micseydel.dsl
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.actor.GmailActor
-import me.micseydel.actor.GmailActor.Email
+import me.micseydel.actor.google.GmailActor.Email
+import me.micseydel.actor.google.GmailActor
 import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor}
 import me.micseydel.dsl.cast.SystemWideTimeKeeper
 
