@@ -6,7 +6,7 @@ import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotificati
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 
@@ -36,6 +36,7 @@ object RecurringResponsibilityActor {
 
   private def behavior()(implicit Tinker: Tinker, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
+    implicit val c: TinkerClock = context.system.clock
     Tinker.receiveMessage {
       case NotePing(_) =>
         noteRef.getDocument() match {
@@ -51,7 +52,7 @@ object RecurringResponsibilityActor {
                 // start the interval from today
                 val triggerDay = Today.plusDays(intervalDays)
                 context.actorContext.log.info(s"Scheduling trigger day $triggerDay")
-                timeKeeper !! TimeKeeper.RemindMeIn(intervalDays.days, context.self, TimerUp, Some(TimerUp))
+                timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, TimerUp, Some(TimerUp))
                 Success(NoOp)
 
               case (false, Some(Today)) =>
@@ -66,7 +67,7 @@ object RecurringResponsibilityActor {
                 } else {
                   val triggerInDays = TimeUtil.daysBetween(Today, triggerDay).toInt.days
                   context.actorContext.log.info(s"Will trigger in $triggerInDays days (trigger day $triggerDay, latest entry $latestEntry)")
-                  timeKeeper !! TimeKeeper.RemindMeIn(triggerInDays, context.self, TimerUp, Some(TimerUp))
+                  timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, TimerUp, Some(TimerUp))
                 }
                 Success(NoOp)
 
@@ -76,7 +77,7 @@ object RecurringResponsibilityActor {
 
               case (true, _) =>
                 val nextTrigger = Today.plusDays(intervalDays)
-                timeKeeper !! TimeKeeper.RemindMeIn(intervalDays.days, context.self, TimerUp, Some(TimerUp))
+                timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 noteRef.prepend(Today, Some(nextTrigger))
 

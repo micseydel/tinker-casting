@@ -3,11 +3,12 @@ package me.micseydel.dsl.cast
 import akka.actor.typed.scaladsl.Behaviors
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
 import me.micseydel.util.TimeUtil
 
+import java.time.{LocalDate, ZonedDateTime}
 import java.util.UUID
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 object TimeKeeper {
   sealed trait Message
@@ -21,6 +22,15 @@ object TimeKeeper {
     def apply[M](delay: FiniteDuration, replyTo: SpiritRef[M], message: M, timerKey: Option[Any]): RemindMeIn[M] = {
       new RemindMeIn(delay, replyTo, message, timerKey)
     }
+  }
+
+  def RemindMeAt[M](at: ZonedDateTime, recipient: SpiritRef[M], message: M, timerKey: Option[Any])(implicit clock: TinkerClock): RemindMeIn[M] = {
+    val delay = TimeUtil.between(clock.now(), at)
+    RemindMeIn(delay, recipient, message, timerKey)
+  }
+
+  def RemindMeAt[M](at: LocalDate, recipient: SpiritRef[M], message: M, timerKey: Option[Any])(implicit clock: TinkerClock): RemindMeIn[M] = {
+    RemindMeAt(ZonedDateTime.from(at), recipient, message, timerKey)
   }
 
   case class RemindMeEvery[M](delay: FiniteDuration, replyTo: SpiritRef[M], message: M, timerKey: Option[Any]) extends Message
