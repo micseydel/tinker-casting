@@ -47,7 +47,7 @@ private object TinkerGoogleCalendarService {
 }
 
 
-// FIXME: turn this into a trait so I can have main functions for easy testing outside of actors
+// FIXME: turn these private methods into a trait so I can have main functions for easy testing outside of actors
 object SimpleTinkerApp {
   def main(args: Array[String]): Unit = {
     import GmailActor.RichNoteRef

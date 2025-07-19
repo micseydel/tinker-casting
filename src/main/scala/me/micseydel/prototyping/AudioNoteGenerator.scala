@@ -1,7 +1,7 @@
 package me.micseydel.prototyping
 
-import me.micseydel.actor.AudioNoteCapturer.AcceptableFileExts
-import spray.json._
+import me.micseydel.actor.AudioNoteCapturerHelpers
+import spray.json.*
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, Paths}
@@ -15,7 +15,7 @@ object AudioNoteGenerator extends DefaultJsonProtocol {
 
   def genAudioPaths(inputDir: String): List[String] = {
     val files = new File(inputDir).listFiles
-    files.filter(f => f.getName.toLowerCase.split("\\.").exists(AcceptableFileExts.contains)).map(_.getName).toList
+    files.filter(f => AudioNoteCapturerHelpers.pathSupportedByFfmpeg(f.getName)).map(_.getName).toList
   }
 
   def getSegments(path: String, inputDir: String): List[Segment] = {
