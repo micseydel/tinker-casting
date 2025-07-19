@@ -6,7 +6,7 @@ import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext, Tinkerer}
 import me.micseydel.util.TimeUtil
 
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.{LocalDate, ZoneId, ZonedDateTime}
 import java.util.UUID
 import scala.concurrent.duration.*
 
@@ -30,7 +30,7 @@ object TimeKeeper {
   }
 
   def RemindMeAt[M](at: LocalDate, recipient: SpiritRef[M], message: M, timerKey: Option[Any])(implicit clock: TinkerClock): RemindMeIn[M] = {
-    RemindMeAt(ZonedDateTime.from(at), recipient, message, timerKey)
+    RemindMeAt(at.atStartOfDay(ZoneId.systemDefault()), recipient, message, timerKey)
   }
 
   case class RemindMeEvery[M](delay: FiniteDuration, replyTo: SpiritRef[M], message: M, timerKey: Option[Any]) extends Message
