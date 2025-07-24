@@ -2,11 +2,12 @@ package me.micseydel.actor.transcription
 
 import me.micseydel.NoOp
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
+import me.micseydel.actor.AudioNoteCapturerHelpers
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
-import me.micseydel.model._
+import me.micseydel.model.*
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.{JsonlRefT, NoteRef}
@@ -25,10 +26,11 @@ object TranscriptionNoteWrapper {
     setup(capture, listener)
 
   private def setup(capture: NoticedAudioNote, listener: SpiritRef[Chronicler.ReceiveNotedTranscription])(implicit Tinker: Tinker): Ability[Message] = {
-    val jsonFilenameWithoutExtension = capture.transcriptionNoteName.replace(" ", "_").toLowerCase
+    val transcriptionNoteName = AudioNoteCapturerHelpers.transcriptionNoteName(capture.wavPath)
+    val jsonFilenameWithoutExtension = transcriptionNoteName.replace(" ", "_").toLowerCase
     Tinker.withPersistedMessages(jsonFilenameWithoutExtension, TranscriptionMessageListJsonProtocol.TranscriptionNoteWrapperMessageJsonFormat) { jsonlRef =>
-      NoteMakingTinkerer[Message](capture.transcriptionNoteName, TinkerColor.Purple, "🎵") { (context, noteRef) =>
-        context.actorContext.log.info(s"Setting stub for ${capture.transcriptionNoteName}")
+      NoteMakingTinkerer[Message](transcriptionNoteName, TinkerColor.Purple, "🎵") { (context, noteRef) =>
+        context.actorContext.log.info(s"Setting stub for $transcriptionNoteName")
 
         noteRef.setStub(capture) match {
           case Failure(exception) => throw exception
