@@ -8,10 +8,10 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries, Series}
+import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
-import spray.json._
+import spray.json.*
 
 import java.io.FileNotFoundException
 import java.time.LocalDate
@@ -44,7 +44,7 @@ private object LitterGraphHelper {
      */
     def integrate(incomingSummary: LitterSummaryForDay): (Boolean, Document) = {
       summaries.get(incomingSummary.forDay) match {
-        case Some(existing) if (existing == incomingSummary) =>
+        case Some(existing) if existing == incomingSummary =>
           false -> this
         case _ =>
           true -> Document(
@@ -80,7 +80,7 @@ private object LitterGraphHelper {
       val extras = if (needsAudit.nonEmpty) {
         val auditLines = needsAudit.map { case (forDay, auditType) =>
           s"- [[Litter boxes sifting ($forDay)]]: $auditType"
-        }.mkString("\n")
+        }.reverse.mkString("\n")
 
         s"""
            |# Needs auditing
