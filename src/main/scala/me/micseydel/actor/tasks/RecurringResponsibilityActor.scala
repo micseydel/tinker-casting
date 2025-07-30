@@ -24,17 +24,17 @@ object RecurringResponsibilityActor {
 
   private final case object TimerUp extends Message
 
-  def apply(noteId: String)(implicit Tinker: Tinker): Ability[Message] =
+  def apply(noteId: String, manager: SpiritRef[RecurringResponsibilityManager.Track])(implicit Tinker: Tinker): Ability[Message] =
     AttentiveNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
       context.self !! NotePing(NoOp) // behavior is no different on startup as when the note is updated
 
-      behavior()(Tinker, noteRef, timeKeeper)
+      behavior()(Tinker, noteRef, timeKeeper, manager)
     }
 
-  private def behavior()(implicit Tinker: Tinker, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.setup { context =>
+  private def behavior()(implicit Tinker: Tinker, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     implicit val c: TinkerClock = context.system.clock
     Tinker.receiveMessage {
@@ -51,15 +51,18 @@ object RecurringResponsibilityActor {
               case (false, None) =>
                 // start the interval from today
                 val triggerDay = Today.plusDays(intervalDays)
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
                 context.actorContext.log.info(s"Scheduling trigger day $triggerDay")
                 timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, TimerUp, Some(TimerUp))
                 Success(NoOp)
 
               case (false, Some(Today)) =>
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, Today.plusDays(intervalDays))
                 Success(NoOp) // just ignore this
 
               case (false, Some(latestEntry)) =>
                 val triggerDay = latestEntry.plusDays(intervalDays)
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
                 if (triggerDay.isBefore(Today)) {
                   // it should have already triggered
                   context.actorContext.log.warn(s"Trigger day $triggerDay is before today ($Today) so sending TimerUp to self")
@@ -73,10 +76,13 @@ object RecurringResponsibilityActor {
 
               case (true, Some(Today)) =>
                 context.actorContext.log.info("Button was pushed but there's already an entry for today, clearing button")
-                noteRef.resetButton(Some(Today.plusDays(intervalDays)))
+                val triggerDay = Today.plusDays(intervalDays)
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
+                noteRef.resetButton(Some(triggerDay))
 
               case (true, _) =>
                 val nextTrigger = Today.plusDays(intervalDays)
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 noteRef.prepend(Today, Some(nextTrigger))
