@@ -12,7 +12,7 @@ object Light {
   val BackToiletHigh = new Light(10)
 
   val AllList: Seq[Light] = List(ByTheDehumidifier, FrontTable, FrontLitter, ByTheLitterRobot,
-    //      Bedroom,
+          Bedroom,
     BackToiletLow, BackToiletHigh)
 
   val ByTheDehumidifierName = "ByTheDehumidifier"
