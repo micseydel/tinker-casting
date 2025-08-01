@@ -2,7 +2,7 @@ package me.micseydel.actor.tasks
 
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
+import me.micseydel.actor.notifications.NotificationCenterManager.{CompleteNotification, NewNotification, Notification, NotificationId}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
@@ -105,12 +105,18 @@ object RecurringResponsibilityActor {
                 Success(NoOp)
 
               case (true, Some(Today)) =>
+                val notificationId = notificationIdForNoteId(noteRef.noteId)
+                context.system.notifier !! CompleteNotification(notificationId)
+
                 context.actorContext.log.info("Button was pushed but there's already an entry for today, clearing button")
                 val triggerDay = Today.plusDays(intervalDays)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
                 noteRef.resetButton(Some(triggerDay))
 
               case (true, _) =>
+                val notificationId = notificationIdForNoteId(noteRef.noteId)
+                context.system.notifier !! CompleteNotification(notificationId)
+
                 val nextTrigger = Today.plusDays(intervalDays)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
@@ -131,6 +137,9 @@ object RecurringResponsibilityActor {
         maybeVoiceCompletion.foreach { voiceCompletion =>
           if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("as done"))) {
             if (voiceCompletion.matches(loweredText)) {
+              val notificationId = notificationIdForNoteId(noteRef.noteId)
+              context.system.notifier !! CompleteNotification(notificationId)
+
               val today = context.system.clock.today()
               val nextTrigger = context.system.clock.today().plusDays(intervalDays)
               manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
@@ -146,10 +155,7 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case TimerUp =>
-        val notificationId = MessageDigest.getInstance("SHA-256")
-          .digest(noteRef.noteId.id.getBytes("UTF-8"))
-          .take(7)
-          .map("%02x".format(_)).mkString
+        val notificationId = notificationIdForNoteId(notificationId)
         context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
 
         context.system.notifier !! NewNotification(Notification(
@@ -255,5 +261,12 @@ object RecurringResponsibilityActor {
         )
       }
     }
+  }
+
+  private def notificationIdForNoteId(noteId: NoteId): String = {
+    MessageDigest.getInstance("SHA-256")
+      .digest(noteId.id.getBytes("UTF-8"))
+      .take(7)
+      .map("%02x".format(_)).mkString
   }
 }
