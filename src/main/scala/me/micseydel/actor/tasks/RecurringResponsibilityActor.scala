@@ -10,6 +10,7 @@ import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.*
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult}
 import me.micseydel.util.TimeUtil
+import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
 
@@ -47,7 +48,7 @@ object RecurringResponsibilityActor {
 
           if (markedAsDone) {
             val today = context.system.clock.today()
-            noteRef.prepend(today, Some(today.plusDays(intervalDays))) match {
+            noteRef.prepend(today, Some(today.plusDays(intervalDays)), None) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong prepending", exception)
               case Success(NoOp) =>
             }
@@ -114,7 +115,7 @@ object RecurringResponsibilityActor {
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
-                noteRef.prepend(Today, Some(nextTrigger))
+                noteRef.prepend(Today, Some(nextTrigger), None)
 
             }) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong updating Markdown", exception)
@@ -135,7 +136,7 @@ object RecurringResponsibilityActor {
               manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
               timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
               context.actorContext.log.info(s"Prepending today ($today) and setting timer for $nextTrigger")
-              noteRef.prepend(today, Some(nextTrigger))
+              noteRef.prepend(today, Some(nextTrigger), Some(noteId))
             } else {
               context.actorContext.log.info("Mark as completion request detected, but not a match")
             }
@@ -175,7 +176,18 @@ object RecurringResponsibilityActor {
 
   case class Document(intervalDays: Int, markedAsDone: Boolean, itemsAfterDone: List[String], maybeVoiceCompletion: Option[VoiceCompletion]) {
     def latestEntry: Option[LocalDate] = {
-      itemsAfterDone.headOption.map(_.dropRight(3).takeRight(10)).map(LocalDate.parse)
+      itemsAfterDone.headOption.flatMap(latest =>
+        if (latest.contains(")]] ")) {
+          latest.split("\\)]] ").toList match {
+            case List(messyWikiLink, ref) =>
+              Some(messyWikiLink.takeRight(10))
+            case _ =>
+              None
+          }
+        } else {
+          Some(latest.dropRight(3).takeRight(10))
+        }
+      ).map(LocalDate.parse)
     }
   }
 
@@ -184,8 +196,13 @@ object RecurringResponsibilityActor {
       setDocumentMarkdown(None, nextTrigger)
     }
 
-    def prepend(day: LocalDate, nextTrigger: Option[LocalDate])(implicit log: Logger): Try[NoOp.type] = {
-      val itemToPrepend = s"[[${noteRef.noteId.id} ($day)]]"
+    def prepend(day: LocalDate, nextTrigger: Option[LocalDate], maybeRef: Option[NoteId])(implicit log: Logger): Try[NoOp.type] = {
+      val itemToPrepend = maybeRef match {
+        case Some(noteId) =>
+          val aliased = noteId.wikiLinkWithAlias("ref")
+          s"[[${noteRef.noteId.id} ($day)]] ($aliased)"
+        case None => s"[[${noteRef.noteId.id} ($day)]]"
+      }
       setDocumentMarkdown(Some(itemToPrepend), nextTrigger)
     }
 
