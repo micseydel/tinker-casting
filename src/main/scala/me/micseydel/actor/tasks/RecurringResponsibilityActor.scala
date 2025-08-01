@@ -155,7 +155,7 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case TimerUp =>
-        val notificationId = notificationIdForNoteId(notificationId)
+        val notificationId: String = notificationIdForNoteId(noteRef.noteId)
         context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
 
         context.system.notifier !! NewNotification(Notification(
