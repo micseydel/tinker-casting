@@ -3,17 +3,21 @@ package me.micseydel.actor.tasks
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.TimeKeeper
+import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext}
+import me.micseydel.dsl.*
+import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
+import org.slf4j.Logger
 
 import java.io.FileNotFoundException
 import java.security.MessageDigest
 import java.time.LocalDate
 import scala.concurrent.duration.DurationInt
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.{Failure, Success, Try}
 
 
@@ -22,21 +26,46 @@ object RecurringResponsibilityActor {
 
   private final case class NotePing(ping: Ping) extends Message
 
+  private case class ReceiveTranscription(transcription: NotedTranscription) extends Message
+
   private final case object TimerUp extends Message
 
-  def apply(noteId: String, manager: SpiritRef[RecurringResponsibilityManager.Track])(implicit Tinker: Tinker): Ability[Message] =
+  def apply(noteId: String, manager: SpiritRef[RecurringResponsibilityManager.Track])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] =
     AttentiveNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
-      context.self !! NotePing(NoOp) // behavior is no different on startup as when the note is updated
+      implicit val l: Logger = context.actorContext.log
+      l.debug("setting up")
 
-      behavior()(Tinker, noteRef, timeKeeper, manager)
+      noteRef.getDocument() match {
+        case Success(Document(intervalDays, markedAsDone, _, maybeVoiceCompletion)) =>
+          if (maybeVoiceCompletion.nonEmpty) {
+            context.actorContext.log.info("Subscribing to Gossiper")
+            Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(ReceiveTranscription))
+          }
+
+          if (markedAsDone) {
+            val today = context.system.clock.today()
+            noteRef.prepend(today, Some(today.plusDays(intervalDays))) match {
+              case Failure(exception) => context.actorContext.log.error("Something went wrong prepending", exception)
+              case Success(NoOp) =>
+            }
+          }
+
+          behavior(intervalDays, maybeVoiceCompletion)(Tinker, noteRef, timeKeeper, manager)
+
+        case Failure(exception) =>
+          context.actorContext.log.error("Something went wrong", exception)
+          Tinker.ignore
+      }
     }
 
-  private def behavior()(implicit Tinker: Tinker, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(intervalDays: Int, maybeVoiceCompletion: Option[VoiceCompletion])(implicit Tinker: Tinker, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     implicit val c: TinkerClock = context.system.clock
+    implicit val l: Logger = context.actorContext.log
+    l.debug("creating message receiver")
     Tinker.receiveMessage {
       case NotePing(_) =>
         noteRef.getDocument() match {
@@ -45,7 +74,7 @@ object RecurringResponsibilityActor {
             Tinker.ignore
           case Failure(exception) => throw exception // FIXME
 
-          case Success(doc@Document(intervalDays, markedAsDone, _)) =>
+          case Success(doc@Document(intervalDays, markedAsDone, _, _)) =>
             val Today = context.system.clock.today()
             ((markedAsDone, doc.latestEntry) match {
               case (false, None) =>
@@ -95,6 +124,26 @@ object RecurringResponsibilityActor {
 
         Tinker.steadily
 
+      case ReceiveTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, whisperResultMetadata), captureTime), noteId)) =>
+        context.actorContext.log.info(s"Received transcription $noteId")
+        val loweredText = whisperResultContent.text.toLowerCase
+        maybeVoiceCompletion.foreach { voiceCompletion =>
+          if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("as done"))) {
+            if (voiceCompletion.matches(loweredText)) {
+              val today = context.system.clock.today()
+              val nextTrigger = context.system.clock.today().plusDays(intervalDays)
+              manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
+              timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
+              context.actorContext.log.info(s"Prepending today ($today) and setting timer for $nextTrigger")
+              noteRef.prepend(today, Some(nextTrigger))
+            } else {
+              context.actorContext.log.info("Mark as completion request detected, but not a match")
+            }
+          } // else it's not meant for this type of actor
+        }
+
+        Tinker.steadily
+
       case TimerUp =>
         val notificationId = MessageDigest.getInstance("SHA-256")
           .digest(noteRef.noteId.id.getBytes("UTF-8"))
@@ -119,28 +168,33 @@ object RecurringResponsibilityActor {
 
   //
 
-  case class Document(intervalDays: Int, markedAsDone: Boolean, itemsAfterDone: List[String]) {
+  case class VoiceCompletion(config: List[List[String]]) {
+    def matches(loweredText: String): Boolean =
+      config.exists(sublist => sublist.forall(s => loweredText.contains(s)))
+  }
+
+  case class Document(intervalDays: Int, markedAsDone: Boolean, itemsAfterDone: List[String], maybeVoiceCompletion: Option[VoiceCompletion]) {
     def latestEntry: Option[LocalDate] = {
       itemsAfterDone.headOption.map(_.dropRight(3).takeRight(10)).map(LocalDate.parse)
     }
   }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def resetButton(nextTrigger: Option[LocalDate]): Try[NoOp.type] = {
+    def resetButton(nextTrigger: Option[LocalDate])(implicit log: Logger): Try[NoOp.type] = {
       setDocumentMarkdown(None, nextTrigger)
     }
 
-    def prepend(day: LocalDate, nextTrigger: Option[LocalDate]): Try[NoOp.type] = {
+    def prepend(day: LocalDate, nextTrigger: Option[LocalDate])(implicit log: Logger): Try[NoOp.type] = {
       val itemToPrepend = s"[[${noteRef.noteId.id} ($day)]]"
       setDocumentMarkdown(Some(itemToPrepend), nextTrigger)
     }
 
-    private def setDocumentMarkdown(prependWith: Option[String], nextTrigger: Option[LocalDate]): Try[NoOp.type] = {
+    private def setDocumentMarkdown(prependWith: Option[String], nextTrigger: Option[LocalDate])(implicit log: Logger): Try[NoOp.type] = {
       getDocument().flatMap { document =>
         val lines = List(
           List("- [ ] Mark as done"),
           nextTrigger.map(_.toString).toList.map(day => s"    - Next trigger: [[$day]]"),
-          prependWith.toList.map("- " + _),
+          prependWith.toList.map("- " + _).filterNot(maybeDuplicate => document.itemsAfterDone.headOption.contains(maybeDuplicate)),
           document.itemsAfterDone.map("- " + _)
         ).flatten
 
@@ -149,22 +203,39 @@ object RecurringResponsibilityActor {
       }
     }
 
-    def getDocument(): Try[Document] = {
-      noteRef.readNote().flatMap { note =>
-        // FIXME: better error handling
-        note.yamlFrontMatter.map(_("interval_days").asInstanceOf[Int]).map { intervalDays =>
-          // ignore any lines that are indented (comments
-          val lines = note.markdown.split("\n").filterNot(_.startsWith(" "))
+    def getDocument()(implicit log: Logger): Try[Document] = {
+      noteRef.readMarkdownAndFrontmatter().map { case (markdown, frontmatter) =>
+        val maybeVoiceCompletion: Option[VoiceCompletion] = frontmatter.get("voice_completion") match {
+          case Some(result: java.util.List[_]) =>
+            val (passed, failed) = result.asScala.partition(_.isInstanceOf[java.util.List[?]])
+            if (failed.nonEmpty) {
+              log.warn(s"Expected to find a List[List[String]] but found: $failed")
+              None
+            } else {
+              Some(VoiceCompletion(passed.toList.map(_.asInstanceOf[java.util.List[?]].asScala.toList.map(_.asInstanceOf[String]))))
+            }
 
-          // FIXME: how best to check for lines.head containing "mark as complete"? just assuming for now
-          val linesAfterDone: List[String] = lines.toList.drop(1)
+          case None => None
 
-          Document(
-            intervalDays,
-            note.markdown.startsWith("- [x]"),
-            linesAfterDone.map(_.drop(2)) // drop the Markdown list characters
-          )
+          case other =>
+            log.warn(s"Expected a List[List[String]] but got $other")
+            None
         }
+
+        val intervalDays = frontmatter("interval_days").asInstanceOf[Int]
+
+        // ignore any lines that are indented (comments
+        val lines = markdown.split("\n").filterNot(_.startsWith(" "))
+
+        // FIXME: how best to check for lines.head containing "mark as complete"? just assuming for now
+        val linesAfterDone: List[String] = lines.toList.drop(1)
+
+        Document(
+          intervalDays,
+          markdown.startsWith("- [x]"),
+          linesAfterDone.map(_.drop(2)), // drop the Markdown list characters
+          maybeVoiceCompletion
+        )
       }
     }
   }

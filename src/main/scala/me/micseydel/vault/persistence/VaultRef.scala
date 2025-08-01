@@ -78,6 +78,11 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
   def readNote(): Try[Note] =
     readRaw().map(rawToNote)
 
+  def readMarkdownAndFrontmatter(): Try[(String, Map[String, Any])] =
+    readNote().flatMap { note =>
+      note.yamlFrontMatter.map(frontmatter => (note.markdown, frontmatter))
+    }
+
   def upsert(f: Note => Note): Try[Note] = {
     read()
       .recoverWith {

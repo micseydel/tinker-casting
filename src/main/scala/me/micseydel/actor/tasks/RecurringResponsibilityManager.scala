@@ -3,9 +3,10 @@ package me.micseydel.actor.tasks
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{EnhancedTinker, Tinker, TinkerColor}
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.LocalDate
@@ -16,7 +17,7 @@ object RecurringResponsibilityManager {
 
   final case class Track(wikilink: String, localDate: LocalDate) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Recurring responsibilities (MOC)", TinkerColor.random(), "⛑️") { (context, noteRef) =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = NoteMakingTinkerer("Recurring responsibilities (MOC)", TinkerColor.random(), "⛑️") { (context, noteRef) =>
     implicit val nr: NoteRef = noteRef
     noteRef.readListOfWikiLinks() match {
       case Validated.Invalid(e) =>
