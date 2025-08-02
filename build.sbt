@@ -38,6 +38,9 @@ lazy val additionalLibraryDependencies = Seq(
   "com.fasterxml.jackson.core" % "jackson-databind" % "2.18.3",
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.18.3",
 
+  "org.dmfs" % "lib-recur" % "0.17.1",
+  "net.jcazevedo" %% "moultingyaml" % "0.4.2",
+
   // testing
 
   "com.typesafe.akka" %% "akka-http-testkit"         % akkaHttpVersion % Test,
