@@ -76,7 +76,7 @@ object PurpleAirCloudActor {
           r.simplePurpleAirResults.head.time // FIXME: hack, what's the data model?
         )
 
-        noteRef.setMarkdown(s"- [ ] Do fetch\n    - Last generated ${context.system.clock.now()}\n\n![[${noteRef.noteId.id} (${context.system.clock.today()})]]\n---\n" + simplePurpleAirResults.map {
+        noteRef.setMarkdown(s"- [ ] Do fetch\n    - Last generated ${context.system.clock.now()}\n\n![[${noteRef.noteId.id} (${context.system.clock.today()})]]\n\n---\n\n" + simplePurpleAirResults.map {
           case SimplePurpleAirResult(time, index, pm25, pm25_10minute, pm25_30minute, pm25_60minute, pm25_6hour, pm25_24hour) =>
             s"""- index: $index @ $time
                |    - pm25: $pm25
