@@ -143,23 +143,30 @@ object RecurringResponsibilityActor {
       case ReceiveTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, whisperResultMetadata), captureTime), noteId)) =>
         context.actorContext.log.info(s"Received transcription $noteId")
         val loweredText = whisperResultContent.text.toLowerCase
-        maybeVoiceCompletion.foreach { voiceCompletion =>
-          if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("as done"))) {
-            if (voiceCompletion.matches(loweredText)) {
-              val notificationId = notificationIdForNoteId(noteRef.noteId)
-              context.system.notifier !! CompleteNotification(notificationId)
 
-              val today = context.system.clock.today()
-              val nextTrigger = context.system.clock.today().plusDays(intervalDays)
-              manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
-              timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
-              context.actorContext.log.info(s"Prepending today ($today) and setting timer for $nextTrigger")
-              noteRef.prepend(today, Some(nextTrigger), Some(noteId))
+        maybeVoiceCompletion match {
+          case None => context.actorContext.log.warn("No voice completion config, should not have subscribed to Gossiper and should not have received this message! Bug!")
+          case Some(voiceCompletion) =>
+            context.actorContext.log.debug(s"Using $voiceCompletion to check...")
+            if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("as done"))) {
+              if (voiceCompletion.matches(loweredText)) {
+                val notificationId = notificationIdForNoteId(noteRef.noteId)
+                context.system.notifier !! CompleteNotification(notificationId)
+
+                val today = context.system.clock.today()
+                val nextTrigger = context.system.clock.today().plusDays(intervalDays)
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
+                timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
+                context.actorContext.log.info(s"Prepending today ($today) and setting timer for $nextTrigger")
+                noteRef.prepend(today, Some(nextTrigger), Some(noteId))
+              } else {
+                context.actorContext.log.info("Mark as completion request detected, but not a match")
+              }
             } else {
-              context.actorContext.log.info("Mark as completion request detected, but not a match")
+              context.actorContext.log.debug("voice note not intended to mark something as completed")
             }
-          } // else it's not meant for this type of actor
         }
+
 
         Tinker.steadily
 
