@@ -211,7 +211,7 @@ object PurpleAirCloudAPI {
             context.log.error("HTTP request failed", exception)
           case Success(httpResponse) =>
             // FIXME: does this not contain the cost?
-            context.log.warn(s"HTTP request succeeded, piping to self now to unmarshal")
+            context.log.info(s"HTTP request succeeded, piping to self now to unmarshal")
             val umarshal: Unmarshal[ResponseEntity] = Unmarshal(httpResponse.entity)
             val fut: Future[String] = umarshal.to[String]
             context.pipeToSelf(fut)(ReceiveUnmarshalling)

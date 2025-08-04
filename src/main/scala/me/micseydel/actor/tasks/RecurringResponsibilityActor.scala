@@ -34,17 +34,26 @@ object RecurringResponsibilityActor {
   def apply(noteId: String, manager: SpiritRef[RecurringResponsibilityManager.Track])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] =
     AttentiveNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
+      implicit val c: TinkerClock = context.system.clock
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
 
       implicit val l: Logger = context.actorContext.log
       l.debug("setting up")
 
       noteRef.getDocument() match {
-        case Success(Document(intervalDays, markedAsDone, _, maybeVoiceCompletion)) =>
+        case Success(d@Document(intervalDays, markedAsDone, _, maybeVoiceCompletion)) =>
           if (maybeVoiceCompletion.nonEmpty) {
             context.actorContext.log.info("Subscribing to Gossiper")
             Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(ReceiveTranscription))
           }
+
+          val nextTriggerDay = (d.latestEntry match {
+            case Some(latestEntry) => latestEntry
+            case None => context.system.clock.today()
+          }).plusDays(intervalDays)
+
+          manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTriggerDay)
+          timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, TimerUp, Some(TimerUp))
 
           if (markedAsDone) {
             val today = context.system.clock.today()
@@ -160,7 +169,7 @@ object RecurringResponsibilityActor {
 
         context.system.notifier !! NewNotification(Notification(
           context.system.clock.now(),
-          s"${noteRef.noteId} eligible since ${context.system.clock.today()}",
+          s"${noteRef.noteId} eligible since ${context.system.clock.today()}", // FIXME: this is not correct!
           None,
           NotificationId(notificationId),
           Nil, // FIXME: specify side-effects in the yaml?
