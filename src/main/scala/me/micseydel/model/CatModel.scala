@@ -1,8 +1,7 @@
 package me.micseydel.model
 
-import me.micseydel.Common
-import me.micseydel.vault.NoteId
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat}
+import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 
 import java.time.ZonedDateTime
 
@@ -93,19 +92,17 @@ case class LitterUsedEvent(when: ZonedDateTime, litterBoxChoice: LitterBoxChoice
 case class LitterSiftedEvent(when: ZonedDateTime, litterBoxChoice: LitterBoxChoice, contents: SiftedContents) extends CatObservationEvent
 
 object PostHocLitterObservationEventJsonProtocol extends DefaultJsonProtocol {
-  import Common.ZonedDateTimeJsonFormat
   import CatObservationEvent.LitterBoxChoiceFormat
   implicit val PostHocLitterObservationEventJsonFormat: JsonFormat[PostHocLitterObservationEvent] = jsonFormat3(PostHocLitterObservationEvent)
 }
 
 object LitterUsedEventJsonProtocol extends DefaultJsonProtocol {
-  import Common.ZonedDateTimeJsonFormat
   import CatObservationEvent.LitterBoxChoiceFormat
   implicit val LitterUsedEventJsonFormat: JsonFormat[LitterUsedEvent] = jsonFormat3(LitterUsedEvent)
 }
 
 object LitterSiftedEventJsonProtocol extends DefaultJsonProtocol {
-  import Common.ZonedDateTimeJsonFormat
+
 
   implicit object LitterBoxChoiceFormat extends RootJsonFormat[LitterBoxChoice] {
     def write(t: LitterBoxChoice): JsString = JsString(t.toString)

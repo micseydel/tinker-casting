@@ -103,7 +103,7 @@ private object LitterGraphHelper {
 
   private object DocumentJsonProtocol extends DefaultJsonProtocol {
 
-    import me.micseydel.Common.CommonJsonProtocol.LocalDateTypeJsonFormat
+    import me.micseydel.util.JsonUtil.CommonJsonProtocol.LocalDateTypeJsonFormat
 
     implicit val litterSummaryForDayJsonFormat: RootJsonFormat[LitterCharts.LitterSummaryForDay] = jsonFormat4(LitterSummaryForDay)
     implicit val documentMapFormat: RootJsonFormat[Map[LocalDate, LitterCharts.LitterSummaryForDay]] = mapFormat[LocalDate, LitterSummaryForDay]

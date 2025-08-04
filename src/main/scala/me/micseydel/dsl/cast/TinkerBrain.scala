@@ -4,7 +4,6 @@ import akka.actor.{ActorPath, Cancellable}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import cats.data.NonEmptyList
-import me.micseydel.Common
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TinkerBrain.{PersistedMessage, SentMessage, TranscriptionBroadcast}
 import me.micseydel.dsl.cast.TinkerBrainUtil.{cleanerUri, graphForLast3Days, toURIish}
@@ -562,7 +561,7 @@ private object RealtimeFrameBatcher {
 
 object TinkerBrainJsonProtocol extends DefaultJsonProtocol {
 
-  import me.micseydel.Common.ZonedDateTimeJsonFormat
+  import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 
   implicit val sentMessageFormat: JsonFormat[SentMessage] = jsonFormat4(SentMessage.apply(_: ZonedDateTime, _: String, _: String, _: String))
   import NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat

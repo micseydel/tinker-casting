@@ -158,7 +158,7 @@ object RemindMeListenerActor {
 
   private case object StateJsonProtocol extends DefaultJsonProtocol {
 
-    import me.micseydel.Common.ZonedDateTimeJsonFormat
+    import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 
     implicit val linkIdFormat: JsonFormat[NoteId] = LinkIdJsonProtocol.noteIdFormat
 

@@ -2,14 +2,15 @@ package me.micseydel.actor.notifications
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.actor.notifications.NotificationCenterManager._
+import me.micseydel.actor.notifications.NotificationCenterManager.*
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, Tinkerer}
+import me.micseydel.util.JsonUtil.{OptionalJsonFormat, ZonedDateTimeJsonFormat}
 import me.micseydel.util.MarkdownUtil
-import me.micseydel.vault._
+import me.micseydel.vault.*
 import me.micseydel.vault.persistence.TypedJsonRef
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
@@ -251,7 +252,6 @@ case class NotificationCenterState(map: Map[String, Notification]) {
 object NotificationCenterManagerJsonFormat extends DefaultJsonProtocol {
 
   import LinkIdJsonProtocol.noteIdFormat
-  import me.micseydel.Common.{OptionalJsonFormat, ZonedDateTimeJsonFormat}
   import me.micseydel.actor.perimeter.HueControlJsonFormat.HueControlCommandJsonFormat
 
   implicit val pushNotificationJsonFormat: RootJsonFormat[PushNotification] = jsonFormat2(PushNotification)

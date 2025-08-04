@@ -2,8 +2,8 @@ package me.micseydel.dsl.cast.chronicler
 
 import ChroniclerMOC.{AutomaticallyIntegrated, NeedsAttention, NoteState, TranscribedMobileNoteEntry}
 import ChroniclerMOCDailyNote.{AddNote, ListenerAcknowledgement, PostInitMessage}
+import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 import spray.json._
-import me.micseydel.Common.ZonedDateTimeJsonFormat
 import me.micseydel.vault.LinkIdJsonProtocol.noteIdFormat
 
 object TranscribedMobileNotesJsonProtocol extends DefaultJsonProtocol {

@@ -109,7 +109,7 @@ object OllamaModel {
 
 object OllamaJsonFormat extends DefaultJsonProtocol {
 
-  import me.micseydel.Common.ZonedDateTimeJsonFormat
+  import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 
   implicit val detailsFormat: RootJsonFormat[Details] = jsonFormat5(Details)
   implicit val modelFormat: RootJsonFormat[Model] = jsonFormat5(Model)

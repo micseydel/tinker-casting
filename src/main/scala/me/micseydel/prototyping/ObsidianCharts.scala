@@ -1,7 +1,7 @@
 package me.micseydel.prototyping
 
-import spray.json.DefaultJsonProtocol._
-import spray.json.{DeserializationException, JsNumber, JsValue, RootJsonFormat, enrichAny}
+import spray.json.DefaultJsonProtocol.*
+import spray.json.enrichAny
 
 object ObsidianCharts {
   def chart(labels: List[String], series: List[Series[_]]): String = {
@@ -22,6 +22,10 @@ object ObsidianCharts {
        |  series:
        |$formattedSeries
        |```""".stripMargin
+  }
+
+  def chart(series: List[Series[_]]): String = {
+    chart(series.map(_ => ""), series)
   }
 
   def chart(series: Series[_]): String = {

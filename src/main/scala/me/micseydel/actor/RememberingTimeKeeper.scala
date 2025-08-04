@@ -112,7 +112,7 @@ object RememberingTimeKeeper {
 
   private object StateJsonFormat extends DefaultJsonProtocol {
     def apply[M](implicit jsonFormat: JsonFormat[M]): JsonFormat[State[M]] = {
-      import me.micseydel.Common.ZonedDateTimeJsonFormat
+      import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
       implicit val entryJsonFormat: JsonFormat[Pending[M]] = jsonFormat3(Pending[M])
       jsonFormat1(State[M])
     }

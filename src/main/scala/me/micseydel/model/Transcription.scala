@@ -1,5 +1,6 @@
 package me.micseydel.model
 
+import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
 import spray.json.{DefaultJsonProtocol, JsonFormat}
 
@@ -36,7 +37,6 @@ case class TranscriptionCapture(whisperResult: WhisperResult, captureTime: Zoned
 object TranscriptionCapture {
   object TranscriptionCaptureJsonProtocol extends DefaultJsonProtocol {
     import WhisperResultJsonProtocol.whisperResultFormat
-    import me.micseydel.Common.ZonedDateTimeJsonFormat
 
     implicit val transcriptionCaptureFormat: JsonFormat[TranscriptionCapture] = jsonFormat2(TranscriptionCapture.apply)
   }

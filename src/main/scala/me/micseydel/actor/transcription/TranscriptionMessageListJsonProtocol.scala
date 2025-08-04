@@ -3,6 +3,7 @@ package me.micseydel.actor.transcription
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper.{Message, TranscriptionCompletedEvent}
 import me.micseydel.model.WhisperResultJsonProtocol
+import me.micseydel.util.JsonUtil.{PathJsonFormat, ZonedDateTimeJsonFormat}
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 case object TranscriptionMessageListJsonProtocol extends DefaultJsonProtocol {
@@ -10,7 +11,6 @@ case object TranscriptionMessageListJsonProtocol extends DefaultJsonProtocol {
   implicit object TranscriptionNoteWrapperMessageJsonFormat extends RootJsonFormat[Message] {
 
     import WhisperResultJsonProtocol.whisperResultFormat
-    import me.micseydel.Common.{PathJsonFormat, ZonedDateTimeJsonFormat}
 
     implicit val noticedAudioNoteFormat: RootJsonFormat[NoticedAudioNote] = jsonFormat4(NoticedAudioNote)
     implicit val transcriptionCompletedEventFormat: RootJsonFormat[TranscriptionCompletedEvent] = jsonFormat1(TranscriptionCompletedEvent)

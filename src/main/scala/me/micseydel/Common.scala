@@ -3,17 +3,16 @@ package me.micseydel
 import cats.data.ValidatedNel
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.dsl.TinkerClock
-import spray.json.{DefaultJsonProtocol, DeserializationException, JsNull, JsNumber, JsString, JsValue, JsonFormat, RootJsonFormat}
 
 import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, Path}
+import java.time.*
 import java.time.format.DateTimeFormatter
-import java.time._
 import javax.sound.sampled.AudioSystem
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, Future}
-import scala.jdk.StreamConverters._
+import scala.jdk.StreamConverters.*
 import scala.util.{Failure, Success}
 
 /**
@@ -91,44 +90,6 @@ object Common {
       .atZone(ZoneId.systemDefault())
   }
 
-  implicit object ZonedDateTimeJsonFormat extends RootJsonFormat[ZonedDateTime] {
-    def write(t: ZonedDateTime): JsString = JsString(t.toString)
-
-    def read(value: JsValue): ZonedDateTime = value match {
-      case JsString(s) =>
-        ZonedDateTime.parse(s)
-      case JsNumber(value) =>
-        try {
-          ZonedDateTime.ofInstant(Instant.ofEpochSecond(value.longValue), ZoneId.systemDefault)
-        } catch {
-          case e: DateTimeException =>
-            throw DeserializationException(s"Failed to extract ZonedDateTime from value $value", e)
-        }
-      case _ =>
-        throw DeserializationException("Expected a string or epoch number")
-    }
-  }
-
-  implicit object PathJsonFormat extends RootJsonFormat[Path] {
-    def write(t: Path): JsString = JsString(t.toString)
-
-    def read(value: JsValue): Path = value match {
-      case JsString(s) => Path.of(s)
-      case _ => throw DeserializationException("Expected a string")
-    }
-  }
-
-  object CommonJsonProtocol extends DefaultJsonProtocol {
-    implicit object LocalDateTypeJsonFormat extends RootJsonFormat[LocalDate] {
-      def write(e: LocalDate): JsString = JsString(e.toString)
-
-      def read(value: JsValue): LocalDate = value match {
-        case JsString(s) => LocalDate.parse(s)
-        case _ => throw DeserializationException(s"An ISO local date")
-      }
-    }
-  }
-
   /**
    * Returns in SECONDS
    */
@@ -171,21 +132,6 @@ object Common {
     val minutes = duration.toMinutes % 60
 
     s"$hours hours and $minutes minutes ago"
-  }
-
-  object OptionalJsonFormat {
-    def apply[Item](itemFormat: JsonFormat[Item]): JsonFormat[Option[Item]] = new JsonFormat[Option[Item]] {
-
-      override def write(optionItem: Option[Item]): JsValue = optionItem match {
-        case Some(item) => itemFormat.write(item)
-        case None => JsNull
-      }
-
-      override def read(json: JsValue): Option[Item] = json match {
-        case JsNull => None
-        case other => Some(itemFormat.read(other))
-      }
-    }
   }
 
   def await[FutureResult, FinalResult](fut: Future[FutureResult], onSuccess: FutureResult => FinalResult)(implicit duration: FiniteDuration): FinalResult = {

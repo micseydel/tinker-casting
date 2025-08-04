@@ -28,9 +28,9 @@ case object KibbleEventListJsonProtocol extends DefaultJsonProtocol {
   }
 
   import LinkIdJsonProtocol.noteIdFormat
-  import me.micseydel.Common.ZonedDateTimeJsonFormat
+  import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 
-//  implicit val kibbleRefilledJsonFormat: RootJsonFormat[KibbleRefill] = jsonFormat4(KibbleRefill)
+  //  implicit val kibbleRefilledJsonFormat: RootJsonFormat[KibbleRefill] = jsonFormat4(KibbleRefill)
 //  implicit val kibbleMeasuredJsonFormat: RootJsonFormat[RemainingKibbleMeasure] = jsonFormat4(RemainingKibbleMeasure)
 //  implicit val kibbleDiscardedJsonFormat: RootJsonFormat[KibbleDiscarded] = jsonFormat3(KibbleDiscarded)
 //

@@ -52,7 +52,8 @@ object HungerTracker {
 }
 
 object HungerTrackJsonProtocol extends DefaultJsonProtocol {
-  import me.micseydel.Common.ZonedDateTimeJsonFormat
+
+  import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
   private implicit val lastAteFormat: RootJsonFormat[LastAte] = jsonFormat1(LastAte)
   implicit val hungerStateJsonFormat: RootJsonFormat[HungerState] = jsonFormat2(HungerState)
 }
