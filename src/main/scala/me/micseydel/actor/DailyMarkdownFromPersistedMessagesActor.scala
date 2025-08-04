@@ -35,7 +35,7 @@ object DailyMarkdownFromPersistedMessagesActor {
       case StoreAndRegenerateMarkdown(wrapped) =>
         jsonlRef.appendAndGet(wrapped) match {
           case Failure(exception) =>
-            throw new RuntimeException(s"appendAndGet failed for $jsonlRef", exception)
+            context.actorContext.log.error(s"appendAndGet failed for $jsonlRef", exception)
           case Success(latest) =>
             val markdown = messagesToMarkdown(latest, context.system.clock)
             noteRef.setMarkdown(markdown) match {

@@ -8,7 +8,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.PurpleAirCloudAPI.{Request, SimplePurpleAirResult}
+import me.micseydel.actor.PurpleAirCloudAPI.{SimplePurpleAirResult, PurpleAirBatchResult, Request}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
@@ -32,7 +32,7 @@ object PurpleAirCloudActor {
 
   private case class ReceivePing(ping: Ping) extends Message
 
-  case class ReceiveApiResult(simplePurpleAirResults: NonEmptyList[SimplePurpleAirResult]) extends Message
+  final case class ReceiveApiResult(batchResults: PurpleAirBatchResult) extends Message
 
   //
 
@@ -69,16 +69,19 @@ object PurpleAirCloudActor {
 
         Tinker.steadily
 
-      case r@ReceiveApiResult(simplePurpleAirResults) =>
-
+      case r@ReceiveApiResult(batchResult: PurpleAirBatchResult) =>
         dailyNotesAssistant !! DailyNotesRouter.Envelope(
           DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(r),
-          r.simplePurpleAirResults.head.time // FIXME: hack, what's the data model?
+          batchResult.time
         )
 
-        noteRef.setMarkdown(s"- [ ] Do fetch\n    - Last generated ${context.system.clock.now()}\n\n![[${noteRef.noteId.id} (${context.system.clock.today()})]]\n\n---\n\n" + simplePurpleAirResults.map {
-          case SimplePurpleAirResult(time, index, pm25, pm25_10minute, pm25_30minute, pm25_60minute, pm25_6hour, pm25_24hour) =>
-            s"""- index: $index @ $time
+        noteRef.setMarkdown(s"- [ ] Do fetch\n    - Last generated ${context.system.clock.now()} with batch result server time (${batchResult.time}\n\n![[${noteRef.noteId.id} (${context.system.clock.today()})]]\n\n---\n\n" + batchResult.results.map {
+          case SimplePurpleAirResult(index, pm25, pm25_10minute, pm25_30minute, pm25_60minute, pm25_6hour, pm25_24hour) =>
+            val sensorIndexToLabel = sensors.map {
+              case ConfigEntry(index, label) => index -> label
+            }.toList.toMap
+            val name = sensorIndexToLabel.get(index).flatten.map(label => s"$label ($index)").getOrElse(index)
+            s"""- index: $name
                |    - pm25: $pm25
                |    - pm25_10minute: $pm25_10minute
                |    - pm25_30minute: $pm25_30minute
@@ -96,11 +99,10 @@ object PurpleAirCloudActor {
   //
 
   private object ReceiveApiResultJsonProtocol extends DefaultJsonProtocol {
-
     import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
-
-    implicit val simplePurpleAirResultJsonFormat: JsonFormat[SimplePurpleAirResult] = jsonFormat8(SimplePurpleAirResult)
-    implicit val nonEmptySimplePurpleAirResultJsonFormat: JsonFormat[NonEmptyList[SimplePurpleAirResult]] = JsonUtil.nonEmptyListJsonFormat()
+    implicit val simplePurpleAirResultJsonFormat: JsonFormat[SimplePurpleAirResult] = jsonFormat7(SimplePurpleAirResult)
+    implicit val nonEmptyNewSimplePurpleAirResultJsonFormat: JsonFormat[NonEmptyList[SimplePurpleAirResult]] = JsonUtil.nonEmptyListJsonFormat()
+    implicit val purpleAirBatchResultJsonFormat: RootJsonFormat[PurpleAirBatchResult] = jsonFormat2(PurpleAirBatchResult)
     implicit val receiveApiResultJsonFormat: RootJsonFormat[ReceiveApiResult] = jsonFormat1(ReceiveApiResult)
   }
 
@@ -109,7 +111,7 @@ object PurpleAirCloudActor {
       case ConfigEntry(index, label) => index -> label
     }.toList.toMap
 
-    val unwrapped = messages.map(_.simplePurpleAirResults)
+    val unwrapped: List[NonEmptyList[SimplePurpleAirResult]] = messages.map(_.batchResults).sortBy(_.time).map(_.results)
 
     val batchedByIndex = unwrapped.foldRight(Map[Int, NonEmptyList[SimplePurpleAirResult]]()) { (singleBatchMeasurement, soFar) =>
       val batchedByIndexAccumulator: Map[Int, NonEmptyList[SimplePurpleAirResult]] = singleBatchMeasurement.toList.foldRight(soFar) { (sensorReading, accumulator) =>
@@ -191,9 +193,11 @@ object PurpleAirCloudAPI {
 
   //
 
-  case class SimplePurpleAirResult(time: ZonedDateTime, index: Int, pm25: Float, pm25_10minute: Float, pm25_30minute: Float, pm25_60minute: Float, pm25_6hour: Float, pm25_24hour: Float)
+  case class SimplePurpleAirResult(index: Int, pm25: Float, pm25_10minute: Float, pm25_30minute: Float, pm25_60minute: Float, pm25_6hour: Float, pm25_24hour: Float)
 
-  def apply(apiKey: String, replyTo: SpiritRef[NonEmptyList[SimplePurpleAirResult]]): Behavior[Message] = Behaviors.setup { context =>
+  case class PurpleAirBatchResult(time: ZonedDateTime, results: NonEmptyList[SimplePurpleAirResult])
+
+  def apply(apiKey: String, replyTo: SpiritRef[PurpleAirBatchResult]): Behavior[Message] = Behaviors.setup { context =>
     implicit val s: ActorSystem[?] = context.system
 
     Behaviors.receiveMessage {
@@ -225,20 +229,21 @@ object PurpleAirCloudAPI {
             context.log.info("Unmarshalling")
             value.parseJson match {
               case JsObject(fields) =>
-                val maybeResult: List[SimplePurpleAirResult] = {
+                val time = fields.get("data_time_stamp") match {
+                  case Some(JsNumber(value)) =>
+                    // FIXME: systemDefault should instead probably be in the context/clock
+                    ZonedDateTime.ofInstant(Instant.ofEpochSecond(value.toLong), ZoneId.systemDefault())
+                  case other => throw net.jcazevedo.moultingyaml.DeserializationException(s"Needed a `data_time_stamp` number, time since epoche but got $other")
+                }
 
-                  val time = fields.get("data_time_stamp") match {
-                    case Some(JsNumber(value)) =>
-                      ZonedDateTime.ofInstant(Instant.ofEpochSecond(value.toLong), ZoneId.systemDefault())
-                    case other => throw net.jcazevedo.moultingyaml.DeserializationException(s"Needed a `data_time_stamp` number, time since epoche but got $other")
-                  }
-
-                  fields.get("data") match {
+                val maybeResult: Option[PurpleAirBatchResult] = {
+                  val sensors = fields.get("data") match {
                     case Some(JsArray(elements)) =>
                       elements.toList.flatMap {
                         case JsArray(Vector(JsNumber(index), JsNumber(pm25), JsNumber(pm25_10minute), JsNumber(pm25_30minute), JsNumber(pm25_60minute), JsNumber(pm25_6hour), JsNumber(pm25_24hour))) =>
-                          List(SimplePurpleAirResult(time, index.toInt, pm25.toFloat, pm25_10minute.toFloat, pm25_30minute.toFloat, pm25_60minute.toFloat, pm25_6hour.toFloat, pm25_24hour.toFloat))
+                          Some(SimplePurpleAirResult(index.toInt, pm25.toFloat, pm25_10minute.toFloat, pm25_30minute.toFloat, pm25_60minute.toFloat, pm25_6hour.toFloat, pm25_24hour.toFloat))
                         case other =>
+                          // FIXME: provide fields.get("fields") which should be clarifying
                           context.log.warn(s"Expected an array with fields {index, pm25, pm25_10minute, pm25_30minute, pm25_60minute, pm25_6hour, pm25_24hour} but got $other")
                           Nil
                       }
@@ -250,15 +255,22 @@ object PurpleAirCloudAPI {
                       context.log.warn(s"Field `data` was not an array: $other")
                       Nil
                   }
+
+                  sensors match {
+                    case head :: tail =>
+                      Some(PurpleAirBatchResult(time, NonEmptyList(head, tail)))
+                    case Nil =>
+                      context.log.warn("data contained an empty list")
+                      None
+                  }
                 }
 
                 maybeResult match {
-                  case head :: tail =>
-                    val result = NonEmptyList(head, tail)
+                  case Some(result) =>
                     context.log.info(maybeResult.mkString("\n"))
                     implicit val sender: Sender = Sender(context.self.path)
                     replyTo !!! result
-                  case Nil =>
+                  case None =>
                 }
 
               case other =>
