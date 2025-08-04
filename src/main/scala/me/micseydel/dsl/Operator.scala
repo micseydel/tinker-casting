@@ -68,7 +68,7 @@ object Operator {
             context.log.info(s"Sending new subscriber ${subscriber.path} to GmailActor...")
             gmailActorRef !!! GmailActor.Subscribe(subscriber)
           case None =>
-            context.log.warn(s"New subscriber ${subscriber.path} to gmail but no registered GmailActor")
+            context.log.info(s"New subscriber ${subscriber.path} to gmail but no registered GmailActor - fine on startup, but may be an issue if it's happening more than then")
         }
         Behaviors.same
 

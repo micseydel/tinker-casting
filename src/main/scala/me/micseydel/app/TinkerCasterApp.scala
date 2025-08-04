@@ -1,20 +1,19 @@
 package me.micseydel.app
 
 import cats.data.Validated
-import me.micseydel.actor._
+import me.micseydel.actor.*
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.tasks.RecurringResponsibilityManager
 import me.micseydel.app.AppConfiguration.AppConfig
+import me.micseydel.dsl.*
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl._
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.VaultPath
 
 import java.time.ZonedDateTime
 import scala.annotation.unused
@@ -39,7 +38,7 @@ object TinkerCasterApp {
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
         centralCastFactory(chroniclerConfig)(_, _), // effectively globals
-        UserTinkerCast()(_: EnhancedTinker[MyCentralCast])
+        UserTinkerCast(config.purpleAirReadAPIKey)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
@@ -63,7 +62,7 @@ case class MyCentralCast(
 
 
 object UserTinkerCast {
-  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply(purpleAirApiKey: Option[String])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
@@ -94,6 +93,14 @@ object UserTinkerCast {
 
     @unused // driven internally by a note
     val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
+
+    purpleAirApiKey match {
+      case Some(value) =>
+        context.cast(PurpleAirCloudActor(value), "PurpleAirCloudActor")
+        context.actorContext.log.info("Started PurpleAirCloudActor")
+      case None => context.actorContext.log.info("No PurpleAir API key found, not starting PurpleAirCloudActor")
+    }
+
 
     Tinker.receiveMessage {
       case ReceiveMqttEvent(topic, payload) =>

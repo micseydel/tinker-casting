@@ -12,6 +12,7 @@ object AppConfiguration {
     eventReceiverHost: String,
     eventReceiverPort: Int,
     mqttConfig: Option[MqttConfig],
+    purpleAirReadAPIKey: Option[String],
   )
 
   /**
@@ -41,7 +42,8 @@ object AppConfiguration {
           vaultRoot,
           config.getString("transcription.whisper.event-receiver.host"),
           config.getInt("transcription.whisper.event-receiver.port"),
-          maybeMqttConfig
+          maybeMqttConfig,
+          getOptionalString(config, "purpleAir.readAPIKey")
         ))
     }
   }
