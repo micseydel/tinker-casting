@@ -1,0 +1,6 @@
+- Install npm if needed
+	- `brew install npm`
+- Navigate to `tinkerbrain`
+	- `cd source_code/tinkerplot/tinkerbrain`
+- `npm install`
+- `npm run dev` (every time)

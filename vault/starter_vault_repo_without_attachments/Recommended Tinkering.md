@@ -4,7 +4,7 @@ aliases:
 ---
 # Pre-reqs
 
-- Per [[README]],
+- Per [[Getting Started]],
 	- [ ] `tinkerenv.bash` is being used to bring up the Scala server
 	- [ ] `transcriber.py` is active (the Whisper model also takes a moment to load)
 - [ ] Find+replace all
@@ -16,7 +16,7 @@ aliases:
 # Procedure
 
 - Create a new audio note for each experiment below, with `python rec_unlimited_play.py ~/Tinker\ Casting\ Starter\ Kit/Tinker\ Casting\ Starter\ Vault/attachments/mobile_audio_captures/`
-	- (In [[README|Getting Started]], we used tinker_demo.py which integrates rec_unlimited_play.py (which we're using here) and transcribe_and_generate_markdown.py)
+	- (In [[Getting Started|Getting Started]], we used tinker_demo.py which integrates rec_unlimited_play.py (which we're using here) and transcribe_and_generate_markdown.py)
 	- (rec_unlimited_play.py also allows multiple recordings without having to reload the Whisper model every time, which makes it much faster)
 - For each experiment, make a voice note for the quoted sentence at the top
 	- recordings shouldn't take more than a moment to appear

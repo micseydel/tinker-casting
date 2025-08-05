@@ -1,0 +1,5 @@
+- Initial motivation: so people wouldn't have to care so much about Whisper
+- Whisper cannot be dockerized, at least on macOS, last I checked
+- Lots of non-network I/O - file *watching*, sound I/O, Bluetooth
+- It's not something I'm familiar with - could start with Wyze, and maybe Rasa, but it seems like it would add more than encapsulate complexity at this point
+- (if I'm *wrong* about something, feel free to say so with a citation)

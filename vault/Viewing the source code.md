@@ -1,0 +1,25 @@
+## Viewing the source
+
+- **Notes:**
+	- non-coders can return to this section later
+	- if you skipped compilation above, IntelliJ will not work as well until an sbt compilation completes
+- Setup [IntelliJ community edition](https://www.jetbrains.com/idea/download/?section=mac) (for example via [Jetbrains Toolbox](https://www.jetbrains.com/toolbox-app/))
+	- Open `tinker-casting`
+	- ("Trust Project" is [recommended](https://www.jetbrains.com/help/idea/2024.2/project-security.html?Project_security))
+	- Open TinkerCasterApp.scala
+	- Install Scala Plugin
+		- I was prompted, but: Cmd+, for settings, search "plugins"
+	- Setup Scala SDK (as prompted)
+		- ![[Pasted image 20241123171341.png]]
+		- Download 2.12.20
+	- File > Project structure (or Cmd+;)
+		- Set Java SDK to version 17
+			- ![[Pasted image 20240922144608.png]]
+			- *My first go-through, it was in "Detected SDKs"*
+	- Load sbt Project
+		- It's the hexagon near the top right of the window
+		- ![[Pasted image 20241123172015.png]]
+		- ![[Pasted image 20241123172022.png|240]]
+		- Once expanded, use the button to the left of the plus (+) symbol to *Sync All sbt Projects*
+		- ![[Pasted image 20241123172045.png|480]]
+- PyCharm is better for the Python code, but the Python code gets fewer updates so 🤷
