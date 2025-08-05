@@ -34,22 +34,43 @@ This is intended to be viewed with [Obsidian](https://obsidian.md/) although Obs
 	- Reminders
 	- [[Hue Smart Lights]]
 	- Cat litter tracking
+		- Notification center
+		- Summary report, audit, chart
+			- [[Charts Plugin]]
+- Recurring Responsibilities
+	- Voice completion
 - Notification center
 	- *enhancements*
 		- [[Chime Sounds]]
 		- [[Hue Smart Lights]]
 		- [[Ntfy for mobile Push Notifications]] (requires internet)
+	- as an Obsidian pane
+		- with a custom icon
 - [[Tinkerbrain visualization]]
+	- [ ] *helping with debugging*
 - Air quality
 	- [[PurpleAirCloudAPI]] (requires API key)
 	- PurpleAir local (if you have the hardware for it)
 	- AirGradient local
 	- Aranet4 local Bluetooth
-- Koroko voice synthesis
-- LocalLlama
+- *Google*
+	- Gmail
+	- Google Calendar
+- Barely-integrated AI
+	- Koroko voice synthesis
+	- Ollama
+		- *who no OpenAI integration*
+- Wyze smart plugs
 - ([[Python setup]])
+- (no longer maintained)
+	- Fitbit
 - ~
 	- ==[[Recommended Tinkering]]== (open this note in a new tab and then come back)
+
+# Future plans
+
+- Rasa flow/loop
+- "Projects" as a more coherent idea
 
 # Technicals
 
