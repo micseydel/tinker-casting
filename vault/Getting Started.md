@@ -53,6 +53,7 @@ This is intended to be viewed with [Obsidian](https://obsidian.md/) although Obs
 	- PurpleAir local (if you have the hardware for it)
 	- AirGradient local
 	- Aranet4 local Bluetooth
+- Polar H10 heart rate
 - *Google*
 	- Gmail
 	- Google Calendar
@@ -67,10 +68,17 @@ This is intended to be viewed with [Obsidian](https://obsidian.md/) although Obs
 - ~
 	- ==[[Recommended Tinkering]]== (open this note in a new tab and then come back)
 
+# How to use this vault
+
+- ...atomic notes...
+
 # Future plans
 
 - Rasa flow/loop
 - "Projects" as a more coherent idea
+- MQTT
+	- Used for Owntracks integration - until I realized *that* still uses Google Location Services
+	- May re-integrate and use in favor of the "event logger"
 
 # Technicals
 
