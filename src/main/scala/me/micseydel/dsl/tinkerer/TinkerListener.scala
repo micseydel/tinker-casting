@@ -7,6 +7,7 @@ import me.micseydel.actor.RasaActor
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.Gossiper.Subscription
 import me.micseydel.dsl.cast.chronicler.Chronicler.ListenerAcknowledgement
 import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerContext}
 import me.micseydel.model.{NotedTranscription, RasaResult}
@@ -29,10 +30,10 @@ object TinkerListener {
   case class Acknowledged(listenerAcknowledgement: ListenerAcknowledgement) extends ListenerResult
 
   // FIXME: TinkerListener is NOT clearly in userspace, should fix
-  def simpleStateless(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
+  def simpleStateless(wrapper: SpiritRef[NotedTranscription] => Subscription)(behavior: (TinkerContext[_], NotedTranscription) => ListenerResult)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
 
-    Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(TranscriptionEvent))
+    Tinker.userExtension.gossiper !! wrapper(context.messageAdapter(TranscriptionEvent))
 
     Tinker.receiveMessage {
       case TranscriptionEvent(notedTranscription) =>

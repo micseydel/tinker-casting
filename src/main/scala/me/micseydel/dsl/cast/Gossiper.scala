@@ -29,6 +29,8 @@ object Gossiper {
 
   final case class Vote(noteId: NoteId, confidence: Either[Double, Option[Boolean]], voter: SpiritRef[NonEmptyList[Vote]], voteTime: ZonedDateTime, comments: Option[String]) {
     override def toString = s"""Vote($noteId, $confidence, ${toNormalizedUri(voter.path.toSerializationFormat).drop(35)}, ${voteTime.format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))}, $comments)"""
+
+    def voterPathContains(partialPath: String): Boolean = voter.path.toSerializationFormat.contains(partialPath)
   }
 
   sealed trait Subscription extends Message {

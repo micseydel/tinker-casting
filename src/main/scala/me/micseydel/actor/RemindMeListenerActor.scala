@@ -109,8 +109,8 @@ object RemindMeListenerActor {
 
             Tinker.steadily
 
-          case WhisperResult(WhisperResultContent(text, _), _) =>
-            Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVotes), Some("trigger phrase not detected"))
+          case WhisperResult(WhisperResultContent(text, _), meta) =>
+            Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(false), context.messageAdapter(ReceiveVotes), Some(s"trigger phrase not detected (${meta.model})"))
             if (context.actorContext.log.isDebugEnabled) {
               context.actorContext.log.debug(s"trigger phrase was not detected, ignoring ($text)")
             }

@@ -2,15 +2,15 @@ package me.micseydel.actor.kitties.kibble
 
 import cats.data.NonEmptyList
 import me.micseydel.NoOp
-import me.micseydel.actor.kitties.kibble.KibbleModel.{Circular1, Circular2, KibbleContainer, RectangularL, RectangularS}
+import me.micseydel.actor.kitties.kibble.KibbleModel.*
 import me.micseydel.app.MyCentralCast
-import me.micseydel.dsl.{EnhancedTinker, Tinker, TinkerClock, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.model.NotedTranscription
+import me.micseydel.dsl.{EnhancedTinker, TinkerClock, TinkerContext}
+import me.micseydel.model.{LargeModel, NotedTranscription, WhisperModel}
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
@@ -28,20 +28,21 @@ object KibbleManagerActor {
 
   private[kitties] final case class MaybeHeardKibbleMention(notedTranscription: NotedTranscription) extends Message
 
-  sealed trait Event extends Message {
+  sealed trait StructuredEvent extends Message {
     def time: ZonedDateTime
+    def whisperModel: WhisperModel
   }
 
-  private[kitties] sealed trait KibbleContainerMeasurement extends Event {
+  private[kitties] sealed trait KibbleContainerMeasurement extends StructuredEvent {
     def container: KibbleContainer
     def massGrams: Int
   }
 
-  private[kitties] case class KibbleRefill(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends KibbleContainerMeasurement
+  private[kitties] case class KibbleRefill(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId, whisperModel: WhisperModel) extends KibbleContainerMeasurement
 
-  private[kitties] case class RemainingKibbleMeasure(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends KibbleContainerMeasurement
+  private[kitties] case class RemainingKibbleMeasure(container: KibbleContainer, massGrams: Int, time: ZonedDateTime, noteId: NoteId, whisperModel: WhisperModel) extends KibbleContainerMeasurement
 
-  private[kitties] case class KibbleDiscarded(massGrams: Int, time: ZonedDateTime, noteId: NoteId) extends Event
+  private[kitties] case class KibbleDiscarded(massGrams: Int, time: ZonedDateTime, noteId: NoteId, whisperModel: WhisperModel) extends StructuredEvent
 
   private val NoteName = "Kibble Tinkering 2.0"
 
@@ -69,55 +70,77 @@ object KibbleManagerActor {
         Tinker.userExtension.gossiper !! notedTranscription.noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Definitely maybe"))
         Tinker.steadily
 
-      case KibbleRefill(container, mass, time, noteId) =>
-        val text = s"Refilled $container to ${mass}g"
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
-        noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
-        noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
+//      case se: StructuredEvent if se.whisperModel != LargeModel =>
+//        ???
+
+      // FIXME: awful hacks below to JUST VOTE for base transcriptions, and only update markdown based on large
+
+      case KibbleRefill(container, mass, time, noteId, model) =>
+        val nextBehavior: Ability[Message] = if (model == LargeModel) {
+          val text = s"Refilled $container to ${mass}g"
+          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+          noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+          noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
+          behavior(cachedContainers.updated(container, mass))
+        } else {
+          context.actorContext.log.info(s"Received a $model transcription (non-large), using it for voting but JUST voting")
+          Tinker.steadily
+        }
 
         if (mass < 100 || mass > 500) {
           // uncertain
-          Tinker.userExtension.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Mass out of range; mis-transcription?"))
-          Tinker.steadily
+          Tinker.userExtension.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some(s"Mass out of range; mis-transcription? ($model)"))
+//          Tinker.steadily
         } else {
-          Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("perfect fit"))
-          behavior(cachedContainers.updated(container, mass))
+          Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"perfect fit ($model)"))
+//          behavior(cachedContainers.updated(container, mass))
         }
 
-      case RemainingKibbleMeasure(container, mass, time, noteId) =>
-        val text = cachedContainers.get(container) match {
-          case None =>
-            s"Measured $container at ${mass}g"
-          case Some(cachedMass) =>
-            if (cachedMass > mass) {
-              s"Measured $container at ${mass}g, previously ${cachedMass}g therefor dispensed ${cachedMass - mass}g"
-            } else {
-              s"Measured $container at ${mass}g, previously ${cachedMass}g"
-            }
+        nextBehavior
+
+      case RemainingKibbleMeasure(container, mass, time, noteId, model) => // FIXME
+        val nextBehavior: Ability[Message] = if (model == LargeModel) {
+          val text = cachedContainers.get(container) match {
+            case None =>
+              s"Measured $container at ${mass}g"
+            case Some(cachedMass) =>
+              if (cachedMass > mass) {
+                s"Measured $container at ${mass}g, previously ${cachedMass}g therefor dispensed ${cachedMass - mass}g"
+              } else {
+                s"Measured $container at ${mass}g, previously ${cachedMass}g"
+              }
+          }
+          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+          noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+          behavior(cachedContainers.updated(container, mass))
+        } else {
+          Tinker.steadily
         }
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
-        noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
 
         if (mass < container.baselineWeight || mass > 1000) {
           // uncertain
-          Tinker.userExtension.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Almost matched; mis-transcription?"))
-          Tinker.steadily
+          Tinker.userExtension.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some(s"Almost matched; mis-transcription? ($model)"))
+//          Tinker.steadily
         } else {
           noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
-          Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("perfect fit"))
-          behavior(cachedContainers.updated(container, mass))
+          Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"perfect fit ($model)"))
+//          behavior(cachedContainers.updated(container, mass))
         }
 
-      case KibbleDiscarded(mass, time, noteId) =>
-        val text = s"Discarded ${mass}g kibble"
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
-        noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+        nextBehavior
+
+      case KibbleDiscarded(mass, time, noteId, model) => // FIXME
+        if (model == LargeModel) {
+          val text = s"Discarded ${mass}g kibble"
+          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+          noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
+        }
 
         if (mass < 0 || mass > 150) {
           // uncertain
-          Tinker.userExtension.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Mass out of range; mis-transcription?"))
+          Tinker.userExtension.gossiper !! noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some(s"Mass out of range; mis-transcription? ($model)"))
         } else {
-          Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("perfect fit"))
+          Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some(s"perfect fit ($model)"))
         }
 
         Tinker.steadily

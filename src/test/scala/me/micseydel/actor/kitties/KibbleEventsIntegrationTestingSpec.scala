@@ -95,7 +95,7 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
     println(containers)
 
     @tailrec
-    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.Event], accumulator: KibbleDispensing, lastUsedContainer: Option[KibbleContainer]): (Containers, KibbleDispensing) = {
+    def r(currentContainers: Containers, remainingEvents: List[KibbleManagerActor.StructuredEvent], accumulator: KibbleDispensing, lastUsedContainer: Option[KibbleContainer]): (Containers, KibbleDispensing) = {
       remainingEvents match {
         case Nil => (currentContainers, accumulator)
         case event :: eventsToRecursOn =>
@@ -129,10 +129,10 @@ class KibbleEventsIntegrationTestingSpec extends AnyWordSpec
       }
     }
 
-    val simplifiedEvents: List[KibbleManagerActor.Event] = events.map {
+    val simplifiedEvents: List[KibbleManagerActor.StructuredEvent] = events.map {
       case KibbleManagerActor.ReceiveVotes(votes) => ???
       case KibbleManagerActor.MaybeHeardKibbleMention(notedTranscription) => ???
-      case event: KibbleManagerActor.Event => event
+      case event: KibbleManagerActor.StructuredEvent => event
     }
 
     println(s"CANARY ${simplifiedEvents.map(_.time.toLocalDate).distinct}")

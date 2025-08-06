@@ -2,6 +2,7 @@ package me.micseydel.app
 
 import cats.data.Validated
 import me.micseydel.actor.*
+import me.micseydel.actor.hue.HueListener
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor

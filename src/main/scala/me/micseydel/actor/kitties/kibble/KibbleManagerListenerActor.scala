@@ -1,23 +1,24 @@
 package me.micseydel.actor.kitties.kibble
 
 import me.micseydel.actor.kitties.kibble.KibbleManagerActor.{KibbleDiscarded, KibbleRefill, RemainingKibbleMeasure}
-import me.micseydel.actor.kitties.kibble.KibbleModel._
+import me.micseydel.actor.kitties.kibble.KibbleModel.*
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.TinkerListener
 import me.micseydel.dsl.tinkerer.TinkerListener.{Acknowledged, Ignored}
-import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerContext}
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent}
 import me.micseydel.util.StringImplicits.RichString
 import org.slf4j.Logger
 
 object KibbleManagerListenerActor {
   def apply(manager: SpiritRef[KibbleManagerActor.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[TinkerListener.Message] =
-    TinkerListener.simpleStateless { (context, notedTranscription) =>
+    TinkerListener.simpleStateless(Gossiper.SubscribeHybrid) { (context, notedTranscription) =>
       implicit val tc: TinkerContext[_] = context
       notedTranscription match {
-        case nt@NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), captureTime), noteId) =>
+        case nt@NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), meta), captureTime), noteId) =>
           context.actorContext.log.debug(s"received ${text.wordCount} words: $text")
 
           val lowerText = text.toLowerCase
@@ -36,7 +37,7 @@ object KibbleManagerListenerActor {
                 case Some(mass) =>
                   if (lowerText.contains("discard")) {
                     context.actorContext.log.info(s"Detected ${mass}g discarded kibble")
-                    manager !! KibbleDiscarded(mass, captureTime, noteId)
+                    manager !! KibbleDiscarded(mass, captureTime, noteId, meta.model)
                     Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble discarded"))
                   } else {
                     getContainer(text) match {
@@ -47,11 +48,11 @@ object KibbleManagerListenerActor {
                       case Some(container) =>
                         if (lowerText.contains("refill")) {
                           context.actorContext.log.info(s"Detected refill for $container of ${mass}g")
-                          manager !! KibbleRefill(container, mass, captureTime, noteId)
+                          manager !! KibbleRefill(container, mass, captureTime, noteId, meta.model)
                           Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
                         } else if (lowerText.contains("measure")) {
                           context.actorContext.log.info(s"Detected measure for $container of ${mass}g")
-                          manager !! RemainingKibbleMeasure(container, mass, captureTime, noteId)
+                          manager !! RemainingKibbleMeasure(container, mass, captureTime, noteId, meta.model)
                           Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
                         } else {
                           context.actorContext.log.warn(s"Identified kibble/dry food reference for container $container and mass ${mass}g but could not identify choice {refill, measure}: $text")
@@ -100,7 +101,7 @@ object KibbleManagerListenerActor {
 
   def lineToMeasurementEvent(nt: NotedTranscription)(implicit log: Logger): Option[KibbleManagerActor.Message] = {
     nt match {
-      case nt@NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), captureTime), noteId) =>
+      case nt@NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), meta), captureTime), noteId) =>
         val lowerText = text.toLowerCase
         val mentionsKibble = lowerText.contains("kibble")
         val mentionsDryFood = lowerText.contains("dry food")
@@ -116,7 +117,7 @@ object KibbleManagerListenerActor {
               case Some(mass) =>
                 if (lowerText.contains("discard")) {
                   log.info(s"Detected ${mass}g discarded kibble")
-                  KibbleDiscarded(mass, captureTime, noteId)
+                  KibbleDiscarded(mass, captureTime, noteId, meta.model)
                 } else {
                   getContainer(text) match {
                     case None =>
@@ -125,10 +126,10 @@ object KibbleManagerListenerActor {
                     case Some(container) =>
                       if (lowerText.contains("refill")) {
                         log.info(s"Detected refill for $container of ${mass}g")
-                        KibbleRefill(container, mass, captureTime, noteId)
+                        KibbleRefill(container, mass, captureTime, noteId, meta.model)
                       } else if (lowerText.contains("measure")) {
                         log.info(s"Detected measure for $container of ${mass}g")
-                        RemainingKibbleMeasure(container, mass, captureTime, noteId)
+                        RemainingKibbleMeasure(container, mass, captureTime, noteId, meta.model)
                       } else {
                         log.warn(s"Identified kibble/dry food reference for container $container and mass ${mass}g but could not identify choice {refill, measure}: $text")
                         KibbleManagerActor.MaybeHeardKibbleMention(nt)
