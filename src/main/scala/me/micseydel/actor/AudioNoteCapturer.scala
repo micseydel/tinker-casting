@@ -147,8 +147,14 @@ object AudioNoteCapturer {
     message match {
       case AudioPathUpdatedEvent(PathCreatedEvent(audioPath)) if validPath(audioPath) =>
         context.actorContext.log.info(s"New audio ${audioPath.getFileName} (size=${new File(audioPath.toString).length()})")
-        val seconds: Double = Common.getWavLength(audioPath.toString)
-        context.actorContext.log.debug(s"wavPath $audioPath is $seconds seconds long, triggering transcription")
+
+        Try(Common.getWavLength(audioPath.toString)) match {
+          case Failure(exception) =>
+            context.actorContext.log.warn(s"Failed to get .wav length for $audioPath", exception)
+          case Success(seconds) =>
+            context.actorContext.log.debug(s"wavPath $audioPath is $seconds seconds long, triggering transcription")
+        }
+
         triggerTranscriptionForWavPath(audioPath)
 
         val transcriptionNoteName = AudioNoteCapturerHelpers.transcriptionNoteName(audioPath)
