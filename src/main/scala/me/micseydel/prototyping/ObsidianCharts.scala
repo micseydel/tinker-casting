@@ -25,7 +25,7 @@ object ObsidianCharts {
   }
 
   def chart(series: List[Series[_]]): String = {
-    chart(series.map(_ => ""), series)
+    chart(series.headOption.toList.flatMap(_.data.map(_ => "")), series)
   }
 
   def chart(series: Series[_]): String = {

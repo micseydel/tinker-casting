@@ -37,40 +37,45 @@ def send_to_server(capture_time, outline_confidence, diameter):
         print(f"Expected status code 202 but got {response.status_code} and ${response.text}")
 
 
-algorithm = pp.PuRe()
+def main():
+    algorithm = pp.PuRe()
 
-cap = cv.VideoCapture(0)
-if not cap.isOpened():
-    print("Cannot open camera")
-    exit()
+    cap = cv.VideoCapture(0)
+    if not cap.isOpened():
+        print("Cannot open camera")
+        exit()
 
-try:
-    while True:
-        # Capture frame-by-frame
-        ret, frame = cap.read()
-     
-        # if frame is read correctly ret is True
-        if not ret:
-            print("Can't receive frame (stream end?). Exiting ...")
-            break
-        # Our operations on the frame come here
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+    try:
+        while True:
+            # Capture frame-by-frame
+            ret, frame = cap.read()
+         
+            # if frame is read correctly ret is True
+            if not ret:
+                print("Can't receive frame (stream end?). Exiting ...")
+                break
+            # Our operations on the frame come here
+            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-        pupil = algorithm.runWithConfidence(gray)
+            pupil = algorithm.runWithConfidence(gray)
 
-        capture_time = time()
+            capture_time = time()
 
-        print(capture_time, pupil.outline_confidence, pupil.diameter())
+            print(capture_time, pupil.outline_confidence, pupil.diameter())
 
-        send_to_server(capture_time, pupil.outline_confidence, pupil.diameter())
+            send_to_server(capture_time, pupil.outline_confidence, pupil.diameter())
 
-        # Display the resulting frame
-        # cv.imshow('frame', gray)
-        # if cv.waitKey(1) == ord('q'):
-        #     break
-except KeyboardInterrupt:
-    pass
- 
-# When everything done, release the capture
-cap.release()
-cv.destroyAllWindows()
+            # Display the resulting frame
+            # cv.imshow('frame', gray)
+            # if cv.waitKey(1) == ord('q'):
+            #     break
+    except KeyboardInterrupt:
+        print("Done")
+
+    # When everything done, release the capture
+    cap.release()
+    cv.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
