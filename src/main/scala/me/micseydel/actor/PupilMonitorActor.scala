@@ -13,7 +13,7 @@ import me.micseydel.vault.persistence.NoteRef
 import spray.json.*
 
 import java.time.{Instant, ZoneId, ZonedDateTime}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 // copied from HeartRateMonitorActor
 object PupilMonitorActor {
@@ -46,32 +46,29 @@ object PupilMonitorActor {
         context.actorContext.log.info(s"noteRef.checkBoxIsChecked()? ${noteRef.checkBoxIsChecked()}")
         if (noteRef.checkBoxIsChecked()) {
           if (measurements.nonEmpty) {
+            val sorted = measurements.sortBy(_.time)
             context.actorContext.log.warn(s"Generating chart from ${measurements.size}")
-            val chart = ObsidianCharts.chart(
-              List(
-                IntSeries("Diameter", measurements.map(_.diameter).reverse),
-                DoubleSeries("Confidence", measurements.map(_.confidence*100).reverse)
-              )
-            )
-
-            noteRef.setMarkdown(
-              s"""- [ ] Click to re-generate chart
-                 |    - Max ${measurements.maxBy(_.captureTime).time}
-                 |    - Total measurements ${measurements.size}
-                 |
-                 |# Chart
-                 |$chart
-                 |""".stripMargin)
+            noteRef.updateMarkdown(sorted)
+            behavior(sorted)
           } else {
             context.actorContext.log.warn("Received note ping but checkbox was not checked")
+            Tinker.steadily
           }
         } else {
           context.actorContext.log.debug("Ignoring change, wasn't a checkbox mark")
+          Tinker.steadily
         }
-
-        Tinker.steadily
     }
   }
+
+  //
+
+  private def measurementsToChart(measurements: List[Payload]): String = ObsidianCharts.chart(
+    List(
+      IntSeries("Diameter", measurements.map(_.diameter).reverse),
+      DoubleSeries("Confidence", measurements.map(_.confidence*100).reverse)
+    )
+  )
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def checkBoxIsChecked(): Boolean =
@@ -80,6 +77,28 @@ object PupilMonitorActor {
         case Failure(exception) => throw exception
         case Success(result) => result
       }
+
+    def updateMarkdown(measurements: List[Payload]): Try[NoOp.type] = {
+      val chart = measurementsToChart(measurements)
+      
+      val minConfidence = 0.6
+      val chart2 = measurementsToChart(measurements.filter(_.confidence > 0.6))
+
+      noteRef.setMarkdown(
+        s"""- [ ] Click to re-generate chart
+           |    - Min ${measurements.minBy(_.captureTime).time}
+           |    - Max ${measurements.maxBy(_.captureTime).time}
+           |    - Total measurements ${measurements.size}
+           |
+           |# Charts
+           |
+           |$chart
+           |
+           |## Just confidence >$minConfidence
+           |
+           |$chart2
+           |""".stripMargin)
+    }
   }
 
   private case class Payload(
