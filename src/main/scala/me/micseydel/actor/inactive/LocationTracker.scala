@@ -5,8 +5,8 @@ import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRo
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
-import me.micseydel.util.MarkdownUtil
-import spray.json._
+import me.micseydel.util.{MarkdownUtil, TimeUtil}
+import spray.json.*
 
 import java.nio.charset.StandardCharsets
 import java.time.{Instant, ZoneId, ZonedDateTime}
@@ -170,7 +170,7 @@ object owntracks {
                                steps: Option[String]
                              ) {
     // FIXME: get the zoneid from the lat/lon?
-    def createdTime: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(created_at), ZoneId.systemDefault())
+    def createdTime: ZonedDateTime = TimeUtil.pythonEpocheToZonedDateTime(created_at)
   }
 
   object JsonFormat extends DefaultJsonProtocol {

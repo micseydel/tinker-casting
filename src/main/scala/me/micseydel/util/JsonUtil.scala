@@ -26,7 +26,7 @@ object JsonUtil {
         ZonedDateTime.parse(s)
       case JsNumber(value) =>
         try {
-          ZonedDateTime.ofInstant(Instant.ofEpochSecond(value.longValue), ZoneId.systemDefault)
+          TimeUtil.pythonEpocheToZonedDateTime(value.longValue)
         } catch {
           case e: DateTimeException =>
             throw DeserializationException(s"Failed to extract ZonedDateTime from value $value", e)

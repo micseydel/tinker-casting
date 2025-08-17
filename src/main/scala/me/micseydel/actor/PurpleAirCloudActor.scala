@@ -8,14 +8,14 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.PurpleAirCloudAPI.{SimplePurpleAirResult, PurpleAirBatchResult, Request}
+import me.micseydel.actor.PurpleAirCloudAPI.{PurpleAirBatchResult, Request, SimplePurpleAirResult}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.DoubleSeries
-import me.micseydel.util.{JsonUtil, YamUtil}
+import me.micseydel.util.{JsonUtil, TimeUtil, YamUtil}
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 import net.jcazevedo.moultingyaml.{PimpedString, *}
@@ -232,7 +232,7 @@ object PurpleAirCloudAPI {
                 val time = fields.get("data_time_stamp") match {
                   case Some(JsNumber(value)) =>
                     // FIXME: systemDefault should instead probably be in the context/clock
-                    ZonedDateTime.ofInstant(Instant.ofEpochSecond(value.toLong), ZoneId.systemDefault())
+                    TimeUtil.pythonEpocheToZonedDateTime(value.toLong)
                   case other => throw net.jcazevedo.moultingyaml.DeserializationException(s"Needed a `data_time_stamp` number, time since epoche but got $other")
                 }
 

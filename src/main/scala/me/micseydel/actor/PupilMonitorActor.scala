@@ -8,6 +8,7 @@ import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries}
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 import spray.json.*
 
@@ -86,7 +87,7 @@ object PupilMonitorActor {
                               confidence: Double,
                               diameter: Int
                             ) {
-    def time: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(captureTime.toInt), ZoneId.systemDefault())
+    def time: ZonedDateTime = TimeUtil.pythonEpocheToZonedDateTime(captureTime.toInt)
   }
 
   private object PayloadJsonFormat extends DefaultJsonProtocol {

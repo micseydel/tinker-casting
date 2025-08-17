@@ -105,4 +105,7 @@ object TimeUtil {
   }
 
   val IsoMonthFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
+
+  def pythonEpocheToZonedDateTime(epoche: Long): ZonedDateTime =
+    ZonedDateTime.ofInstant(Instant.ofEpochSecond(epoche), ZoneId.systemDefault())
 }
