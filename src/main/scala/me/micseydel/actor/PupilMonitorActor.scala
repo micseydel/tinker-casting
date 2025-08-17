@@ -80,9 +80,9 @@ object PupilMonitorActor {
 
     def updateMarkdown(measurements: List[Payload]): Try[NoOp.type] = {
       val chart = measurementsToChart(measurements)
-      
-      val minConfidence = 0.6
-      val chart2 = measurementsToChart(measurements.filter(_.confidence > 0.6))
+
+      val minConfidence = 0.85
+      val chart2 = measurementsToChart(measurements.filter(_.confidence > minConfidence))
 
       noteRef.setMarkdown(
         s"""- [ ] Click to re-generate chart
