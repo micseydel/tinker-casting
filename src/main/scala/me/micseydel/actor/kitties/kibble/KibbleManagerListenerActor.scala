@@ -46,7 +46,7 @@ object KibbleManagerListenerActor {
                         manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
                         Ignored
                       case Some(container) =>
-                        if (lowerText.contains("refill")) {
+                        if (isRefill(lowerText)) {
                           context.actorContext.log.info(s"Detected refill for $container of ${mass}g")
                           manager !! KibbleRefill(container, mass, captureTime, noteId, meta.model)
                           Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
@@ -71,6 +71,10 @@ object KibbleManagerListenerActor {
           }
       }
     }
+
+  private def isRefill(lowercase: String): Boolean = {
+    lowercase.contains("refill") || lowercase.contains("re-fill")
+  }
 
   private def getGrams(text: String): Option[Int] = {
     // just split on whitespace
@@ -124,7 +128,7 @@ object KibbleManagerListenerActor {
                       log.warn(s"Kibble/dry food mentioned and identified mass ${mass}g but could not identify container: $text")
                       KibbleManagerActor.MaybeHeardKibbleMention(nt)
                     case Some(container) =>
-                      if (lowerText.contains("refill")) {
+                      if (isRefill(lowerText)) {
                         log.info(s"Detected refill for $container of ${mass}g")
                         KibbleRefill(container, mass, captureTime, noteId, meta.model)
                       } else if (lowerText.contains("measure")) {
