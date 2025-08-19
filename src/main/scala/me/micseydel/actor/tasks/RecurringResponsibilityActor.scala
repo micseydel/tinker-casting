@@ -251,7 +251,12 @@ object RecurringResponsibilityActor {
               log.warn(s"Expected to find a List[List[String]] but found: $failed")
               None
             } else {
-              Some(VoiceCompletion(passed.toList.map(_.asInstanceOf[java.util.List[?]].asScala.toList.map(_.asInstanceOf[String]))))
+              Try(Some(VoiceCompletion(passed.toList.map(_.asInstanceOf[java.util.List[?]].asScala.toList.map(_.asInstanceOf[String]))))) match {
+                case Failure(exception) =>
+                  log.warn(s"Deserializing yaml failed - could be because of an intermediary change", exception)
+                  None
+                case Success(value) => value
+              }
             }
 
           case None => None
