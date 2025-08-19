@@ -3,15 +3,16 @@ package me.micseydel.actor.kitties
 import cats.data.Validated.Invalid
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
+import com.softwaremill.quicklens.ModifyPimp
 import me.micseydel.actor.DailyNotesRouter
 import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation}
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, HasInbox, LitterSummaryForDay}
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl._
+import me.micseydel.dsl.*
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.model._
+import me.micseydel.model.*
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.NoteId
@@ -125,10 +126,10 @@ private[kitties] object DailyAbility {
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def addEventCapture(eventCapture: EventCapture)(implicit log: Logger): ValidatedNel[String, Document] = {
-      eventCapture match {
+      (eventCapture match {
         case obs@LitterSiftedObservation(_) => addObservation(obs)
         case ati@AddToInbox(_, _) => addToInbox(ati)
-      }
+      }).map(_.modify(_.report).using(_.copy(audited = false)))
     }
 
     private def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): ValidatedNel[String, Document] = {
