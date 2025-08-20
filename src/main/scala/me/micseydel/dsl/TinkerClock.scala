@@ -8,6 +8,8 @@ trait TinkerClock {
   def now(zoneId: ZoneId): ZonedDateTime
 
   def today(): LocalDate
+
+  def midnight(): ZonedDateTime = now().withHour(0).withMinute(0)
 }
 
 class TinkerClockImpl extends TinkerClock {

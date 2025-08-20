@@ -63,7 +63,7 @@ object GmailActor {
 
   val NoteName = "Gmail Configuration"
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
+  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
     implicit val nr: NoteRef = noteRef
     implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
@@ -71,9 +71,9 @@ object GmailActor {
     context.system.operator !! Operator.RegisterGmail(context.self)
 
     noteRef.getDocument() match {
-      case Valid(Document(pollingMinutes, gmailConfig, _)) =>
+      case Valid(Document(pollingMinutes, _)) =>
         context.actorContext.log.info("Starting gmail service")
-        implicit val gmailService: Gmail = TinkerGmailService.createGmailService(gmailConfig)
+        implicit val gmailService: Gmail = TinkerGmailService.createGmailService(credential)
         context.actorContext.log.info("Started gmail service")
 
         timeKeeper !! TimeKeeper.RemindMeEvery(pollingMinutes.minutes, context.self, HeartBeat, Some(this))
@@ -101,7 +101,7 @@ object GmailActor {
 
       case ReceivePing(_) =>
         noteRef.getDocument() match {
-          case Valid(Document(pollingInterval, GmailConfig(_, _), checkboxIsChecked)) =>
+          case Valid(Document(pollingInterval, checkboxIsChecked)) =>
             if (checkboxIsChecked) {
               context.actorContext.log.info("Note check box was check, requesting email async now")
               requestGmailAsync()
@@ -137,7 +137,7 @@ object GmailActor {
 
   //
 
-  private[google] case class Document(pollingMinutes: Int, gmailConfig: GmailConfig, checkboxIsChecked: Boolean)
+  private[google] case class Document(pollingMinutes: Int, checkboxIsChecked: Boolean)
 
   private[google] implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def getDocument(): ValidatedNel[String, Document] = {
@@ -164,7 +164,6 @@ object GmailActor {
                   validatedCredsPath.andThen { credsPath =>
                     Document(
                       pollingMinutes,
-                      GmailConfig(credsPath, tokenPath),
                       markdown.startsWith("- [x] ")
                     ).validNel
                   }
@@ -179,8 +178,7 @@ object GmailActor {
 case class GmailConfig(credentialsPath: String, tokensPath: String)
 
 private object TinkerGmailService {
-  def createGmailService(config: GmailConfig): Gmail = {
-    val credential = GmailAuth.authenticate(config.credentialsPath, config.tokensPath)
+  def createGmailService(credential: Credential): Gmail = {
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
       .setApplicationName("Gmail Actor Service") // FIXME: ApplicationName
       .build()
@@ -253,42 +251,5 @@ private object TinkerGmailService {
       }
       .getOrElse(ZonedDateTime.now(ZoneId.systemDefault()))
       .toString
-  }
-}
-
-
-object GmailAuth {
-  def authenticate(credentialsPath: String, tokensDir: String): Credential = {
-    val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
-    val jsonFactory = GsonFactory.getDefaultInstance
-
-    val clientSecrets = GoogleClientSecrets.load(
-      jsonFactory,
-      new InputStreamReader(new FileInputStream(credentialsPath))
-    )
-
-    val flow: AuthorizationCodeFlow = new GoogleAuthorizationCodeFlow.Builder(
-      httpTransport,
-      jsonFactory,
-      clientSecrets,
-      List(
-        "https://www.googleapis.com/auth/gmail.readonly",
-        CalendarScopes.CALENDAR_READONLY,
-        CalendarScopes.CALENDAR_ACLS_READONLY,
-        CalendarScopes.CALENDAR_CALENDARLIST_READONLY,
-        CalendarScopes.CALENDAR_CALENDARS_READONLY,
-        CalendarScopes.CALENDAR_EVENTS_OWNED_READONLY,
-        CalendarScopes.CALENDAR_EVENTS_PUBLIC_READONLY,
-        CalendarScopes.CALENDAR_EVENTS_READONLY,
-        CalendarScopes.CALENDAR_SETTINGS_READONLY
-      ).asJava
-    ).setDataStoreFactory(new FileDataStoreFactory(new File(tokensDir)))
-      .setAccessType("offline")
-      .build()
-
-    // FIXME: use event logger instead?
-    val receiver = new LocalServerReceiver.Builder().setPort(8888).build()
-
-    new AuthorizationCodeInstalledApp(flow, receiver).authorize("user")
   }
 }

@@ -22,7 +22,7 @@ import scala.util.{Failure, Success, Try}
 
 object PeriodicNotesCreatorActor {
   sealed trait Message
-  private case class ItsMidnight(day: LocalDate) extends Message
+  private case class ItsMidnight(day: ZonedDateTime) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     context.actorContext.log.info("Starting up PeriodicNotesCreatorActor")
@@ -73,7 +73,7 @@ object PeriodicNotesCreatorActor {
 object DailyNotesManager {
   sealed trait Message
 
-  case class ItsMidnight(day: LocalDate) extends Message
+  case class ItsMidnight(day: ZonedDateTime) extends Message
 
   def apply(templateName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(templateName, TinkerColor.random(), "🏛️") { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
@@ -109,7 +109,7 @@ object DailyNotesManager {
     implicit val c: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ItsMidnight(dayForNote) =>
-        dailyNoteLookup :?> dayForNote match {
+        dailyNoteLookup :?> dayForNote.toLocalDate match {
           case (updated, _) =>
             behavior(updated)
         }
@@ -133,7 +133,7 @@ object DailyNoteActor {
   sealed trait Message
 
   final case class ReceiveTemplate(template: String) extends Message
-  private case class NewDay(day: LocalDate) extends Message
+  private case class NewDay(day: ZonedDateTime) extends Message
 
   def apply(forDay: LocalDate)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(forDay.toString, rgb(255, 222, 71), "•", Some("periodic_notes/daily")) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
@@ -174,7 +174,7 @@ object DailyNoteActor {
 
       case NewDay(currentDay) =>
         context.actorContext.log.info(s"Tidying yaml for $forDay (on $currentDay)")
-        noteRef.tidyYamlAliases(forDay, currentDay) match {
+        noteRef.tidyYamlAliases(forDay, currentDay.toLocalDate) match {
           case Failure(exception) => context.actorContext.log.warn(s"Tidying aliases on $currentDay for $forDay failed", exception)
           case Success(_) =>
         }

@@ -2,6 +2,7 @@ package me.micseydel.app
 
 import cats.data.Validated
 import me.micseydel.actor.*
+import me.micseydel.actor.google.GoogleAuthManager
 import me.micseydel.actor.hue.HueListener
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
@@ -67,8 +68,8 @@ object UserTinkerCast {
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
-    @unused // registers with the Operator
-    val gmailActor = context.cast(GmailExperimentActor(), "GmailTestActor")
+    @unused // registers various services with the Operator
+    val google = context.cast(GoogleAuthManager(), "GoogleAuthManager")
 
     @unused // subscribes to gmail via operator
     val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")

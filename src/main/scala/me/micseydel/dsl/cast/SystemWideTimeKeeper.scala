@@ -10,7 +10,7 @@ import java.time.{LocalDate, ZonedDateTime}
 object SystemWideTimeKeeper {
   sealed trait Message
   case object ItsMidnight extends Message
-  case class SubscribeMidnight(replyTo: SpiritRef[LocalDate]) extends Message
+  case class SubscribeMidnight(replyTo: SpiritRef[ZonedDateTime]) extends Message
 
   def apply(): Behavior[Message] = Behaviors.setup { context =>
     val timeKeeper = context.spawn(UntrackedTimeKeeper(), "UntrackedTimeKeeper")
@@ -21,10 +21,10 @@ object SystemWideTimeKeeper {
     behavior(Set.empty)
   }
 
-  private def behavior(subscribers: Set[SpiritRef[LocalDate]]): Behavior[Message] = Behaviors.receive { (context, message) =>
+  private def behavior(subscribers: Set[SpiritRef[ZonedDateTime]]): Behavior[Message] = Behaviors.receive { (context, message) =>
     message match {
       case SubscribeMidnight(replyTo) =>
-        val newSubscribers: Set[SpiritRef[LocalDate]] = subscribers + replyTo
+        val newSubscribers: Set[SpiritRef[ZonedDateTime]] = subscribers + replyTo
         context.log.info(s"${replyTo.path} just subscribed to updates for midnight, ${newSubscribers.size} subscribers now")
         behavior(newSubscribers)
 
@@ -36,7 +36,7 @@ object SystemWideTimeKeeper {
             case MillisUntil(_) => now.plusDays(1)
             case MillisSince(_) => now
           }
-        }.toLocalDate
+        }.withHour(0).withMinute(0)
 
         context.log.info(s"Notifying ${subscribers.size} subscribers that it's midnight: $subscribers")
         implicit val sender: Sender = Sender(context.self.path)

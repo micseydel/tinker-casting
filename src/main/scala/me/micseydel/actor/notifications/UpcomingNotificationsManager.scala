@@ -22,7 +22,7 @@ object UpcomingNotificationsManager {
 
   sealed trait Message
 
-  private case class ItsMidnight(forDay: LocalDate) extends Message
+  private case class ItsMidnight(forDay: ZonedDateTime) extends Message
 
   private case class ReceiveNotePing(ping: Ping) extends Message
 

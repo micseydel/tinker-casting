@@ -1,5 +1,6 @@
 package me.micseydel.actor
 
+import com.google.api.client.auth.oauth2.Credential
 import me.micseydel.actor.google.GmailActor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -14,10 +15,10 @@ object GmailExperimentActor {
 
   private case class ReceiveEmail(emails: Seq[GmailActor.Email]) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Gmail API Integration Testing", TinkerColor.random(), "📮") { (context, noteRef) =>
+  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Gmail API Integration Testing", TinkerColor.random(), "📮") { (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
 
-    val gmailFetcher = context.cast(GmailActor(), "GmailActor")
+    val gmailFetcher = context.cast(GmailActor(credential), "GmailActor")
 
     gmailFetcher !! GmailActor.Subscribe(context.messageAdapter(ReceiveEmail))
     context.actorContext.log.debug("Subscribed to GmailActor")
