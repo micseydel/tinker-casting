@@ -4,18 +4,12 @@ import akka.actor.typed.scaladsl.Behaviors
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import cats.implicits.catsSyntaxValidatedId
-import com.google.api.client.auth.oauth2.{AuthorizationCodeFlow, Credential}
-import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp
-import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver
-import com.google.api.client.googleapis.auth.oauth2.{GoogleAuthorizationCodeFlow, GoogleClientSecrets}
+import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
-import com.google.api.client.util.store.FileDataStoreFactory
-import com.google.api.services.calendar.CalendarScopes
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
-import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.dsl.*
@@ -25,7 +19,6 @@ import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
-import java.io.{File, FileInputStream, InputStreamReader}
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.Base64
@@ -156,18 +149,11 @@ object GmailActor {
                 case other => s"Expected a string for key polling_minutes but found: $other".invalidNel
               }
 
-              val validatedTokenPath = getValidatedStringFromConfig(map, "token_path")
-              val validatedCredsPath = getValidatedStringFromConfig(map, "creds_path")
-
               validatedPollingMinutes.andThen { pollingMinutes =>
-                validatedTokenPath.andThen { tokenPath =>
-                  validatedCredsPath.andThen { credsPath =>
-                    Document(
-                      pollingMinutes,
-                      markdown.startsWith("- [x] ")
-                    ).validNel
-                  }
-                }
+                Document(
+                  pollingMinutes,
+                  markdown.startsWith("- [x] ")
+                ).validNel
               }
           }
       }
