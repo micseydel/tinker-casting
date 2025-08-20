@@ -100,7 +100,7 @@ object UpcomingNotificationsManager {
         // FIXME: this actor should be in a lib, this behavior needs to be moved to userspace
         val notifications = List(
           Notification(midnight, s"- ![[Plans#^$id]]", None, NotificationId(id), Nil),
-          Notification(midnight, s"- [[Transcribed mobile notes (${midnight.toLocalDate})#Notes without acknowledgements]]", None, NotificationId(s"withoutack-$id"), Nil)
+          Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(s"withoutack-$id"), Nil)
         )
 
         for (notification <- notifications) {
