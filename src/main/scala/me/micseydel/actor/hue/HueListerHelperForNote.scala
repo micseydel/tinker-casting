@@ -55,8 +55,8 @@ private[hue] object HueListerHelperForNote {
         case m@ReceiveNoteInfo(BaseModel, _, _) =>
           context.actorContext.log.warn(s"Ignoring $m, already processing BaseModel")
           Tinker.steadily
-        case ReceiveNoteInfo(LargeModel, deferring: LightState, confidence) =>
-          context.cast(HelperForModel(noteId, confidence, deferring, context.self, 30.seconds, BaseModel), "HelperForBase")
+        case ReceiveNoteInfo(model@LargeModel, deferring: LightState, confidence) =>
+          context.cast(HelperForModel(noteId, confidence, deferring, context.self, 30.seconds, model), "HelperForLarge")
           processingBoth()
         case ReceiveNoteInfo(otherModel, _, _) =>
           context.actorContext.log.warn(s"Was not expecting other model $otherModel, only expected BaseModel or LargeModel")
