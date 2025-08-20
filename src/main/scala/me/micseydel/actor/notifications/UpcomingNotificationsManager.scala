@@ -96,9 +96,17 @@ object UpcomingNotificationsManager {
         val midnight = nearestMidnightToNow(context.system.clock)
         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
         val id = formatter.format(midnight)
-        val notification = Notification(midnight, s"- ![[Plans#^$id]]", None, NotificationId(id), Nil)
 
-        notificationCenterManager !! NotificationCenterManager.NewNotification(notification)
+        // FIXME: this actor should be in a lib, this behavior needs to be moved to userspace
+        val notifications = List(
+          Notification(midnight, s"- ![[Plans#^$id]]", None, NotificationId(id), Nil),
+          Notification(midnight, s"- [[Transcribed mobile notes (${midnight.toLocalDate})#Notes without acknowledgements]]", None, NotificationId(s"withoutack-$id"), Nil)
+        )
+
+        for (notification <- notifications) {
+          notificationCenterManager !! NotificationCenterManager.NewNotification(notification)
+        }
+
 
         Tinker.steadily
 
