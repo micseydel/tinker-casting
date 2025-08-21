@@ -17,14 +17,14 @@ object NotificationCenterManagerMarkdown {
    */
   def clearDone(noteRef: NoteRef): Try[List[NotificationId]] = {
     noteRef.readMarkdown().map(_.split("\n")).flatMap { lines =>
-      val (done, notDone) = if (lines.headOption.contains(DOClearAll)) {
+      val (done, notDone) = if (lines.headOption.exists(_.startsWith(DOClearAll))) {
         (lines.toList, Nil)
       } else {
         lines.toList.partition(_.startsWith("- [x]"))
       }
 
       val toWrite: Option[String] = if (done.nonEmpty) {
-        if (notDone.headOption.contains(ClearAll) && notDone.size <= 4) {
+        if (notDone.headOption.exists(_.startsWith(ClearAll)) && notDone.size <= 4) {
           Some(notDone.drop(1).mkString("", "\n", "\n"))
         } else {
           Some(notDone.mkString("", "\n", "\n"))
@@ -54,8 +54,8 @@ object NotificationCenterManagerMarkdown {
         updateMarkdown(noteRef) { lines =>
           val newListLine = Notification.toMarkdownListLine(n)
           val newLines = lines.filter(!_.endsWith(notificationId.id)) :+ newListLine
-          if (newLines.size > 3 && !newLines.headOption.contains(ClearAll)) {
-            Some((ClearAll :: newLines).mkString("", "\n", "\n"))
+          if (newLines.size > 3 && !newLines.headOption.exists(_.startsWith(ClearAll))) {
+            Some((s"$ClearAll (${newLines.size})" :: newLines).mkString("", "\n", "\n"))
           } else {
             Some(newLines.mkString("", "\n", "\n"))
           }
@@ -72,7 +72,7 @@ object NotificationCenterManagerMarkdown {
   private def linesUpdater(lines: List[String], notificationId: String): Option[String] = {
     val updated = lines.filter(!_.endsWith(s" ^$notificationId"))
     if (updated.size < lines.size) {
-      if (updated.headOption.contains(ClearAll) && updated.size <= 4) {
+      if (updated.headOption.exists(_.startsWith(ClearAll)) && updated.size <= 4) {
         Some(updated.drop(1).mkString("", "\n", "\n"))
       } else {
         Some(updated.mkString("", "\n", "\n"))
