@@ -53,11 +53,23 @@ object NotificationCenterManagerMarkdown {
       case n@Notification(_, _, _, notificationId, _, _) =>
         updateMarkdown(noteRef) { lines =>
           val newListLine = Notification.toMarkdownListLine(n)
-          val newLines = lines.filter(!_.endsWith(notificationId.id)) :+ newListLine
-          if (newLines.size > 3 && !newLines.headOption.exists(_.startsWith(ClearAll))) {
-            Some((s"$ClearAll (${newLines.size})" :: newLines).mkString("", "\n", "\n"))
+          if (lines.headOption.exists(_.startsWith(DOClearAll))) {
+            Some(newListLine + "\n")
           } else {
-            Some(newLines.mkString("", "\n", "\n"))
+            val filteredLines = lines
+              // might be the first line
+              .dropWhile(_.startsWith(ClearAll))
+              // just in case
+              .filterNot(_.startsWith("- [x]"))
+              // if this would create a duplicate, drop the old one
+              .filterNot(_.endsWith(notificationId.id))
+
+            val newLines = filteredLines :+ newListLine
+            if (newLines.size > 3 && !newLines.headOption.exists(_.startsWith(ClearAll))) {
+              Some((s"$ClearAll (${newLines.size})" :: newLines).mkString("", "\n", "\n"))
+            } else {
+              Some(newLines.mkString("", "\n", "\n"))
+            }
           }
         }
     }
