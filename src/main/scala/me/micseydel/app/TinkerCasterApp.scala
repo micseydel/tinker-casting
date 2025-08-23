@@ -71,9 +71,6 @@ object UserTinkerCast {
     @unused // registers various services with the Operator
     val google = context.cast(GoogleAuthManager(), "GoogleAuthManager")
 
-    @unused // subscribes to gmail via operator
-    val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
-
     @unused // uses an internal folder watcher
     val ollamaActor = context.cast(OllamaActor(), "OllamaActor")
 
@@ -95,6 +92,9 @@ object UserTinkerCast {
 
     @unused // driven internally by a note
     val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
+
+    @unused // subscribes to gmail via operator
+    val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
 
     purpleAirApiKey match {
       case Some(value) =>

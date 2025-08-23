@@ -120,7 +120,7 @@ object GmailActor {
         maybeEmails match {
           case Failure(exception) => context.actorContext.log.error("Failed to fetch Gmail", exception)
           case Success(newEmails) =>
-            context.actorContext.log.info(s"Fetched ${newEmails.size} emails; sending to subscribers $subscribers")
+            context.actorContext.log.info(s"Fetched ${newEmails.size} emails; sending to ${subscribers.size} subscribers $subscribers")
             subscribers.foreach(_ !! newEmails.sortBy(_.sentAt))
         }
 
@@ -164,6 +164,8 @@ object GmailActor {
 case class GmailConfig(credentialsPath: String, tokensPath: String)
 
 private object TinkerGmailService {
+  private val MaxResults = 30
+
   def createGmailService(credential: Credential): Gmail = {
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
       .setApplicationName("Gmail Actor Service") // FIXME: ApplicationName
@@ -176,7 +178,7 @@ private object TinkerGmailService {
         // FIXME
         .setLabelIds(List("INBOX").asJava)
         .setQ("is:unread")
-        .setMaxResults(5).execute().getMessages
+        .setMaxResults(MaxResults).execute().getMessages
 
       Option(rawMessages).map(_.asScala.toList).getOrElse(Nil)
     }

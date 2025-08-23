@@ -10,6 +10,8 @@ import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper.Vote
+import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
 import me.micseydel.dsl.tinkerer.{NoteMakingTinkerer, RasaAnnotatingListener}
@@ -65,6 +67,7 @@ object HueListener {
     Tinker.receiveMessage {
 
       case ReceiveDelegated(noteId, lightState, model) =>
+        Tinker.userExtension.chronicler !! genAckMessage(noteId, model, s"Setting lights to $lightState")
         context.actorContext.log.info(s"Processing deferred $lightState update for $noteId, $model")
         context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
         for (light <- AllList) {
@@ -150,20 +153,18 @@ object HueListener {
     }
   }
 
-  // FIXME: what to do with this?
-  // FIXME Tinker.userExtension.chronicler !! genAckMessage(noteId, model, whisperResultContent.text)
   // FIXME: can chronicler act as a "final" tracker of what happens after voting?!
-//  private def genAckMessage(noteId: NoteId, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
-//    val ackText = model match {
-//      case BaseModel =>
-//        s"Updated the lights (fast): $text"
-//      case LargeModel =>
-//        s"Updated the lights (accurate): $text"
-//      case TurboModel => ???
-//    }
-//
-//    Chronicler.ListenerAcknowledgement(noteId, clock.now(), ackText, Some(AutomaticallyIntegrated))
-//  }
+  private def genAckMessage(noteId: NoteId, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
+    val ackText = model match {
+      case BaseModel =>
+        s"Updated the lights (fast): $text"
+      case LargeModel =>
+        s"Updated the lights (accurate): $text"
+      case TurboModel => ???
+    }
+
+    Chronicler.ListenerAcknowledgement(noteId, clock.now(), ackText, Some(AutomaticallyIntegrated))
+  }
 
   private def genLightState(maybeLightState: Option[LightState], maybeBrightness: Option[Int])(implicit log: Logger): LightState = {
     val pending = maybeLightState match {

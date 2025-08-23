@@ -2,12 +2,14 @@ package me.micseydel.dsl
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import com.softwaremill.quicklens.ModifyPimp
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.google.GmailActor
 import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor}
-import me.micseydel.dsl.cast.SystemWideTimeKeeper
+import me.micseydel.dsl.cast.{SystemWideTimeKeeper, UntrackedTimeKeeper}
 
 import java.time.{LocalDate, ZonedDateTime}
+import scala.concurrent.duration.DurationInt
 
 object Operator {
   sealed trait Message
@@ -18,19 +20,23 @@ object Operator {
   case class RegisterHomeMonitor(registrant: SpiritRef[HomeMonitorActor.Monitoring]) extends Register
   case class RegisterGmail(registrant: SpiritRef[GmailActor.Subscribe]) extends Register
 
+  private val TotalAllowedRetries: Int = 3
+
   sealed trait Subscribe extends Message
   case class SubscribeAranet4(subscriber: SpiritRef[AranetActor.Result]) extends Subscribe
   case class SubscribeGmail(subscriber: SpiritRef[Seq[Email]]) extends Subscribe
+  private case class RetryGmailSubscription(subscriber: SpiritRef[Seq[Email]], retryNumber: Int = 1) extends Register
 
   // behavior
 
   def apply(): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("Starting operator")
     val systemWideTimeKeeper: ActorRef[SystemWideTimeKeeper.Message] = context.spawn(SystemWideTimeKeeper(), "SystemWideTimeKeeper")
-    behavior(systemWideTimeKeeper, None, None)
+    implicit val timeKeeper: ActorRef[UntrackedTimeKeeper.Message] = context.spawn(UntrackedTimeKeeper(), "UntrackedTimeKeeper")
+    behavior(systemWideTimeKeeper, timeKeeper, None, None)
   }
 
-  private def behavior(systemWideTimeKeeper: ActorRef[SystemWideTimeKeeper.Message], homeMonitor: Option[SpiritRef[HomeMonitorActor.Monitoring]], gmailSubscription: Option[SpiritRef[GmailActor.Subscribe]]): Behavior[Message] = Behaviors.receive { (context, message) =>
+  private def behavior(systemWideTimeKeeper: ActorRef[SystemWideTimeKeeper.Message], timeKeeper: ActorRef[UntrackedTimeKeeper.Message], homeMonitor: Option[SpiritRef[HomeMonitorActor.Monitoring]], gmailSubscription: Option[SpiritRef[GmailActor.Subscribe]]): Behavior[Message] = Behaviors.receive { (context, message) =>
     implicit val sender: Sender = Sender(context.self.path)
 
     message match {
@@ -41,7 +47,7 @@ object Operator {
           case None =>
             context.log.info(s"Registering ${registrant.path} as HomeMonitor")
         }
-        behavior(systemWideTimeKeeper, Some(registrant), gmailSubscription)
+        behavior(systemWideTimeKeeper, timeKeeper, Some(registrant), gmailSubscription)
 
       case RegisterGmail(subscription) =>
         gmailSubscription match {
@@ -50,7 +56,7 @@ object Operator {
           case None =>
             context.log.info(s"Registering ${subscription.path} as GmailActor")
         }
-        behavior(systemWideTimeKeeper, homeMonitor, Some(subscription))
+        behavior(systemWideTimeKeeper, timeKeeper, homeMonitor, Some(subscription))
 
       case SubscribeAranet4(subscriber) =>
         homeMonitor match {
@@ -69,6 +75,25 @@ object Operator {
             gmailActorRef !!! GmailActor.Subscribe(subscriber)
           case None =>
             context.log.info(s"New subscriber ${subscriber.path} to gmail but no registered GmailActor - fine on startup, but may be an issue if it's happening more than then")
+            val delay = 5.seconds // FIXME
+            val retryMessage = RetryGmailSubscription(subscriber)
+            timeKeeper ! UntrackedTimeKeeper.RemindMeIn(delay, context.self, retryMessage, None)
+        }
+        Behaviors.same
+
+      case retry@RetryGmailSubscription(subscriber, retryCount) =>
+        if (retryCount > TotalAllowedRetries) {
+          context.log.warn(s"Ignoring $subscriber after $retryCount")
+        } else {
+          gmailSubscription match {
+            case Some(gmail) =>
+              context.log.info(s"Subscribing $subscriber after $retryCount retries")
+              gmail !!! GmailActor.Subscribe(subscriber)
+            case None =>
+              val delay = 5.seconds // FIXME
+              context.log.info(s"Subscription for $subscriber still retrying after $retryCount retries, up to $TotalAllowedRetries")
+              timeKeeper ! UntrackedTimeKeeper.RemindMeIn(delay, context.self, retry.modify(_.retryNumber).using(_ + 1), None)
+          }
         }
         Behaviors.same
 

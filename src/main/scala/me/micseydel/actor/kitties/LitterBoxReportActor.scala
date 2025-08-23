@@ -126,10 +126,10 @@ private[kitties] object DailyAbility {
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def addEventCapture(eventCapture: EventCapture)(implicit log: Logger): ValidatedNel[String, Document] = {
-      (eventCapture match {
+      eventCapture match {
         case obs@LitterSiftedObservation(_) => addObservation(obs)
         case ati@AddToInbox(_, _) => addToInbox(ati)
-      }).map(_.modify(_.report).using(_.copy(audited = false)))
+      }
     }
 
     private def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): ValidatedNel[String, Document] = {
@@ -220,7 +220,10 @@ case class Document(report: Report, inbox: List[String]) {
 
   def append(dataPoint: DataPoint): Document = this.copy(report = report.append(dataPoint))
 
-  def appendToInbox(string: String): Document = this.copy(inbox = string :: inbox)
+  def appendToInbox(string: String): Document = this.copy(
+    report = report.copy(audited = false),
+    inbox = string :: inbox
+  )
 
   private def inboxMd: String = ("# Inbox" :: "" :: inbox.map("- " + _).reverse).mkString("\n")
 
@@ -329,7 +332,7 @@ object MarkdownWithoutJsonExperiment {
     private def distinctDatapoints: List[DataPoint] = datapoints.distinct
 
     def append(datapoint: DataPoint): Report = {
-      this.copy(datapoints = (datapoint :: datapoints).distinct.sortBy(_.zonedDateTime))
+      this.copy(datapoints = (datapoint :: datapoints).distinct.sortBy(_.zonedDateTime), audited = false)
     }
 
     def summary: (Int, Int) = {
