@@ -183,7 +183,7 @@ object Last30DaysLitterGraphActor {
   import LitterGraphHelper.RichNoteRef
 
   def apply()(implicit Tinker: Tinker): Ability[LitterSummaryForDay] = {
-    val noteName = s"Litter Sifting Chart (last 30 days)"
+    val noteName = "Litter Sifting Chart (last 30 days)"
     NoteMakingTinkerer(noteName, TinkerColor.random(), "~") { case (context, noteRef) =>
       Tinker.receiveMessage { summary: LitterSummaryForDay =>
         noteRef.readDocument().flatMap {

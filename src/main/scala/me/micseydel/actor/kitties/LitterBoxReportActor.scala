@@ -40,8 +40,7 @@ object LitterBoxReportActor {
 
   // behavior
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] =
-    setup()
+  def apply()(implicit Tinker: Tinker): Ability[Message] = setup()
 
   private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
