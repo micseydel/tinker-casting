@@ -31,6 +31,7 @@ object RecurringResponsibilityManager {
         context.actorContext.log.warn(s"Something went wrong setting up ${noteRef.noteId}: $e")
         Tinker.ignore
       case Validated.Valid(recurringResponsibilities: NonEmptyList[Entry]) =>
+        // FIXME: consider de-duping recurringResponsibilities, for when Obsidian Sync causes problems
         val specificResponsibilityTrackers = recurringResponsibilities.map { recurringResponsibility =>
           context.actorContext.log.info(s"Casting $recurringResponsibility")
           context.cast(RecurringResponsibilityActor(recurringResponsibility.wikilink, context.self), Common.tryToCleanForActorName(recurringResponsibility.wikilink))
