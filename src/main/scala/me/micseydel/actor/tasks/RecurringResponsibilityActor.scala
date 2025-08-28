@@ -8,6 +8,8 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.*
+import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.NoteId
@@ -56,6 +58,7 @@ object RecurringResponsibilityActor {
           timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, TimerUp, Some(TimerUp))
 
           if (markedAsDone) {
+            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
             val today = context.system.clock.today()
             noteRef.prepend(today, Some(today.plusDays(intervalDays)), None) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong prepending", exception)
@@ -71,7 +74,7 @@ object RecurringResponsibilityActor {
       }
     }
 
-  private def behavior(intervalDays: Int, maybeVoiceCompletion: Option[VoiceCompletion])(implicit Tinker: Tinker, noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(intervalDays: Int, maybeVoiceCompletion: Option[VoiceCompletion])(implicit Tinker: EnhancedTinker[MyCentralCast], noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     implicit val c: TinkerClock = context.system.clock
     implicit val l: Logger = context.actorContext.log
@@ -131,6 +134,7 @@ object RecurringResponsibilityActor {
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 noteRef.prepend(Today, Some(nextTrigger), None)
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
 
             }) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong updating Markdown", exception)
@@ -159,6 +163,7 @@ object RecurringResponsibilityActor {
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($today) and setting timer for $nextTrigger")
                 noteRef.prepend(today, Some(nextTrigger), Some(noteId))
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
               } else {
                 context.actorContext.log.info("Mark as completion request detected, but not a match")
               }
