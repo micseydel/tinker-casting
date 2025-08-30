@@ -161,7 +161,7 @@ object RecurringResponsibilityActor {
                 val nextTrigger = context.system.clock.today().plusDays(intervalDays)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
-                context.actorContext.log.info(s"Prepending today ($today) and setting timer for $nextTrigger")
+                context.actorContext.log.info(s"Prepending today ($today), setting timer for $nextTrigger, and ack'ing as done ${noteRef.noteId}")
                 noteRef.prepend(today, Some(nextTrigger), Some(noteId))
                 Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
               } else {
