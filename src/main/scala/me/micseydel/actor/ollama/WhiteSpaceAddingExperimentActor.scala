@@ -75,7 +75,7 @@ object WhiteSpaceAddingExperimentActor {
         context.actorContext.log.error("Failed to access disk", exception)
         Tinker.steadily
 
-      case ReceivePromptResponse(ChatResponseResult(resultText, _)) =>
+      case ReceivePromptResponse(ChatResponseResult(resultText, _, _, _, _, _, _, _, _)) =>
         val normalizedResultText = normalizeWhitespace(resultText)
         context.actorContext.log.info(s"Received prompt reply!")
 

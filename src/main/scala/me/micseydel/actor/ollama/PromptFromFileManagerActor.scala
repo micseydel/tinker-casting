@@ -77,9 +77,21 @@ object PromptFromFileManagerActor {
         context.actorContext.log.error("Failed to access disk", exception)
         Tinker.steadily
 
-      case ReceivePromptResponse(ChatResponseResult(text, _)) =>
+      case ReceivePromptResponse(ChatResponseResult(text, model, created_at, total_duration, load_duration, prompt_eval_count, prompt_eval_duration, eval_count, eval_duration)) =>
         context.actorContext.log.info(s"Received prompt reply!")
-        noteRef.append(s"\n## Response\n\n$text\n")
+        noteRef.append(
+          s"""## Response
+             |
+             |> [!abstract] Metadata
+             |> - total_duration: ${total_duration / 1000 / 1000}s
+             |> - load_duration: ${load_duration / 1000 / 1000}s
+             |> - prompt_eval_count: $prompt_eval_count
+             |> - prompt_eval_duration: ${prompt_eval_duration / 1000 / 1000}s
+             |> - eval_count: $eval_count
+             |> - eval_duration: ${eval_duration / 1000 / 1000}s
+             |
+             |$text
+             |""".stripMargin)
         Tinker.steadily
 
       case ReceivePromptResponse(ChatResponseFailure(msg, maybeException)) =>

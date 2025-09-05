@@ -94,7 +94,61 @@ object OllamaModel {
 
   sealed trait ChatResponse
 
-  case class ChatResponseResult(response: String, model: String) extends ChatResponse
+  /*
+  {
+  "model": "llama3.2",
+  "created_at": "2023-08-04T19:22:45.499127Z",
+  "response": "",
+  "done": true,
+  "context": [1, 2, 3],
+  "total_duration": 10706818083,
+  "load_duration": 6338219291,
+  "prompt_eval_count": 26,
+  "prompt_eval_duration": 130079000,
+  "eval_count": 259,
+  "eval_duration": 4232710000
+  }
+
+
+  {
+  "model": "llama3:70b",
+  "created_at": "2025-09-05T17:59:27.539054Z",
+  "response": "The answer to 2 + 2 is 4.",
+  "done": true,
+  "done_reason": "stop",
+  "total_duration": 3646721291,
+  "load_duration": 57536041,
+  "prompt_eval_count": 18,
+  "prompt_eval_duration": 1567955125,
+  "eval_count": 13,
+  "eval_duration": 2020718458
+}
+
+
+   */
+
+  /**
+   * https://github.com/ollama/ollama/blob/main/docs/api.md#response
+   * @param created_at
+   * @param total_duration time spent generating the response
+   * @param load_duration time spent in nanoseconds loading the model
+   * @param prompt_eval_count number of tokens in the prompt
+   * @param prompt_eval_duration time spent in nanoseconds evaluating the prompt
+   * @param eval_count number of tokens in the response
+   * @param eval_duration time in nanoseconds spent generating the response
+   */
+  case class ChatResponseResult(
+                                 response: String,
+                                 model: String,
+                                 created_at: String, // format string? "2025-09-05T17:59:27.539054Z"
+                                 total_duration: Long,
+                                 load_duration: Long,
+                                 prompt_eval_count: Long,
+                                 prompt_eval_duration: Long,
+                                 eval_count: Long,
+                                 eval_duration: Long
+                               ) extends ChatResponse
+
   case class ChatResponseFailure(message: String, exception: Option[Throwable] = None) extends ChatResponse
 
   object ChatResponseFailure {
@@ -115,7 +169,7 @@ object OllamaJsonFormat extends DefaultJsonProtocol {
   implicit val modelFormat: RootJsonFormat[Model] = jsonFormat5(Model)
   implicit val receiveModelsFormat: RootJsonFormat[Models] = jsonFormat1(Models)
 
-  implicit val chatResponseResultFormat: RootJsonFormat[ChatResponseResult] = jsonFormat2(ChatResponseResult)
+  implicit val chatResponseResultFormat: RootJsonFormat[ChatResponseResult] = jsonFormat9(ChatResponseResult)
 
   class ExceptionPlaceHolder(val className: String) extends Exception
 
