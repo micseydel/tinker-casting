@@ -182,9 +182,10 @@ object AirGradientActor {
       val (pm02Counts, pm10Counts, pm02Compensateds, rco2s, tvocIndexs) = split(items)
 
       // FIXME: .toInt hacks
-      val pm02CountsSeries = IntSeries("pm02Counts", pm02Counts.map(_.toInt))
+      // FIXME: REMOVE .map(Math.min(_, 550) hacks (or add markdown mentioning it or SOMETHING)
+      val pm02CountsSeries = IntSeries("pm02Counts", pm02Counts.map(_.toInt).map(Math.min(_, 200)))
       val pm10CountsSeries = DoubleSeries("pm10Counts", pm10Counts)
-      val pm02CompensatedsSeries = IntSeries("pm02Compensateds", pm02Compensateds.map(_.toInt))
+      val pm02CompensatedsSeries = IntSeries("pm02Compensateds", pm02Compensateds.map(_.toInt).map(Math.min(_, 200)))
       val rco2sSeries = IntSeries("rco2s-350", rco2s.map(_.toInt-350))
       val tvocIndexsSeries = DoubleSeries("tvocIndexs", tvocIndexs)
 
