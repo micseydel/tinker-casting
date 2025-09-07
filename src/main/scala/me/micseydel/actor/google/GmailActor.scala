@@ -74,6 +74,7 @@ object GmailActor {
 
         implicit val requestGmailAsync: () => Unit = () => {
           implicit val ec: ExecutionContextExecutor = context.system.httpExecutionContext
+          implicit val l: Logger = context.actorContext.log
           context.pipeToSelf(TinkerGmailService.fetchEmails(gmailService))(ReceiveInbox)
         }
 

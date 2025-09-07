@@ -87,7 +87,7 @@ object QuickVoiceCaptureActor {
         Behaviors.same
 
       case DoHeartBeat() =>
-        context.log.warn("[awaitingClient] Ignoring heart beat, should not have happened yet")
+        context.log.info("[awaitingClient] Ignoring heart beat, should not have happened yet")
         Behaviors.same
 
       case StartTinkering(_) => Behaviors.same
