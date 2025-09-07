@@ -18,6 +18,7 @@ import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
+import org.slf4j.Logger
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
@@ -172,7 +173,7 @@ private object TinkerGmailService {
       .build()
   }
 
-  def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor): Future[Seq[Email]] = (Future {
+  def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor, log: Logger): Future[Seq[Email]] = (Future {
     val messages: List[com.google.api.services.gmail.model.Message] = {
       val rawMessages = gmailService.users().messages().list("me")
         // FIXME
@@ -204,10 +205,12 @@ private object TinkerGmailService {
 
         val groupedHeaders = headers.groupBy(_.getName).map { case (k, v) => k -> v.map(_.getValue).toList }
 
-        Some(Email(sender, subject, body, time, groupedHeaders))
+        Email(sender, subject, body, time, groupedHeaders)
       } match {
-        case Failure(exception) => throw exception // FIXME: log
-        case Success(value) => value
+        case Failure(exception) =>
+          log.warn(s"Failed to fetch ${msg.getId}", exception)
+          None
+        case Success(value) => Some(value)
       }
     }
   }).recoverWith {
