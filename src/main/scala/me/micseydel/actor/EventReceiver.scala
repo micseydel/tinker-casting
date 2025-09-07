@@ -3,14 +3,16 @@ package me.micseydel.actor
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.ws.TextMessage
+import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage}
 import akka.http.scaladsl.server.Directives.{concat, handleWebSocketMessages, path}
 import akka.http.scaladsl.server.Route
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.{NotUsed, actor}
 import me.micseydel.dsl.cast.TinkerBrain
 import me.micseydel.prototyping.EventRouting
-import spray.json._
+import spray.json.*
+import akka.actor.typed.scaladsl.adapter.*
 
 import scala.util.{Failure, Success}
 
@@ -26,8 +28,16 @@ object EventReceiver {
 
   // behavior
 
-  def apply(config: Config, tinkerBrain: ActorRef[TinkerBrain.Message]): Behavior[Message] = Behaviors.setup { context =>
-    val route = concat(EventRouting.route(context.self), WebSocketRouting.websocketRoute(tinkerBrain))
+  def apply(config: Config, tinkerBrain: ActorRef[TinkerBrain.Message], quickVoiceCaptureActor: ActorRef[QuickVoiceCaptureActor.Message]): Behavior[Message] = Behaviors.setup { context =>
+
+    val route = concat(
+      EventRouting.route(context.self),
+      WebSocketRouting.websocketRoute(tinkerBrain),
+      {
+        val adapter = context.spawnAnonymous(CustomAdapter(quickVoiceCaptureActor))
+        WebSocketRouting.quickVoiceCaptureWebsocketRoute(quickVoiceCaptureActor, adapter.toClassic)
+      }
+    )
     context.log.info(f"Starting event receiver HTTP server on port ${config.httpPort}")
     startHttpServer(route, config.httpPort)(context.system)
 
@@ -116,7 +126,7 @@ private object WebSocketRouting {
   def websocketRoute(messageActor: ActorRef[TinkerBrain.RegisterClient]): Route = {
     path("ws-messages") {
       handleWebSocketMessages {
-        val source = Source.actorRef[TextMessage](
+        val source = Source.actorRef[BinaryMessage](
           completionMatcher = PartialFunction.empty,
           failureMatcher = PartialFunction.empty,
           bufferSize = 10,
@@ -128,6 +138,36 @@ private object WebSocketRouting {
 
         Flow.fromSinkAndSourceCoupled(Sink.ignore, source)
       }
+    }
+  }
+
+  // copy-paste from the function above
+  def quickVoiceCaptureWebsocketRoute(messageActor: ActorRef[QuickVoiceCaptureActor.Command], untyped: akka.actor.ActorRef): Route = {
+    path("quick-voice-capture") {
+      handleWebSocketMessages {
+        val source: Source[Message, actor.ActorRef] = Source.actorRef[BinaryMessage](
+          completionMatcher = PartialFunction.empty,
+          failureMatcher = PartialFunction.empty,
+          bufferSize = 10,
+          overflowStrategy = OverflowStrategy.fail
+        ).mapMaterializedValue { clientActor =>
+          messageActor ! QuickVoiceCaptureActor.RegisterClient(clientActor)
+          clientActor
+        }
+
+        val sink: Sink[Message, NotUsed] = Sink.actorRef[Message](untyped, TextMessage("completed"), PartialFunction.empty)
+
+        Flow.fromSinkAndSourceCoupled(sink, source)
+      }
+    }
+  }
+}
+
+private object CustomAdapter {
+  def apply(quickVoiceCaptureActor: ActorRef[QuickVoiceCaptureActor.Message]): Behavior[Message] = Behaviors.setup { context =>
+    Behaviors.receiveMessage { message =>
+      quickVoiceCaptureActor ! QuickVoiceCaptureActor.IncomingMessage(message)
+      Behaviors.same
     }
   }
 }

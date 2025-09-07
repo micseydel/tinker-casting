@@ -1,13 +1,15 @@
 package me.micseydel.prototyping
 
 import akka.actor.typed.ActorRef
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
+import akka.http.scaladsl.server.Directives.*
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import me.micseydel.actor.EventReceiver
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
+import me.micseydel.actor.{EventReceiver, QuickVoiceCaptureActor}
 import me.micseydel.actor.EventReceiver.IncomingEvent
-import spray.json._
+import spray.json.*
+
+import java.net.InetAddress
 
 
 object EventRouting {
@@ -15,7 +17,6 @@ object EventRouting {
     // ! asynchronously pass the event off, as long as the structure is valid
     // else, report the error
 
-    // Define exception handler
     implicit def myExceptionHandler: ExceptionHandler =
       ExceptionHandler {
         case ex: DeserializationException =>
@@ -25,16 +26,29 @@ object EventRouting {
           ))
       }
 
-    handleExceptions(myExceptionHandler) {
+    val event = handleExceptions(myExceptionHandler) {
       pathPrefix("event") {
         post {
-          import me.micseydel.actor.EventReceiver.EventJsonProtocol._
+          import me.micseydel.actor.EventReceiver.EventJsonProtocol.*
           entity(as[IncomingEvent]) { event =>
-            actorRef ! event // sending the event to the actor
-            complete(StatusCodes.Accepted) // HTTP 202
+            actorRef ! event
+            complete(StatusCodes.Accepted)
           }
         }
       }
     }
+
+    val quickVoiceCapture = handleExceptions(myExceptionHandler) {
+      pathPrefix("voice-capture") {
+        get {
+          val hostname = InetAddress.getLocalHost.getHostName
+          // FIXME: need to dynamically populate the port
+          val htmlContent = QuickVoiceCaptureActor.html("ws://localhost:5003/quick-voice-capture")
+          complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, htmlContent))
+        }
+      }
+    }
+
+    concat(event, quickVoiceCapture)
   }
 }

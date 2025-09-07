@@ -12,6 +12,7 @@ import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsSt
 import scala.annotation.tailrec
 import scala.concurrent.duration.DurationInt
 
+// FIXME: need to abstract tinkerbrain stuff out of here! or rename
 object WebSocketMessageActor {
   type Client = akka.actor.ActorRef
 
