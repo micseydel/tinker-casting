@@ -184,26 +184,31 @@ private object TinkerGmailService {
     }
 
     messages.flatMap { msg =>
-      // FIXME: should these be Futures?
-      val fullMessage = gmailService.users().messages().get("me", msg.getId).execute()
-      val payload: MessagePart = fullMessage.getPayload
-      val headers = payload.getHeaders.asScala
+      Try {
+        // FIXME: should these be Futures?
+        val fullMessage = gmailService.users().messages().get("me", msg.getId).execute()
+        val payload: MessagePart = fullMessage.getPayload
+        val headers = payload.getHeaders.asScala
 
-      // FIXME: https://github.com/micseydel/tinker-casting/issues/21 verify sender
-      val sender = headers.find(_.getName == "From").map(_.getValue).getOrElse("Unknown")
-      val subject = headers.find(_.getName == "Subject").map(_.getValue).getOrElse("No Subject")
+        // FIXME: https://github.com/micseydel/tinker-casting/issues/21 verify sender
+        val sender = headers.find(_.getName == "From").map(_.getValue).getOrElse("Unknown")
+        val subject = headers.find(_.getName == "Subject").map(_.getValue).getOrElse("No Subject")
 
-      val parts = payload.getParts
-      val body = if (parts != null) extractPlainText(parts)
-      else Option(payload.getBody).map(body => {
-        Option(body.decodeData()).map(_.map(_.toChar).mkString).getOrElse("")
-      }).getOrElse("(No Content)")
+        val parts = payload.getParts
+        val body = if (parts != null) extractPlainText(parts)
+        else Option(payload.getBody).map(body => {
+          Option(body.decodeData()).map(_.map(_.toChar).mkString).getOrElse("")
+        }).getOrElse("(No Content)")
 
-      val time = getSentTimeFromHeaders(payload)
+        val time = getSentTimeFromHeaders(payload)
 
-      val groupedHeaders = headers.groupBy(_.getName).map { case (k, v) => k -> v.map(_.getValue).toList }
+        val groupedHeaders = headers.groupBy(_.getName).map { case (k, v) => k -> v.map(_.getValue).toList }
 
-      Some(Email(sender, subject, body, time, groupedHeaders))
+        Some(Email(sender, subject, body, time, groupedHeaders))
+      } match {
+        case Failure(exception) => throw exception // FIXME: log
+        case Success(value) => value
+      }
     }
   }).recoverWith {
     case e: com.google.api.client.auth.oauth2.TokenResponseException =>
