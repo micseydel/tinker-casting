@@ -10,6 +10,7 @@ import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEven
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.Chronicler.Message
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.model.WhisperResultJsonProtocol.*
@@ -19,10 +20,11 @@ import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.FileDoesNotExist
 import spray.json.*
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
 import java.nio.file.{Path, Paths}
 import java.time.ZonedDateTime
 import java.util.UUID
+import javax.sound.sampled.{AudioFileFormat, AudioFormat, AudioInputStream, AudioSystem}
 import scala.annotation.unused
 import scala.concurrent.ExecutionContextExecutorService
 import scala.util.{Failure, Success, Try}
@@ -35,6 +37,8 @@ object AudioNoteCapturer {
   private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
+
+//  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
 
   // behavior
 
@@ -129,21 +133,16 @@ object AudioNoteCapturer {
       }
     }
 
-    val timerKey: Option[UUID] = Some(UUID.randomUUID())
-
-    // FIXME: change this interface if possible, then swap out for a regular context.castTimeKeeper or whatever
-    val timeKeeper: ActorRef[UntrackedTimeKeeper.Message] = context.spawn(UntrackedTimeKeeper(), "UntrackedTimeKeeper")
 
     behavior(
       vaultRoot,
       chronicler,
-      timerKey,
-      timeKeeper,
-      triggerTranscriptionForAudioPath
+      triggerTranscriptionForAudioPath,
+      config.audioWatchPath
     )(Tinker, noteRef)
   }
 
-  private def behavior(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], timerKey: Option[UUID], timeKeeper: ActorRef[UntrackedTimeKeeper.Message], triggerTranscriptionForWavPath: Path => Unit)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], triggerTranscriptionForWavPath: Path => Unit, audioWatchPath: Path)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
       case AudioPathUpdatedEvent(PathCreatedEvent(audioPath)) if validPath(audioPath) =>
         context.actorContext.log.info(s"New audio ${audioPath.getFileName} (size=${new File(audioPath.toString).length()})")
@@ -212,8 +211,15 @@ object AudioNoteCapturer {
       case ReceivePing(_) =>
         context.actorContext.log.debug("Ignoring ping, already initialized")
         Tinker.steadily
+
+//      case m@ReceiveWavFile(filename, bytes) =>
+////        writeWavWithJavax(audioWatchPath.resolve(filename), bytes)
+//        // FIXME
+//        context.actorContext.log.warn(s"Ignoring $m, never finished impl")
+//        Tinker.steadily
     }
   }
+
 
   // model
 

@@ -35,6 +35,8 @@ object Chronicler {
 
   case class ListenerAcknowledgement(noteId: NoteId, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends Message
 
+//  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
+
   final case class ReceiveNotePing(ping: Ping) extends Message
 
 
@@ -65,6 +67,7 @@ object Chronicler {
                         gossiper: SpiritRef[Gossiper.Message],
                         whisperEventReceiverHost: String, whisperEventReceiverPort: Int
                       )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
+    // FIXME: I can send voice files to Chronicler, who can pass it to this
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
       vaultRoot, context.self.underlying, whisperEventReceiverHost, whisperEventReceiverPort
@@ -72,13 +75,14 @@ object Chronicler {
 
     val moc: ActorRef[ChroniclerMOC.Message] = context.spawn(ChroniclerMOC(), "ChroniclerMOC")
 
-    behavior(Map.empty)(Tinker, gossiper, moc)
+    behavior(Map.empty)(Tinker, gossiper, moc, audioNoteCapturer)
   }
 
   private def behavior(wavNameToTranscriptionNoteOwner: Map[String, SpiritRef[TranscriptionNoteWrapper.Message]])
                       (implicit Tinker: Tinker,
                        gossiper: SpiritRef[Gossiper.Message],
-                       moc: ActorRef[ChroniclerMOC.Message]
+                       moc: ActorRef[ChroniclerMOC.Message],
+                       audioNoteCapturer: ActorRef[AudioNoteCapturer.Message]
                       ): Ability[Message] =  Tinker.setup { context =>
     context.actorContext.log.info(s"Currently have ${wavNameToTranscriptionNoteOwner.size} elements")
     Tinker.receiveMessage { message =>
@@ -154,6 +158,10 @@ object Chronicler {
         case ReceiveNotePing(_) =>
           context.actorContext.log.warn("Ignoring note ping")
           Tinker.steadily
+
+//        case ReceiveWavFile(filename, bytes) =>
+//          audioNoteCapturer ! AudioNoteCapturer.ReceiveWavFile(filename, bytes)
+//          Tinker.steadily
       }
     }
   }
