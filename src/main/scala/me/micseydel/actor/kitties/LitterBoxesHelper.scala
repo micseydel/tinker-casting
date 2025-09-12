@@ -5,11 +5,14 @@ import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
 import me.micseydel.actor.kitties.CatsHelper.{Message, PartialMatch}
 import me.micseydel.actor.kitties.LitterBoxesHelper.{EventCapture, LitterSifted, ObservedCatUsingLitter, PostHocLitterObservation}
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
+import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.NeedsAttention
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext, Tinkerer}
-import me.micseydel.model._
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext, Tinkerer}
+import me.micseydel.model.*
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
@@ -37,7 +40,7 @@ object LitterBoxesHelper {
 
   // behavior
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🤖").setup { context =>
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🤖").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[EventCapture]]] = context.cast(DailyNotesRouter(
@@ -60,7 +63,7 @@ object LitterBoxesHelper {
     behavior(timeKeeper, dailyNotesAssistant, justSiftingReport)
   }
 
-  private def behavior(timeKeeper: SpiritRef[TimeKeeper.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[EventCapture]]], justSiftingReport: SpiritRef[LitterBoxReportActor.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(timeKeeper: SpiritRef[TimeKeeper.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[EventCapture]]], justSiftingReport: SpiritRef[LitterBoxReportActor.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
       // FIXME: need to set a timer for clumping situations
@@ -68,7 +71,6 @@ object LitterBoxesHelper {
         justSiftingReport !! LitterBoxReportActor.LitterSiftedObservation(capture)
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(capture), when.toLocalDate)
         Tinker.steadily
-
 
       case nonSiftEventCapture@PostHocLitterObservation(PostHocLitterObservationEvent(when, _, isClean), _) =>
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(nonSiftEventCapture), nonSiftEventCapture.when.toLocalDate)
@@ -86,6 +88,7 @@ object LitterBoxesHelper {
         Tinker.steadily
 
       case ReceivePartialMatch(PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId), maybeRasaResult)))) =>
+        Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "added to inbox", Some(NeedsAttention))
         justSiftingReport !! LitterBoxReportActor.AddToInbox(MarkdownUtil.listLineWithTimestampAndRef(captureTime,
           whisperResult.whisperResultContent.text,  // siftedContents.toEmojis,
           noteId).drop(2), // FIXME: hack
