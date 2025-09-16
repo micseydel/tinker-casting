@@ -89,7 +89,7 @@ object RecurringResponsibilityActor {
 
           case Success(doc@Document(intervalDays, markedAsDone, _, _)) =>
             val Today = context.system.clock.today()
-            ((markedAsDone, doc.latestEntry) match {
+            val result = (markedAsDone, doc.latestEntry) match {
               case (false, None) =>
                 // start the interval from today
                 val triggerDay = Today.plusDays(intervalDays)
@@ -135,8 +135,9 @@ object RecurringResponsibilityActor {
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 noteRef.prepend(Today, Some(nextTrigger), None)
                 Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
+            }
 
-            }) match {
+            result match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong updating Markdown", exception)
               case Success(_) =>
             }

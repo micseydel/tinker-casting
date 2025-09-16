@@ -3,7 +3,7 @@ package me.micseydel.actor
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirSensorData.Formatter
-import me.micseydel.actor.airgradient.AirGradientActor
+import me.micseydel.actor.airgradient.{AirGradientActor, AirGradientManager}
 import me.micseydel.actor.perimeter.AranetActor
 import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
 import me.micseydel.actor.wyze.WyzeActor
@@ -41,7 +41,7 @@ object AirQualityManagerActor {
       aranetActor !! AranetActor.Fetch(context.messageAdapter(ReceiveAranetResults))
 
       @unused // internally driven
-      val airGradientActor = context.cast(AirGradientActor("http://192.168.50.252/measures/current"), "AirGradientActor")
+      val airGradientManager = context.cast(AirGradientManager(), "AirGradientManager")
 
       context.actorContext.log.info("Subscribed to Purple Air and did a fetch for Aranet4")
 

@@ -2,10 +2,10 @@ package me.micseydel.actor.airgradient
 
 
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.airgradient.AirGradientPollingActor.AlterPolling
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries}
@@ -13,6 +13,7 @@ import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
+import java.time.LocalDate
 import scala.concurrent.duration.{DurationInt, DurationLong}
 import scala.util.{Failure, Success}
 
@@ -26,55 +27,62 @@ object AirGradientActor {
 
   private case class ReceiveAirGradientSensorData(data: AirGradientSensorData) extends Message
 
-  private val BaseNoteName = "Air Gradient measurements"
-  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](BaseNoteName, TinkerColor(145, 96, 220), "😮‍💨", ReceivePing) { (context, noteRef) =>
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]] = context.cast(DailyNotesRouter(
-      BaseNoteName,
-      "airgradient",
-      AirGradientJsonFormat.airGradientSensorDataJsonFormat,
-      AirGradientDailyMarkdown.apply
-    ), "DailyNotesRouter")
+  def apply(api: SpiritRef[AirGradientApiActor.Message], serial: String, nickname: Option[String])(implicit Tinker: Tinker): (String, Ability[Message]) = {
+    val baseNoteName = s"Air Gradient measurements - $serial"
+    // FIXME: return something that includes the nickname
+    baseNoteName -> AttentiveNoteMakingTinkerer[Message, ReceivePing](baseNoteName, TinkerColor(145, 96, 220), "😮‍💨", ReceivePing) { (context, noteRef) =>
+      // FIXME: nickname as alias!
+      implicit val c: TinkerContext[?] = context
 
-    val initialPollingInterval = noteRef.read() match {
-      case Failure(_: FileNotFoundException) =>
-      noteRef.setTo(Note(s"initializing as of ${context.system.clock.now()}", Some("polling_interval_minutes: 10")))
-        10.minutes
-      case Failure(exception) => throw exception
-      case Success(note) =>
-        note.yamlFrontMatter.toOption.flatMap(_.get("polling_interval_minutes")) match {
-          case Some(value: Int) =>
-            context.actorContext.log.info(s"Using polling_interval_minutes $value from disk")
-            value.minutes
-          case other =>
-            val default = 10.minutes
-            context.actorContext.log.info(s"Using polling_interval_minutes default ${default.toMinutes} (ignoring $other)")
-            default
-        }
+      val initialPollingInterval = noteRef.read() match {
+        case Failure(_: FileNotFoundException) =>
+          noteRef.setTo(Note(s"initializing as of ${context.system.clock.now()}", Some("polling_interval_minutes: 10")))
+          10.minutes
+        case Failure(exception) => throw exception
+        case Success(note) =>
+          note.yamlFrontMatter.toOption.flatMap(_.get("polling_interval_minutes")) match {
+            case Some(value: Int) =>
+              context.actorContext.log.info(s"Using polling_interval_minutes $value from disk")
+              value.minutes
+            case other =>
+              val default = 10.minutes
+              context.actorContext.log.info(s"Using polling_interval_minutes default ${default.toMinutes} (ignoring $other)")
+              default
+          }
+      }
+
+      implicit val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]] = context.cast(DailyNotesRouter(
+        baseNoteName,
+        s"airgradient_$serial",
+        AirGradientJsonFormat.airGradientSensorDataJsonFormat,
+        AirGradientDailyMarkdown.apply
+      ), "DailyNotesRouter")
+
+      implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
+      timeKeeper !! TimeKeeper.RemindMeEvery(initialPollingInterval, context.self, DoFetchNow(), Some(classOf[DoFetchNow]))
+      context.self !! DoFetchNow()
+
+      implicit val a: SpiritRef[AirGradientApiActor.Message] = api
+      implicit val n: NoteRef = noteRef
+      implicit val dailyNoteName: LocalDate => String = day => s"$baseNoteName ($day)"
+
+      behavior(initialPollingInterval.toMinutes)
     }
-
-    val apiPoller: SpiritRef[AirGradientPollingActor.Message] = context.cast(AirGradientPollingActor(uri, initialPollingInterval, context.messageAdapter(ReceiveAirGradientSensorData)), "AirGradientPollingActor")
-
-    behavior(initialPollingInterval.toMinutes
-//      , Nil
-    )(Tinker, noteRef,
-      dailyNotesAssistant,
-      apiPoller)
   }
 
-  private def behavior(
-                        pollingIntervalMinutes: Long
-//                        , subscribers: List[SpiritRef[RawSensorData]]
-                      )(implicit Tinker: Tinker, noteRef: NoteRef,
-                        dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
-                        apiPoller: SpiritRef[AirGradientPollingActor.Message]): Ability[Message] = Tinker.receive { (context, message) =>
-    implicit val c: TinkerContext[_] = context
+  private def behavior(pollingIntervalMinutes: Long)(implicit Tinker: Tinker, noteRef: NoteRef,
+                                                     dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
+                                                     api: SpiritRef[AirGradientApiActor.Message],
+                                                     timeKeeper: SpiritRef[TimeKeeper.Message],
+                                                     dailyNoteName: LocalDate => String): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val c: TinkerContext[?] = context
     message match {
 //      case Subscribe(subscriber) =>
 //        behavior(pollingIntervalMinutes, subscriber :: subscribers)
 
       case DoFetchNow() =>
         context.actorContext.log.info("Doing a fetch now")
-        apiPoller !! AlterPolling(forceCheckNow = true, intervalUpdate = None)
+        api !! AirGradientApiActor.Request(context.messageAdapter(ReceiveAirGradientSensorData))
         Tinker.steadily
 
       case ReceivePing(_) =>
@@ -89,12 +97,17 @@ object AirGradientActor {
                 context.actorContext.log.warn(s"failed to parse frontmatter ${note.maybeFrontmatter}", exception)
                 Tinker.steadily
               case Success(frontmatter) =>
-                val refreshNow = note.markdown(3) match {
-                  case 'x' => true
-                  case ' ' => false
-                  case other =>
-                    context.actorContext.log.warn(s"Unexpected char $other for ${note.markdown}")
-                    false
+
+                val refreshNow = if (note.markdown.startsWith("initializing")) {
+                  false
+                } else {
+                  note.markdown(3) match {
+                    case 'x' => true
+                    case ' ' => false
+                    case other =>
+                      context.actorContext.log.warn(s"Unexpected char $other for ${note.markdown}")
+                      false
+                  }
                 }
 
                 val updateIntervalTo: Option[Long] =
@@ -112,19 +125,15 @@ object AirGradientActor {
                       None
                   }
 
-                if (refreshNow || updateIntervalTo.nonEmpty) {
-                  val alteringPolling = AlterPolling(forceCheckNow = refreshNow, intervalUpdate = updateIntervalTo.map(_.minutes))
-                  context.actorContext.log.debug(s"Altering polling! $alteringPolling")
-                  apiPoller !! alteringPolling
-                } else {
-                  context.actorContext.log.info("Ignoring Frontmatter update - refreshNow was false and no valid update interval")
+                if (refreshNow) {
+                  api !! AirGradientApiActor.Request(context.messageAdapter(ReceiveAirGradientSensorData))
                 }
 
                 updateIntervalTo match {
                   case Some(updatedInterval) =>
-                    behavior(updatedInterval
-//                      , subscribers
-                    )
+                    context.actorContext.log.info(s"Updating interval from $pollingIntervalMinutes -> $updatedInterval (minutes)")
+                    timeKeeper !! TimeKeeper.RemindMeEvery(updatedInterval.minutes, context.self, DoFetchNow(), Some(classOf[DoFetchNow]))
+                    behavior(updatedInterval)
                   case None => Tinker.steadily
                 }
             }
@@ -157,7 +166,7 @@ object AirGradientActor {
              |- tvocIndex $tvocIndex
              |
              |# Today
-             |![[$BaseNoteName (${context.system.clock.today()})]]
+             |![[${dailyNoteName(context.system.clock.today())}]]
              |""".stripMargin
 
         val note = Note(markdown, frontmatter)

@@ -5,66 +5,11 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import spray.json.*
 
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
-
-private object AirGradientPollingActor {
-  sealed trait Message
-
-  private case object HeartBeat extends Message
-
-  case class AlterPolling(forceCheckNow: Boolean, intervalUpdate: Option[FiniteDuration]) extends Message
-
-  def apply(uri: String, initialInterval: FiniteDuration, replyTo: SpiritRef[AirGradientSensorData])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    implicit val c: TinkerContext[Message] = context
-
-    val airGradientApiActor = context.cast(AirGradientApiActor(uri), "AirGradientApiActor")
-    context.actorContext.log.info(s"Making initial request then polling every $initialInterval")
-    airGradientApiActor !! AirGradientApiActor.Request(replyTo)
-
-    val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
-    timeKeeper !! TimeKeeper.RemindMeEvery(initialInterval, context.self, AirGradientPollingActor.HeartBeat, Some(AirGradientPollingActor.HeartBeat))
-
-    behavior(airGradientApiActor, replyTo, timeKeeper)
-  }
-
-  private def behavior(api: SpiritRef[AirGradientApiActor.Message], replyTo: SpiritRef[AirGradientSensorData], timeKeeper: SpiritRef[TimeKeeper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
-    implicit val c: TinkerContext[Message] = context
-
-    message match {
-      case HeartBeat =>
-        context.actorContext.log.info("Received heartbeat, making request...")
-        api !! AirGradientApiActor.Request(replyTo)
-        Tinker.steadily
-
-      case inert@AlterPolling(false, None) =>
-        context.actorContext.log.debug(s"Received inert AlterPolling request $inert")
-        Tinker.steadily
-
-      case a@AlterPolling(forceCheckNow, maybeDuration) =>
-        context.actorContext.log.debug(s"AlterPolling $a")
-        if (forceCheckNow) {
-          context.actorContext.log.info("A check outside of the usual heartbeat has been requested, making API request now...")
-          api !! AirGradientApiActor.Request(replyTo)
-        }
-
-        maybeDuration match {
-          case Some(updatedInterval) =>
-            context.actorContext.log.info(s"Updating polling interval to $updatedInterval")
-            timeKeeper !! TimeKeeper.RemindMeEvery(updatedInterval, context.self, AirGradientPollingActor.HeartBeat, Some(AirGradientPollingActor.HeartBeat))
-          case None =>
-        }
-
-        Tinker.steadily
-    }
-  }
-}
-
 
 private object AirGradientApiActor {
   sealed trait Message
@@ -77,13 +22,13 @@ private object AirGradientApiActor {
 
   private case class ReceiveUnmarshalling(sensorData: AirGradientSensorData, replyTo: SpiritRef[AirGradientSensorData]) extends Message
 
-  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  def apply(host: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val s: ActorSystem[?] = context.system.actorSystem
     implicit val c: TinkerContext[Message] = context
 
     Tinker.receiveMessage {
       case Request(replyTo) =>
-        makeRequest(uri, replyTo)
+        makeRequest(host, replyTo)
         Tinker.steadily
 
       case ReceiveHttpResponse(httpResponse, replyTo) =>
@@ -120,7 +65,8 @@ private object AirGradientApiActor {
 
   // util
 
-  private def makeRequest(uri: String, replyTo: SpiritRef[AirGradientSensorData])(implicit context: TinkerContext[Message], actorSystem: ActorSystem[?]): Unit = {
+  private def makeRequest(host: String, replyTo: SpiritRef[AirGradientSensorData])(implicit context: TinkerContext[Message], actorSystem: ActorSystem[?]): Unit = {
+    val uri = s"http://$host/measures/current"
     context.pipeToSelf(request(uri)) {
       case Failure(exception) => ReceiveFailedHttpResponse(exception)
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse, replyTo)
