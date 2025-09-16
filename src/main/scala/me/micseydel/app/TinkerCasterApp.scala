@@ -7,7 +7,7 @@ import me.micseydel.actor.hue.HueListener
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
-import me.micseydel.actor.tasks.RecurringResponsibilityManager
+import me.micseydel.actor.tasks.{RecurringResponsibilityManager, TaskManager}
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.*
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
@@ -17,6 +17,7 @@ import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
 import me.micseydel.util.TimeUtil
 
+import java.nio.file.Path
 import java.time.ZonedDateTime
 import scala.annotation.unused
 
@@ -36,11 +37,13 @@ object TinkerCasterApp {
     // Chronicler, unlike my other actors, leverages EventReceiver for HTTP responses so needs non-note-config
     val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
 
+    val taskNotesTasksPath = config.vaultRoot.resolve("TaskNotes/Tasks/")
+
     @unused
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
         centralCastFactory(chroniclerConfig)(_, _), // effectively globals
-        UserTinkerCast(config.purpleAirReadAPIKey)(_: EnhancedTinker[MyCentralCast])
+        UserTinkerCast(config.purpleAirReadAPIKey, taskNotesTasksPath)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
@@ -64,7 +67,7 @@ case class MyCentralCast(
 
 
 object UserTinkerCast {
-  def apply(purpleAirApiKey: Option[String])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply(purpleAirApiKey: Option[String], taskNotesTasksPath: Path)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
@@ -89,6 +92,9 @@ object UserTinkerCast {
 
     @unused // internally driven by time
     val recurringResponsibilityManager = context.cast(RecurringResponsibilityManager(), "RecurringResponsibilityManager")
+
+    @unused
+    val taskManager = context.cast(TaskManager(taskNotesTasksPath), "TaskManager")
 
     @unused // driven internally by a note
     val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
