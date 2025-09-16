@@ -20,32 +20,26 @@ private object AirGradientPollingActor {
 
   case class AlterPolling(forceCheckNow: Boolean, intervalUpdate: Option[FiniteDuration]) extends Message
 
-  private case class ReceiveHttpResponse(httpResponse: HttpResponse) extends Message
-
-  private case class ReceiveFailedHttpResponse(exception: Throwable) extends Message
-
-  private case class ReceiveUnmarshalling(sensorData: AirGradientSensorData) extends Message
-
   def apply(uri: String, initialInterval: FiniteDuration, replyTo: SpiritRef[AirGradientSensorData])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    implicit val s: ActorSystem[_] = context.system.actorSystem
     implicit val c: TinkerContext[Message] = context
 
+    val airGradientApiActor = context.cast(AirGradientApiActor(uri), "AirGradientApiActor")
     context.actorContext.log.info(s"Making initial request then polling every $initialInterval")
-    makeRequest(uri)
+    airGradientApiActor !! AirGradientApiActor.Request(replyTo)
+
     val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
     timeKeeper !! TimeKeeper.RemindMeEvery(initialInterval, context.self, AirGradientPollingActor.HeartBeat, Some(AirGradientPollingActor.HeartBeat))
 
-    behavior(uri, replyTo, timeKeeper)
+    behavior(airGradientApiActor, replyTo, timeKeeper)
   }
 
-  private def behavior(uri: String, replyTo: SpiritRef[AirGradientSensorData], timeKeeper: SpiritRef[TimeKeeper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
-    implicit val s: ActorSystem[_] = context.system.actorSystem
+  private def behavior(api: SpiritRef[AirGradientApiActor.Message], replyTo: SpiritRef[AirGradientSensorData], timeKeeper: SpiritRef[TimeKeeper.Message])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[Message] = context
 
     message match {
       case HeartBeat =>
         context.actorContext.log.info("Received heartbeat, making request...")
-        makeRequest(uri)
+        api !! AirGradientApiActor.Request(replyTo)
         Tinker.steadily
 
       case inert@AlterPolling(false, None) =>
@@ -56,7 +50,7 @@ private object AirGradientPollingActor {
         context.actorContext.log.debug(s"AlterPolling $a")
         if (forceCheckNow) {
           context.actorContext.log.info("A check outside of the usual heartbeat has been requested, making API request now...")
-          makeRequest(uri)
+          api !! AirGradientApiActor.Request(replyTo)
         }
 
         maybeDuration match {
@@ -67,8 +61,32 @@ private object AirGradientPollingActor {
         }
 
         Tinker.steadily
+    }
+  }
+}
 
-      case ReceiveHttpResponse(httpResponse) =>
+
+private object AirGradientApiActor {
+  sealed trait Message
+
+  case class Request(replyTo: SpiritRef[AirGradientSensorData]) extends Message
+
+  private case class ReceiveHttpResponse(httpResponse: HttpResponse, replyTo: SpiritRef[AirGradientSensorData]) extends Message
+
+  private case class ReceiveFailedHttpResponse(exception: Throwable) extends Message
+
+  private case class ReceiveUnmarshalling(sensorData: AirGradientSensorData, replyTo: SpiritRef[AirGradientSensorData]) extends Message
+
+  def apply(uri: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    implicit val s: ActorSystem[?] = context.system.actorSystem
+    implicit val c: TinkerContext[Message] = context
+
+    Tinker.receiveMessage {
+      case Request(replyTo) =>
+        makeRequest(uri, replyTo)
+        Tinker.steadily
+
+      case ReceiveHttpResponse(httpResponse, replyTo) =>
         context.actorContext.log.info("Received request response...")
 
         implicit val rawSensorJsonFormat: RootJsonFormat[AirGradientSensorData] = AirGradientJsonFormat.airGradientSensorDataJsonFormat
@@ -78,7 +96,7 @@ private object AirGradientPollingActor {
           case Failure(exception) => ReceiveFailedHttpResponse(exception)
           case Success(models) =>
             try {
-              ReceiveUnmarshalling(models.parseJson.convertTo[AirGradientSensorData])
+              ReceiveUnmarshalling(models.parseJson.convertTo[AirGradientSensorData], replyTo)
             } catch {
               case e: DeserializationException =>
                 ReceiveFailedHttpResponse(new RuntimeException(s"failed to parse: $models", e))
@@ -93,7 +111,7 @@ private object AirGradientPollingActor {
         context.actorContext.log.warn(s"Failed to connect to local Air Gradient", exception)
         Tinker.steadily
 
-      case ReceiveUnmarshalling(models) =>
+      case ReceiveUnmarshalling(models, replyTo) =>
         context.actorContext.log.info("Unmarshalling successful, replying and wrapping")
         replyTo !! models
         Tinker.steadily
@@ -102,14 +120,14 @@ private object AirGradientPollingActor {
 
   // util
 
-  private def makeRequest(uri: String)(implicit context: TinkerContext[Message], actorSystem: ActorSystem[_]): Unit = {
+  private def makeRequest(uri: String, replyTo: SpiritRef[AirGradientSensorData])(implicit context: TinkerContext[Message], actorSystem: ActorSystem[?]): Unit = {
     context.pipeToSelf(request(uri)) {
       case Failure(exception) => ReceiveFailedHttpResponse(exception)
-      case Success(httpResponse) => ReceiveHttpResponse(httpResponse)
+      case Success(httpResponse) => ReceiveHttpResponse(httpResponse, replyTo)
     }
   }
 
-  private def request(uri: String)(implicit s: ActorSystem[_]): Future[HttpResponse] = {
+  private def request(uri: String)(implicit s: ActorSystem[?]): Future[HttpResponse] = {
     Http().singleRequest(HttpRequest(
       method = HttpMethods.GET,
       uri = uri,
