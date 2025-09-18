@@ -1,19 +1,28 @@
 package me.micseydel.actor.tasks
 
+import me.micseydel.NoOp
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
+import me.micseydel.actor.tasks.TaskNote.ModelTaskNote
 import me.micseydel.actor.{FolderWatcherActor, VaultPathAdapter}
-import me.micseydel.dsl.Tinker
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.util.TimeUtil
+import me.micseydel.vault.NoteId
+import me.micseydel.vault.persistence.NoteRef
+import net.jcazevedo.moultingyaml.*
 import org.dmfs.rfc5545.DateTime
 import org.dmfs.rfc5545.recur.{InvalidRecurrenceRuleException, RecurrenceRule}
 import org.yaml.snakeyaml.{DumperOptions, Yaml}
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDate, LocalDateTime, ZoneOffset, ZonedDateTime}
+import java.time.{LocalDate, LocalDateTime, ZoneId, ZoneOffset, ZonedDateTime}
 import scala.annotation.unused
-import scala.util.{Failure, Success, Try}
 import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava, SetHasAsJava}
+import scala.jdk.StreamConverters.StreamHasToScala
+import scala.util.{Failure, Success, Try}
 
 object TaskManager {
   sealed trait Message
@@ -25,10 +34,14 @@ object TaskManager {
     val actorNotesFolderWatcher = context.spawn(
       FolderWatcherActor(
         taskNotesTasksPath,
-        context.castAnonymous(VaultPathAdapter(taskNotesTasksPath, context.messageAdapter(ReceiveVaultPathUpdatedEvent))).underlying
+        context.cast(VaultPathAdapter(taskNotesTasksPath, context.messageAdapter(ReceiveVaultPathUpdatedEvent)), "FolderWatcher").underlying
       ),
       s"FolderWatcherActor_for_tasks"
     )
+
+    // FIXME: need to list taskNotesTasksPath and create actors, then wait for new ones
+    val existing = Files.list(taskNotesTasksPath).toScala(List)
+
 
     Tinker.receiveMessage { m=>
       context.actorContext.log.info(s"ignoring message $m")
@@ -44,7 +57,72 @@ object TaskManager {
   }
 }
 
-// old
+object TaskNoteActor {
+  sealed trait Message
+
+  private final case class NotePing(ping: Ping) extends Message
+
+  //
+
+  private val Subfolder = "TaskNotes/Tasks/"
+
+  /**
+   * noteId needs to exist in /TaskNotes/Tasks/
+   */
+  def apply(noteId: NoteId)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NotePing](noteId.id, TinkerColor.random(), "🧹", NotePing, Some(Subfolder)) { (context, noteRef) =>
+    noteRef.getDetails() match {
+      case Failure(exception) =>
+        context.actorContext.log.warn(s"Problem trying to read frontmatter during initialization for ${noteId.asString} in $Subfolder", exception)
+        Tinker.ignore
+
+      case Success(None) =>
+        context.actorContext.log.warn(s"Note ${noteId.asString} in $Subfolder had no frontmatter")
+        Tinker.ignore
+
+      case Success(Some(modelTaskNote)) =>
+        implicit val nr: NoteRef = noteRef
+        behavior(modelTaskNote)
+    }
+  }
+
+  private def behavior(modelTaskNote: ModelTaskNote)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    Tinker.receiveMessage {
+      case NotePing(NoOp) =>
+        noteRef.getDetails() match {
+          case Failure(exception) =>
+            context.actorContext.log.warn(s"(ignoring) Problem trying to re-read frontmatter for ${noteRef.noteId.asString} in $Subfolder", exception)
+            Tinker.steadily
+
+          case Success(None) =>
+            context.actorContext.log.warn(s"(ignoring) Note ${noteRef.noteId.asString} in $Subfolder had no frontmatter on re-read")
+            Tinker.steadily
+
+          case Success(Some(modelTaskNote)) =>
+            context.actorContext.log.info(s"Reloaded task for ${noteRef.noteId.asString}")
+            behavior(modelTaskNote)
+        }
+    }
+  }
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    import TaskNote.TestProtocol.modelTaskNoteYamlFormat
+    def getDetails(): Try[Option[ModelTaskNote]] = noteRef.readNote()
+      .flatMap { note =>
+        Try(note.maybeFrontmatter.map(_.parseYaml.convertTo[ModelTaskNote]))
+      }
+  }
+
+//  private object ConfigSerialization extends DefaultYamlProtocol {
+//
+//  }
+}
+
+
+
+
+
+
+// tinkering, not integrated
 
 
 //https://github.com/jcazevedo/moultingyaml
@@ -91,21 +169,20 @@ object TaskNote {
   }
 
   case class ModelTaskNote(
-                            title: String,
+//                            title: String,
+                            scheduled: String,
                             status: String, //TaskNoteStatus,
-                            due: LocalDate, // DateTime,
+//                            due: LocalDate, // DateTime,
                             priority: String, //TaskNotePriority,
-                            contexts: List[String],
-                            projects: List[String], //FIXME? NoteId
-                            timeEstimate: Int, //minutes
-                            timeEntries: List[TimeEntry],
-                            recurrence: RecurrenceWrapper,
-                            complete_instances: List[LocalDate] // FIXME or ZonedDateTime?
+//                            contexts: List[String],
+//                            projects: List[String], //FIXME? NoteId
+//                            timeEstimate: Int, //minutes
+//                            timeEntries: List[TimeEntry],
+                            recurrence: RecurrenceWrapper //,
+//                            complete_instances: List[LocalDate] // FIXME or ZonedDateTime?
                           ) {
     def recurrenceRule: RecurrenceRule = recurrence.rr
   }
-
-  import net.jcazevedo.moultingyaml.*
 
   object TestProtocol extends DefaultYamlProtocol {
     implicit object ZonedDateTimeYamlFormat extends YamlFormat[ZonedDateTime] {
@@ -151,7 +228,7 @@ object TaskNote {
     }
 
     implicit val timeEntryYamlFormat: YamlFormat[TimeEntry] = yamlFormat2(TimeEntry)
-    implicit val modelTaskNoteYamlFormat: YamlFormat[ModelTaskNote] = yamlFormat10(ModelTaskNote)
+    implicit val modelTaskNoteYamlFormat: YamlFormat[ModelTaskNote] = yamlFormat4(ModelTaskNote)
   }
 
   private implicit class RichSnakey(val obj: YamlValue) extends AnyVal {
@@ -201,27 +278,47 @@ object TaskNote {
   import TestProtocol.modelTaskNoteYamlFormat
 
   def main(args: Array[String]): Unit = {
-    val yamlValue: YamlValue = ModelYaml.parseYaml
+    val testYaml = """status: open
+                     |priority: high
+                     |scheduled: 2025-09-08T18:45
+                     |recurrence: FREQ=DAILY
+                     |dateCreated: 2025-09-08T15:31:58.102-07:00
+                     |dateModified: 2025-09-08T15:31:58.102-07:00
+                     |tags:
+                     |  - task""".stripMargin
+
+    val yamlValue: YamlValue =
+//      ModelYaml.parseYaml
+      testYaml.parseYaml
 
     val modelTaskNote = yamlValue.convertTo[ModelTaskNote]
     println(modelTaskNote)
 
-    println("---")
-    print(yamlValue.print(new SnakeYamlPrinterTEST()))
-    println("---")
+//    println("---")
+//    print(yamlValue.print(new SnakeYamlPrinterTEST()))
+//    println("---")
 
     println(modelTaskNote.recurrence)
     val recurrenceRule: RecurrenceRule = modelTaskNote.recurrenceRule
     val it = recurrenceRule.iterator(DateTime.today())
     val nextDateTime: DateTime = it.nextDateTime() // ew, side effect; stick in a LazyList?
-    println(nextDateTime)
-    println(LocalDate.parse(nextDateTime.toString, DateTimeFormatter.ofPattern("yyyyMMdd")))
+//    nextDateTime.
+//    println(nextDateTime)
+//    println(LocalDate.parse(nextDateTime.toString, DateTimeFormatter.ofPattern("yyyyMMdd")))
 
     val inAndOut = modelTaskNote.toYaml.print.parseYaml.convertTo[ModelTaskNote]
-    println(modelTaskNote.recurrence == inAndOut.recurrence)
-    println(modelTaskNote.copy(recurrence = null) == inAndOut.copy(recurrence = null)) // HA... but also damn
-    println(modelTaskNote)
-    println(inAndOut)
+//    println(modelTaskNote.recurrence == inAndOut.recurrence)
+//    println(modelTaskNote.copy(recurrence = null) == inAndOut.copy(recurrence = null)) // HA... but also damn
+//    println(modelTaskNote)
+//    println(inAndOut)
+
+    val it2 = inAndOut.recurrenceRule.iterator(DateTime.now())
+    val nextDay: DateTime = it2.next()
+//    println(nextDay)
+
+//    val nextAsZonedDateTime = TimeUtil.pythonEpocheToZonedDateTime(next.getTimestamp/1000)
+//    println(TimeUtil.pythonEpocheToZonedDateTime(next.getTimestamp/1000))
+//    println(TimeUtil.pythonEpocheToZonedDateTime(it2.next().getTimestamp/1000))
 
     //    while (it.hasNext() && rule.isInfinite())
     //    {
@@ -229,5 +326,24 @@ object TaskNote {
     //      // do something with nextInstance
     //    }
     // adapted from https://stackoverflow.com/questions/43319008/how-to-parse-an-ical-rrule-in-java
+
+
+    val scheduled: LocalDateTime = LocalDateTime.parse(
+      modelTaskNote.scheduled.replace("T", " "),
+      TimeUtil.YearMonthDaySpaceTimeFormatter
+    )
+
+//    println(s"month ${nextDay.getMonth} from $nextDay (${nextDay.getDayOfMonth})")
+    val nextLocalDate = LocalDate.of(nextDay.getYear, nextDay.getMonth+1, nextDay.getDayOfMonth)
+    val nextZonedDateTime = ZonedDateTime.of(nextLocalDate, scheduled.toLocalTime, ZoneId.systemDefault())
+    println(nextZonedDateTime)
+
+    println(nextZonedDateTime.plusDays(recurrenceRule.getInterval))
+
+    //    val optimism: LocalDateTime = scheduled.withYear(nextAsZonedDateTime.getYear).withMonth(nextAsZonedDateTime.getMonthValue).withDayOfMonth(nextAsZonedDateTime.getDayOfMonth)
+    //    println(optimism)
+    //
+    //    val x = ZonedDateTime.of(optimism, ZoneId.systemDefault())
+
   }
 }

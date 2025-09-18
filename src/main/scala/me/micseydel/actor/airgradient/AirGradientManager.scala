@@ -43,10 +43,10 @@ object AirGradientManager {
                   withoutPrefix
                 }
 
-                val airGradientApiActor = context.castAnonymous(AirGradientApiActor(host))
+                val airGradientApiActor = context.cast(AirGradientApiActor(host), "api")
 
                 val (noteName, ability) = AirGradientActor(airGradientApiActor, serial = withoutLocal, nickname)
-                noteName -> context.castAnonymous(ability)
+                noteName -> context.cast(ability, s"airgradient$withoutLocal")
             }
 
             val noteNames = deviceActors.map(_._1)

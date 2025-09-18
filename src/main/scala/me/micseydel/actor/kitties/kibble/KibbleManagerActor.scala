@@ -65,7 +65,7 @@ object KibbleManagerActor {
     Tinker.receiveMessage {
       case MaybeHeardKibbleMention(notedTranscription) =>
         context.actorContext.log.debug(s"Received ${notedTranscription.noteId}")
-        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+        val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(notedTranscription.capture.captureTime, notedTranscription.capture.whisperResult.whisperResultContent.text, notedTranscription.noteId, dateTimeFormatter = TimeUtil.YearMonthDaySpaceTimeFormatter)
         noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         Tinker.userExtension.gossiper !! notedTranscription.noteId.voteConfidently(None, context.messageAdapter(ReceiveVotes), Some("Definitely maybe"))
         Tinker.steadily
@@ -78,7 +78,7 @@ object KibbleManagerActor {
       case KibbleRefill(container, mass, time, noteId, model) =>
         val nextBehavior: Ability[Message] = if (model == LargeModel) {
           val text = s"Refilled $container to ${mass}g"
-          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.YearMonthDaySpaceTimeFormatter)
           noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
           noteRef.setContainerOrThrow(container, mass)(context.actorContext.log)
           behavior(cachedContainers.updated(container, mass))
@@ -110,7 +110,7 @@ object KibbleManagerActor {
                 s"Measured $container at ${mass}g, previously ${cachedMass}g"
               }
           }
-          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.YearMonthDaySpaceTimeFormatter)
           noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
           behavior(cachedContainers.updated(container, mass))
         } else {
@@ -132,7 +132,7 @@ object KibbleManagerActor {
       case KibbleDiscarded(mass, time, noteId, model) => // FIXME
         if (model == LargeModel) {
           val text = s"Discarded ${mass}g kibble"
-          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.MonthDayTimeFormatter)
+          val lineToAdd = MarkdownUtil.listLineWithTimestampAndRef(time, text, noteId, dateTimeFormatter = TimeUtil.YearMonthDaySpaceTimeFormatter)
           noteRef.addOrThrow(lineToAdd)(context.actorContext.log)
         }
 
