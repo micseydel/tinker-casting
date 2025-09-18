@@ -198,6 +198,7 @@ object Chronicler {
     case mobilePattern(dateTimeStr) => tryParse(dateTimeStr)
     case desktopPattern(dateTimeStr) => tryParse(dateTimeStr)
     case mp3Pattern(dateTimeStr) => tryParse(dateTimeStr)
+    case it if it.startsWith(".evr_recently_deleted_") => Left(s"Ignoring recently deleted recording")
 
     case _ => Left(s"Filename does not match the expected formats: $mobilePattern or $desktopPattern")
   }
