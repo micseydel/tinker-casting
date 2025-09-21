@@ -68,6 +68,9 @@ case class MyCentralCast(
 
 object UserTinkerCast {
   def apply(purpleAirApiKey: Option[String], taskNotesTasksPath: Path)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+    @unused
+    val appRestartTracker = context.cast(AppRestartTracker(), "AppRestartTracker")
+
     @unused // registers with gossiper to listen for transcribed voice notes
     val hueListener = context.cast(HueListener(), "HueListener")
 
