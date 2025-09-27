@@ -1,3 +1,6 @@
+# test with:
+# curl -X POST -H "Content-Type: application/json" -d '{"key": "value"}' http://localhost:8000
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import logging
