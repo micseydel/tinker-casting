@@ -80,12 +80,18 @@ private object LitterGraphHelper {
       val extras = if (needsAudit.nonEmpty) {
         val auditLines = needsAudit.map { case (forDay, auditType) =>
           s"- [[Litter boxes sifting ($forDay)]]: $auditType"
-        }.reverse.mkString("\n")
+        }.reverse.mkString("", "\n", "\n")
+
+        val textLines = "# Days\n\n" + sorted.map {
+          case (date, LitterSummaryForDay(_, peeClumps, poops, _)) =>
+            s"- [[Litter boxes sifting ($date)|$date]] $peeClumps💦 $poops💩"
+        }.mkString("\n")
 
         s"""
            |# Needs auditing
            |
-           |$auditLines""".stripMargin
+           |$auditLines
+           |$textLines""".stripMargin
       } else {
         ""
       }
