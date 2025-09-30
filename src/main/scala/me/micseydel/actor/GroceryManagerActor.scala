@@ -4,16 +4,18 @@ import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl._
+import me.micseydel.dsl.*
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.util.MarkdownUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
+import net.jcazevedo.moultingyaml.{DefaultYamlProtocol, YamlFormat}
+import net.jcazevedo.moultingyaml.*
 
 import java.io.FileNotFoundException
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object GroceryManagerActor {
   sealed trait Message
@@ -130,12 +132,14 @@ object GroceryListMOCActor {
 
   //
 
-  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: String)(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
+  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
     emails.flatMap {
       case email@Email(sender, subject, _, _, _) =>
         email.getTimeHacky match {
           case Success(dateFromEmail) =>
-            val matches = dateFromEmail.isAfter(lastSeenDate) && sender == senderEquals && subject.contains(subjectContains)
+            val matches = dateFromEmail.isAfter(lastSeenDate) &&
+              sender == senderEquals &&
+              subjectContains.exists(subject.contains)
             if (matches) {
               Some(dateFromEmail.toLocalDate)
             } else {
@@ -148,7 +152,7 @@ object GroceryListMOCActor {
 
   //
 
-  case class Config(senderEquals: String, subjectContains: String)
+  case class Config(sender_equals: String, subject_contains_any: List[String])
 
   case class Document(nextNote: String, latestArchive: String, older: List[String], config: Config) {
     def withNewLatest(latest: String): Document = {
@@ -169,37 +173,34 @@ object GroceryListMOCActor {
       noteRef.readNote() match {
         case Failure(exception) => s"Something went wrong reading from disk: ${Common.getStackTraceString(exception)}".invalidNel
         case Success(note@Note(markdown, _)) =>
-          note.yamlFrontMatter match {
-            case Failure(exception) =>
-              s"Something went wrong reading from disk: ${Common.getStackTraceString(exception)}".invalidNel
-            case Success(map) =>
-              val validatedConfig = getConfigFromMap(map)
-              val validatedItems = MarkdownUtil.readListOfWikiLinks(markdown)
 
-              validatedConfig.andThen { config =>
-                validatedItems.map(_.toList).andThen {
-                  case next :: latest :: older =>
-                    Document(next, latest, older, config).validNel
-                  case other =>
-                    s"Expected at least two items but got $other".invalidNel
-                }
+          import YamlProtocol.configYamlFormat
+          val validatedConfig: ValidatedNel[String, Config] = note.maybeFrontmatter
+            .map(frontMatter => Try(frontMatter.parseYaml.convertTo[Config])) match {
+            case Some(value) =>
+              value match {
+                case Failure(exception) => Common.getStackTraceString(exception).invalidNel
+                case Success(value) => value.validNel
               }
+            case None => "no frontmatter found".invalidNel
+          }
+
+          val validatedItems = MarkdownUtil.readListOfWikiLinks(markdown)
+
+          validatedConfig.andThen { config =>
+            validatedItems.map(_.toList).andThen {
+              case next :: latest :: older =>
+                Document(next, latest, older, config).validNel
+              case other =>
+                s"Expected at least two items but got $other".invalidNel
+            }
           }
       }
     }
+  }
 
-    private def getConfigFromMap(map: Map[String, Any]): ValidatedNel[String, Config] = {
-      (map.get("sender_equals"), map.get("subject_contains")) match {
-        case (Some(sender_equals: String), Some(subject_contains: String)) =>
-          Config(sender_equals, subject_contains).validNel
-
-        case (None, None) =>
-          "Expected properties: sender_equals and subject_contains".invalidNel
-
-        case other =>
-          s"Expected properties (Some(sender_equals: String), Some(subject_contains: String)) but got $other".invalidNel
-      }
-    }
+  private object YamlProtocol extends DefaultYamlProtocol {
+    implicit val configYamlFormat: YamlFormat[Config] = yamlFormat2(Config)
   }
 }
 
