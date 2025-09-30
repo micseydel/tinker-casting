@@ -11,6 +11,7 @@ import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
+import org.slf4j.Logger
 import spray.json.*
 
 import java.io.FileNotFoundException
@@ -87,11 +88,19 @@ private object LitterGraphHelper {
             s"- [[Litter boxes sifting ($date)|$date]] $peeClumps💦 $poops💩"
         }.mkString("\n")
 
+        import DocumentJsonProtocol.documentJsonFormat
         s"""
            |# Needs auditing
            |
            |$auditLines
-           |$textLines""".stripMargin
+           |$textLines
+           |
+           |# Raw
+           |
+           |```json
+           |${Document(summaries).toJson.toString}
+           |```
+           |""".stripMargin
       } else {
         ""
       }
@@ -121,12 +130,29 @@ private object LitterGraphHelper {
 
     import DocumentJsonProtocol.documentJsonFormat
 
-    def readDocument(): Try[Option[Document]] = {
-      noteRef.readNote().map(_.maybeFrontmatter).recoverWith {
+    def readDocument()(implicit log: Logger): Try[Option[Document]] = {
+      noteRef.readNote().flatMap {
+        case Note(markdown, maybeFrontmatter) =>
+          markdown.split('\n')
+            .dropWhile(!_.startsWith("# Raw"))
+            .drop(1)
+            .dropWhile(_ == "")
+            .toList match {
+            case "```json" :: raw :: "```" :: ignoring =>
+              log.debug(s"ignoring ${ignoring.size} lines after json, parsing $raw")
+              Try(Some(raw.parseJson.convertTo[Document]))
+                .recoverWith {
+                  case _: DeserializationException =>
+                    Try(maybeFrontmatter.map(_.parseJson.convertTo[Document]))
+                }
+            case other =>
+              log.warn(s"falling back on frontmatter, no raw json section found in markdown: $other")
+              // FIXME: logging
+              Try(maybeFrontmatter.map(_.parseJson.convertTo[Document]))
+          }
+      }.recoverWith {
         case _: FileNotFoundException => Success(None)
-      }.flatMap(maybeFrontmatter =>
-        Try(maybeFrontmatter.map(_.parseJson.convertTo[Document]))
-      )
+      }
     }
 
     def setDocument(document: Document, daysBack: Int): Try[NoOp.type] = {
@@ -160,6 +186,8 @@ object MonthlyAbility {
   def apply(forMonth: Month, color: TinkerColor, emoji: String)(implicit Tinker: Tinker): (String, Ability[LitterCharts.LitterSummaryForDay]) = {
     val noteName = s"Litter Sifting Chart (${forMonth.isoMonth})"
     noteName -> NoteMakingTinkerer(noteName, color, emoji) { (context, noteRef) =>
+      implicit val l: Logger = context.actorContext.log
+      l.info(s"Started ${noteRef.noteId}")
       Tinker.receiveMessage { summary: LitterSummaryForDay =>
           noteRef.readDocument().flatMap {
             case Some(document) =>
@@ -191,6 +219,19 @@ object Last30DaysLitterGraphActor {
   def apply()(implicit Tinker: Tinker): Ability[LitterSummaryForDay] = {
     val noteName = "Litter Sifting Chart (last 30 days)"
     NoteMakingTinkerer(noteName, TinkerColor.random(), "~") { case (context, noteRef) =>
+      implicit val l: Logger = context.actorContext.log
+      l.info(s"Started ${noteRef.noteId}, refreshing markdown")
+
+      noteRef.readDocument() match {
+        case Failure(exception) => l.warn("failed to read/refresh markdown", exception)
+        case Success(None) => l.warn("didn't find any json")
+        case Success(Some(document)) =>
+          setDocumentTruncated(noteRef, document) match {
+            case Failure(exception) => l.warn("failed to write/refresh markdown", exception)
+            case Success(NoOp) =>
+          }
+      }
+
       Tinker.receiveMessage { summary: LitterSummaryForDay =>
         noteRef.readDocument().flatMap {
           case Some(document) =>
