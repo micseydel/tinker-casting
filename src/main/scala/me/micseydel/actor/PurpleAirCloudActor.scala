@@ -12,7 +12,7 @@ import me.micseydel.actor.PurpleAirCloudAPI.{PurpleAirBatchResult, Request, Simp
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.DoubleSeries
 import me.micseydel.util.{JsonUtil, TimeUtil, YamUtil}
@@ -36,7 +36,7 @@ object PurpleAirCloudActor {
 
   //
 
-  def apply(apiKey: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("PurpleAirCloudActor", rgb(102, 15, 213), "☁️", ReceivePing) { (context, noteRef) =>
+  def apply(apiKey: String)(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("PurpleAirCloudActor", rgb(102, 15, 213), "☁️", ReceivePing) { (context, noteRef) =>
     implicit val nr: NoteRef = noteRef
     noteRef.getConfig() match {
       case Validated.Valid(config: Config) =>

@@ -6,7 +6,7 @@ import me.micseydel.actor.notifications.NotificationCenterManager.{CompleteNotif
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.dsl.*
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.AutomaticallyIntegrated
@@ -34,7 +34,7 @@ object RecurringResponsibilityActor {
   private final case object TimerUp extends Message
 
   def apply(noteId: String, manager: SpiritRef[RecurringResponsibilityManager.Track])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] =
-    AttentiveNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing) { (context, noteRef) =>
+    AttentiveActorNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       implicit val c: TinkerClock = context.system.clock
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()

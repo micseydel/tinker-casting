@@ -1,17 +1,18 @@
 package me.micseydel.actor.kitties
 
-import cats.data.Validated.Invalid
+import cats.data.Validated.{Invalid, catchOnly}
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import com.softwaremill.quicklens.ModifyPimp
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.DailyNotesRouter
-import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation}
+import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation, Message, ReceiveNotePing}
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, HasInbox, LitterSummaryForDay}
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.*
-import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
 import me.micseydel.model.*
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
@@ -28,6 +29,8 @@ import scala.util.{Failure, Success}
 object LitterBoxReportActor {
   sealed trait Message
 
+  final case class ReceiveNotePing(ping: Ping) extends Message
+
   sealed trait EventCapture extends Message {
     def when: ZonedDateTime
   }
@@ -42,13 +45,14 @@ object LitterBoxReportActor {
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = setup()
 
+
   private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
     val last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(Last30DaysLitterGraphActor(), "Last30DaysLitterGraphActor")
 
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[EventCapture]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor), 30), "DailyNotesRouter")
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[Message]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor), 30), "DailyNotesRouter")
 
     Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
@@ -58,51 +62,97 @@ object LitterBoxReportActor {
       case ati@AddToInbox(_, when) =>
         dailyNotesAssistant !! DailyNotesRouter.Envelope(ati, when)
         Tinker.steadily
+
+      case np@ReceiveNotePing(NoOp) =>
+        dailyNotesAssistant !! DailyNotesRouter.Envelope(np, context.system.clock.now())
+        Tinker.steadily
     }
   }
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker): (String, Ability[EventCapture]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker): (String, Ability[Message]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
-    noteName -> NoteMakingTinkerer[EventCapture](noteName, color, emoji) { (context, noteRef) =>
+    noteName -> AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](noteName, color, emoji, ReceiveNotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
 
-      noteRef.getDocument(forDay) match {
-        case Invalid(e) =>
-          e.toList match {
-            case List(justOne) if justOne.contains("No such file or directory") =>
+      def refreshMarkdown(): Unit = {
+        context.actorContext.log.info("Refreshing markdown (and notifying listeners)")
+        noteRef.getDocument(forDay) match {
+          case Invalid(e) =>
+            e.toList match {
+              case List(justOne) if justOne.contains("No such file or directory") =>
               // refactor, but this is normal and expected
-            case other =>
-              context.actorContext.log.warn(s"Something unexpected happened: $other")
-          }
-        case Validated.Valid(document: Document) =>
-          val summary = documentToSummary(document, forDay)
-          context.actorContext.log.info(s"$forDay updating the note and listeners with summary $summary")
-          monthlyLitterGraphActor !! summary
-          last30DaysLitterGraphActor !! summary
-          noteRef.setMarkdown(document.toMarkdown) match {
-            case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
-            case Success(NoOp) =>
-          }
+              case other =>
+                context.actorContext.log.warn(s"Something unexpected happened: $other")
+            }
+          case Validated.Valid((existingMarkdown, document: Document)) =>
+            val summary = documentToSummary(document, forDay)
+            context.actorContext.log.info(s"$forDay updating the note and listeners with summary $summary")
+            monthlyLitterGraphActor !! summary
+            last30DaysLitterGraphActor !! summary
+
+            val latestMarkdown = document.toMarkdown
+            if (latestMarkdown != existingMarkdown) {
+              noteRef.setMarkdown(document.toMarkdown) match {
+                case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
+                case Success(NoOp) =>
+              }
+            } else {
+              context.actorContext.log.info("Markdown stable")
+            }
+        }
       }
 
-      Tinker.receiveMessage { observation =>
-        val validatedUpdatedDocument: ValidatedNel[String, Document] = noteRef.addEventCapture(observation)(context.actorContext.log)
+      refreshMarkdown()
 
-        validatedUpdatedDocument match {
-          case Validated.Valid(document: Document) =>
-            val summaryForDay = documentToSummary(document, forDay)
-            monthlyLitterGraphActor !! summaryForDay
-            last30DaysLitterGraphActor !! summaryForDay
+      Tinker.receiveMessage {
+        case ReceiveNotePing(NoOp) =>
+          context.actorContext.log.warn("Received note ping")
+          noteRef.readMarkdownSafer() match {
+            case NoteRef.FileDoesNotExist => context.actorContext.log.warn(s"Race condition or directory mismatch? Tried to read markdown because of a note ping, but it appears not to exist (${noteRef.noteId})")
+            case NoteRef.Contents(s) =>
+              s match {
+                case Failure(exception) => context.actorContext.log.warn(s"Failed to read markdown on note ping", exception)
+                case Success(markdown) =>
+                  val lines = markdown.split('\n')
+                  if (lines.length >= 5) {
+                    val maybeAuditLine = lines(4)
+                    if (maybeAuditLine.length >= 4) {
+                      maybeAuditLine.charAt(3).toLower match {
+                        case 'x' | '-' =>
+                          context.actorContext.log.info("Detected audit complete, refreshing markdown and notifying any listeners")
+                          refreshMarkdown()
+                        case ' ' => // ignore
+                        case other =>
+                          context.actorContext.log.warn(s"Unexpected character $other where a markdown checkbox was expected")
+                      }
+                    } else {
+                      context.actorContext.log.debug(s"Shorter line than expected: $maybeAuditLine")
+                    }
+                  } else {
+                    context.actorContext.log.debug("Fewer lines than expected")
+                  }
+              }
+          }
+          Tinker.steadily
 
-          case Invalid(e) =>
-            context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
-        }
+        case observation: EventCapture =>
+          val validatedUpdatedDocument: ValidatedNel[String, Document] = noteRef.addEventCapture(observation)(context.actorContext.log)
 
-        Tinker.steadily
+          validatedUpdatedDocument match {
+            case Validated.Valid(document: Document) =>
+              val summaryForDay = documentToSummary(document, forDay)
+              monthlyLitterGraphActor !! summaryForDay
+              last30DaysLitterGraphActor !! summaryForDay
+
+            case Invalid(e) =>
+              context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
+          }
+
+          Tinker.steadily
       }
     }
   }
@@ -137,13 +187,17 @@ private[kitties] object DailyAbility {
           DataPoint(when, contents, ref, maybeRaw.toList.map(c => s"    - $c"))
       }
       getDocument(observation.capture.when.toLocalDate) match {
-        case v@Validated.Valid((document: Document)) =>
+        case v@Validated.Valid((existingMarkdown, document: Document)) =>
           val updatedDocument = document.append(datapoint)
           val updatedMarkdown = updatedDocument.toMarkdown
-          noteRef.setMarkdown(updatedMarkdown) match {
-            case Failure(exception) => Common.getStackTraceString(exception).invalidNel
-            case Success(NoOp) =>
-              document.validNel
+          if (updatedMarkdown != existingMarkdown) {
+            noteRef.setMarkdown(updatedMarkdown) match {
+              case Failure(exception) => Common.getStackTraceString(exception).invalidNel
+              case Success(NoOp) =>
+                document.validNel
+            }
+          } else {
+            document.validNel
           }
         case iv@Validated.Invalid(e) =>
           e.toList match {
@@ -165,13 +219,20 @@ private[kitties] object DailyAbility {
 
     private def addToInbox(toAdd: AddToInbox)(implicit log: Logger): ValidatedNel[String, Document] = {
       getDocument(toAdd.when.toLocalDate) match {
-        case Validated.Valid((document: Document)) =>
+        case Validated.Valid((existingMarkdown, document: Document)) =>
           val updatedDocument = document.appendToInbox(toAdd.string)
-          noteRef.setMarkdown(updatedDocument.toMarkdown) match {
-            case Failure(exception) => Common.getStackTraceString(exception).invalidNel
-            case Success(NoOp) =>
-              Validated.Valid(updatedDocument)
+
+          val updatedMarkdown = updatedDocument.toMarkdown
+          if (updatedMarkdown != existingMarkdown) {
+            noteRef.setMarkdown(updatedDocument.toMarkdown) match {
+              case Failure(exception) => Common.getStackTraceString(exception).invalidNel
+              case Success(NoOp) =>
+                Validated.Valid(updatedDocument)
+            }
+          } else {
+            updatedDocument.valid
           }
+
 
         case iv@Validated.Invalid(e) =>
           if (e.exists(_.contains("FileNotFoundException"))) {
@@ -188,10 +249,10 @@ private[kitties] object DailyAbility {
       }
     }
 
-    def getDocument(forDay: LocalDate): ValidatedNel[String, Document] = {
+    def getDocument(forDay: LocalDate): ValidatedNel[String, (String, Document)] = {
       noteRef.readMarkdown() match {
         case Success(markdown) =>
-          MarkdownWithoutJsonExperiment(markdown, forDay)
+          MarkdownWithoutJsonExperiment(markdown, forDay).map(d => (markdown, d))
 
         case Failure(exception) =>
           Invalid(Common.getStackTraceString(exception)).toValidatedNel
@@ -321,7 +382,7 @@ object MarkdownWithoutJsonExperiment {
       val eventsList: String = distinctDatapoints.distinct.map {
         case DataPoint(zonedDateTime, siftedContents, noteId, maybeComments) =>
           MarkdownUtil.listLineWithTimestampAndRef(zonedDateTime, siftedContents.toEmojis, noteId) +
-            Some(maybeComments).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
+            Some(maybeComments.reverse).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
       }.mkString("\n")
       s"""# Events
          |

@@ -3,7 +3,9 @@ package me.micseydel.vault
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import cats.data.NonEmptyList
-import me.micseydel.Common
+import me.micseydel.{Common, NoOp}
+import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.Gossiper.{SubmitVote, Vote}
@@ -38,6 +40,10 @@ object VaultKeeper {
 
   final case class RequestAttachmentsContents(attachmentNames: List[String], replyTo: ActorRef[Either[String, List[Array[Byte]]]]) extends Message
 
+  final case class RequestUpdatesForNote(subscriber: ActorRef[Ping] /*FIXME*/ , noteId: NoteId /*, subdirectory: Option[String] = None*/) extends Message
+
+  private case class ReceivePathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+
   // outgoing messages
 
   case class NoteRefResponse(noteName: String, noteRefOrWhyNot: Either[String, NoteRef])
@@ -51,14 +57,17 @@ object VaultKeeper {
   private def setup(vaultPath: VaultPath): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("VaultKeeper started")
 
-    behavior(vaultPath, vaultPath.resolve("json"), Set.empty, Set.empty)
+    context.spawn(FolderWatcherActor(vaultPath.path, context.messageAdapter(ReceivePathUpdatedEvent)), "FolderWatcherActor")
+
+    behavior(vaultPath, vaultPath.resolve("json"), Set.empty, Set.empty, Map.empty)
   }
 
   private def behavior(
                         vaultPath: VaultPath,
                         jsonPath: Path,
                         noteRefCache: Set[String],
-                        jsonRefCache: Set[String]
+                        jsonRefCache: Set[String],
+                        rootSubscribers: Map[NoteId, ActorRef[Ping]]
                       ): Behavior[Message] = Behaviors.receive { (context, message) =>
     message match {
       case msg@RequestExclusiveNoteRef(noteId, replyTo, subdirectory) =>
@@ -77,7 +86,8 @@ object VaultKeeper {
             jsonPath,
             //            actorRefCache,
             noteRefCache + noteId,
-            jsonRefCache
+            jsonRefCache,
+            rootSubscribers
           )
         }
 
@@ -92,7 +102,8 @@ object VaultKeeper {
             vaultPath,
             jsonPath,
             noteRefCache,
-            jsonRefCache + jsonName
+            jsonRefCache + jsonName,
+            rootSubscribers
           )
         }
 
@@ -109,6 +120,35 @@ object VaultKeeper {
             replyTo ! Right(byteArrays)
         }
 
+        Behaviors.same
+
+      case RequestUpdatesForNote(subscriber, noteId) =>
+        behavior(vaultPath,
+          jsonPath,
+          noteRefCache,
+          jsonRefCache,
+          rootSubscribers.updated(noteId, subscriber)
+        )
+
+      case ReceivePathUpdatedEvent(event) =>
+        event match {
+          case FolderWatcherActor.PathCreatedEvent(path) => context.log.info(s"Ignoring creation of $path")
+          case FolderWatcherActor.PathDeletedEvent(path) => context.log.info(s"Ignoring deletion of $path")
+          case pme@FolderWatcherActor.PathModifiedEvent(path) =>
+            val filename = path.getFileName.toString
+            if (filename.endsWith(".md")) {
+              val noteId = NoteId(filename.dropRight(3))
+              rootSubscribers.get(noteId) match {
+                case None => context.log.info(s"Ignoring update of $path, no subscriber (of ${rootSubscribers.size} subscribers)")
+                case Some(subscriber) =>
+                  if (context.log.isDebugEnabled) {
+                    context.log.debug(s"Pinging $subscriber")
+                  }
+
+                  subscriber ! NoOp
+              }
+            }
+        }
         Behaviors.same
     }
   }

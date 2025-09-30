@@ -16,6 +16,7 @@ import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
 import me.micseydel.util.TimeUtil
+import me.micseydel.vault.VaultPath
 
 import java.nio.file.Path
 import java.time.ZonedDateTime
@@ -42,14 +43,14 @@ object TinkerCasterApp {
     @unused
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
-        centralCastFactory(chroniclerConfig)(_, _), // effectively globals
+        centralCastFactory(chroniclerConfig, config.vaultRoot)(_, _), // effectively globals
         UserTinkerCast(config.purpleAirReadAPIKey, taskNotesTasksPath)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
   }
 
-  def centralCastFactory(config: ChroniclerConfig)(implicit Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
+  def centralCastFactory(config: ChroniclerConfig, vaultRoot: VaultPath)(implicit Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
     context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rasa")
     val gossiper = context.cast(Gossiper(), "Gossiper")
     val chronicler = context.cast(Chronicler(config, gossiper), "Chronicler")
@@ -111,7 +112,6 @@ object UserTinkerCast {
         context.actorContext.log.info("Started PurpleAirCloudActor")
       case None => context.actorContext.log.info("No PurpleAir API key found, not starting PurpleAirCloudActor")
     }
-
 
     Tinker.receiveMessage {
       case ReceiveMqttEvent(topic, payload) =>

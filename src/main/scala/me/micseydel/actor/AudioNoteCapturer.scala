@@ -11,7 +11,7 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.Chronicler.Message
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.model.WhisperResultJsonProtocol.*
 import me.micseydel.model.{LargeModel, WhisperResult}
@@ -44,7 +44,7 @@ object AudioNoteCapturer {
 
   private val NoteName = "Audio Note Capture"
 
-  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
+  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
     noteRef.properties match {
       case Failure(exception) => throw exception
       case Success(None) =>

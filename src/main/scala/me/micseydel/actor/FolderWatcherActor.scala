@@ -29,6 +29,11 @@ object FolderWatcherActor {
   // behavior
 
   def apply(watchPath: Path, subscribers: ActorRef[PathUpdatedEvent]*): Behavior[Message] = Behaviors.setup[Message] { context =>
+    // FIXME
+    if (subscribers.isEmpty) {
+      context.log.warn("NO SUBSCRIBERS, will not do anything - should fix the function signature, in fact")
+    }
+
     // FIXME: actors should not be doing random IO
     Files.createDirectories(watchPath)
     // FIXME: close this down on detecting shutdown

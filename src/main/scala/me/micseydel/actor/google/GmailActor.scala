@@ -15,7 +15,7 @@ import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
@@ -57,7 +57,7 @@ object GmailActor {
 
   val NoteName = "Gmail Configuration"
 
-  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
+  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "💌", ReceivePing) { case (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
     implicit val nr: NoteRef = noteRef
     implicit val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()

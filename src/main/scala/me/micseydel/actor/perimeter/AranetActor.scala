@@ -8,7 +8,7 @@ import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
@@ -36,7 +36,7 @@ object AranetActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] = setup()
 
   private def setup()(implicit Tinker: Tinker): Ability[Message] = {
-    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated) { (context, noteRef) =>
+    AttentiveActorNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated) { (context, noteRef) =>
       val maybeUri = noteRef.readNote().flatMap(_.yamlFrontMatter).map(_.get("uri")) match {
         case Success(Some(uri: String)) => Some(uri)
         case Failure(exception) =>

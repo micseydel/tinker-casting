@@ -4,7 +4,7 @@ import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.EventReceiver.Pupil
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries}
@@ -21,7 +21,7 @@ object PupilMonitorActor {
   private case class ReceivePayload(payload: String) extends Message
   private case class ReceivePing(ping: Ping) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Pupil Tinkering", TinkerColor.random(), "👁️", ReceivePing) { case (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("Pupil Tinkering", TinkerColor.random(), "👁️", ReceivePing) { case (context, noteRef) =>
     context.system.eventReceiver ! EventReceiver.ClaimEventType(Pupil, context.messageAdapter(ReceivePayload).underlying)
 
     noteRef.setMarkdown("- [ ] Click to generate chart\n") match {

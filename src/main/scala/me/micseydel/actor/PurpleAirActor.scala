@@ -13,7 +13,7 @@ import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl._
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.util.TimeUtil
@@ -41,7 +41,7 @@ object PurpleAirActor {
   private val NoteName = "PurpleAir AQI measurements"
   private val DefaultPollingInterval = 5.minutes
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("PurpleAir AQI measurements", TinkerColor(185, 96, 203), "💨", ReceivePing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("PurpleAir AQI measurements", TinkerColor(185, 96, 203), "💨", ReceivePing) { (context, noteRef) =>
     noteRef.getValidatedConfig(DefaultPollingInterval) match {
       case Validated.Invalid(problems) =>
         context.actorContext.log.warn(s"Failed to read config for $NoteName: $problems")

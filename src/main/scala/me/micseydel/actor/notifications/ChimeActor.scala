@@ -6,7 +6,7 @@ import akka.http.scaladsl.model._
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.notifications.ChimeActor.{Command, Error, Info, Success, Theme, Warning}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
@@ -52,7 +52,7 @@ object ChimeActor {
 
   // behavior
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Chime config", TinkerColor.random(), "🔔", ReceivePing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("Chime config", TinkerColor.random(), "🔔", ReceivePing) { (context, noteRef) =>
     initializing(noteRef)
   }
 

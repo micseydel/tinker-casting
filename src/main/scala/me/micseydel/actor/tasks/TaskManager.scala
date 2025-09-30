@@ -6,7 +6,7 @@ import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.tasks.TaskNote.ModelTaskNote
 import me.micseydel.actor.{FolderWatcherActor, VaultPathAdapter}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.NoteId
@@ -69,7 +69,7 @@ object TaskNoteActor {
   /**
    * noteId needs to exist in /TaskNotes/Tasks/
    */
-  def apply(noteId: NoteId)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NotePing](noteId.id, TinkerColor.random(), "🧹", NotePing, Some(Subfolder)) { (context, noteRef) =>
+  def apply(noteId: NoteId)(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, NotePing](noteId.id, TinkerColor.random(), "🧹", NotePing, Some(Subfolder)) { (context, noteRef) =>
     noteRef.getDetails() match {
       case Failure(exception) =>
         context.actorContext.log.warn(s"Problem trying to read frontmatter during initialization for ${noteId.asString} in $Subfolder", exception)

@@ -4,7 +4,7 @@ import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.CatBrown
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
 import me.micseydel.model._
 import me.micseydel.util.MarkdownUtil
@@ -29,7 +29,7 @@ object LitterTrackingDashboardActor {
   def apply(
           //   litterBoxesHelper: SpiritRef[LitterBoxesHelper.Message]
            )(implicit Tinker: Tinker): Ability[Message] =
-    AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, CatBrown, "🧪", ReceiveNotePing) { (context, noteRef) =>
+    AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, CatBrown, "🧪", ReceiveNotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       implicit val clock: TinkerClock = context.system.clock
       implicit val l: Logger = context.actorContext.log

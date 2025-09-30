@@ -10,7 +10,7 @@ import me.micseydel.actor.perimeter.hue.HueNoteRef
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl._
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
 import me.micseydel.model.Light.AllList
 import me.micseydel.model._
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
@@ -50,7 +50,7 @@ object HueControl {
 
   case class HueConfig(ip: String, username: String)
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
     val validatedConfig = noteRef.readNote().flatMap(_.yamlFrontMatter) match {
       case Failure(exception) =>
         s"Reading frontmatter failed ${Common.getStackTraceString(exception)}".invalidNel
