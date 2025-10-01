@@ -12,6 +12,7 @@ import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 import net.jcazevedo.moultingyaml.{DefaultYamlProtocol, YamlFormat}
 import net.jcazevedo.moultingyaml.*
+import org.slf4j.Logger
 
 import java.io.FileNotFoundException
 import java.time.{LocalDate, ZoneId, ZonedDateTime}
@@ -71,6 +72,9 @@ object GroceryListMOCActor {
   final case class ReceiveEmails(emails: Seq[Email]) extends Message
 
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "🛒") { (context, noteRef) =>
+    implicit val l: Logger = context.actorContext.log
+    l.info(s"Starting $noteName")
+    
     implicit val nr: NoteRef = noteRef
     noteRef.readValidatedDocument() match {
       case Validated.Valid(Document(nextNote, _, _, Config(senderEquals, subjectContains))) =>
@@ -132,7 +136,7 @@ object GroceryListMOCActor {
 
   //
 
-  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime): Option[LocalDate] = {
+  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime)(implicit log: Logger): Option[LocalDate] = {
     emails.flatMap {
       case email@Email(sender, subject, _, _, _) =>
         email.getTimeHacky match {
@@ -145,7 +149,9 @@ object GroceryListMOCActor {
             } else {
               None
             }
-          case Failure(exception) => throw exception
+          case Failure(exception) =>
+            log.warn(s"Failed to parse time ${email.sentAt}", exception)
+            None
         }
     }
   }.maxOption
