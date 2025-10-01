@@ -105,7 +105,9 @@ private object LitterGraphHelper {
         ""
       }
 
-      s"""$chart$extras"""
+      s"""# Chart
+         |
+         |$chart$extras""".stripMargin
     }
 
     private def runningAverage(elements: List[Int], lookback: Int = 7): List[Double] = {
@@ -156,7 +158,7 @@ private object LitterGraphHelper {
     }
 
     def setDocument(document: Document, daysBack: Int): Try[NoOp.type] = {
-      noteRef.setTo(Note(document.toMarkdown(daysBack), Some(document.toJson.toString))).map(_ => NoOp)
+      noteRef.setTo(Note(document.toMarkdown(daysBack), None)).map(_ => NoOp)
     }
   }
 }

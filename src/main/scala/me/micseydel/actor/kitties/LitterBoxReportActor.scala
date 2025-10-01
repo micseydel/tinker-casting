@@ -110,7 +110,6 @@ private[kitties] object DailyAbility {
 
       Tinker.receiveMessage {
         case ReceiveNotePing(NoOp) =>
-          context.actorContext.log.warn("Received note ping")
           noteRef.readMarkdownSafer() match {
             case NoteRef.FileDoesNotExist => context.actorContext.log.warn(s"Race condition or directory mismatch? Tried to read markdown because of a note ping, but it appears not to exist (${noteRef.noteId})")
             case NoteRef.Contents(s) =>
