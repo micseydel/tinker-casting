@@ -16,8 +16,8 @@ object CentralNervousSystemMaintenance {
 
     @unused
     val heartRateMonitor = context.cast(HeartRateMonitorActor(), "HeartRateMonitorActor")
-    @unused
-    val pupilMonitorActor = context.cast(PupilMonitorActor(), "PupilMonitorActor")
+//    @unused
+//    val pupilMonitorActor = context.cast(PupilMonitorActor(), "PupilMonitorActor")
 
     Tinker.ignore
   }
