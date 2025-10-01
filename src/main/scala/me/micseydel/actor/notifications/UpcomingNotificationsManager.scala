@@ -1,17 +1,17 @@
 package me.micseydel.actor.notifications
 
+import me.micseydel.actor.*
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor._
 import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.Purple
-import me.micseydel.dsl._
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDate, ZonedDateTime}
 import scala.util.{Failure, Success}
 
 object UpcomingNotificationsManager {
@@ -35,7 +35,7 @@ object UpcomingNotificationsManager {
   //
 
   def apply(notificationCenterManager: SpiritRef[NotificationCenterManager.Message])(implicit Tinker: Tinker): Ability[Message] =
-    AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, Purple, "⏳", ReceiveNotePing) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, Purple, "⏳", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
 
       context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))

@@ -4,15 +4,15 @@ import akka.util.Timeout
 import cats.data.Validated
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common.getValidatedStringFromConfig
-import me.micseydel.{Common, NoOp}
-import me.micseydel.actor.perimeter.HueControl._
+import me.micseydel.actor.perimeter.HueControl.*
 import me.micseydel.actor.perimeter.hue.HueNoteRef
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl._
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.model.*
 import me.micseydel.model.Light.AllList
-import me.micseydel.model._
+import me.micseydel.{Common, NoOp}
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsNumber, JsObject, JsString, JsValue, RootJsonFormat, enrichAny}
 
 import java.time.Duration
@@ -50,7 +50,7 @@ object HueControl {
 
   case class HueConfig(ip: String, username: String)
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NoteUpdated]("Hue Control", rgb(230, 230, 230), "🕹️", NoteUpdated, Some("_actor_notes")) { (context, noteRef) =>
     val validatedConfig = noteRef.readNote().flatMap(_.yamlFrontMatter) match {
       case Failure(exception) =>
         s"Reading frontmatter failed ${Common.getStackTraceString(exception)}".invalidNel

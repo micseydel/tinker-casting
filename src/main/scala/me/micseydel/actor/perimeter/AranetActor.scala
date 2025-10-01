@@ -6,15 +6,15 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl._
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
-import spray.json._
+import spray.json.*
 
 import java.time.ZonedDateTime
 import scala.util.{Failure, Success}
@@ -36,7 +36,7 @@ object AranetActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] = setup()
 
   private def setup()(implicit Tinker: Tinker): Ability[Message] = {
-    AttentiveActorNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](NoteName, TinkerColor(223, 58, 7), "😶‍🌫️", ReceiveNoteUpdated, Some("_actor_notes")) { (context, noteRef) =>
       val maybeUri = noteRef.readNote().flatMap(_.yamlFrontMatter).map(_.get("uri")) match {
         case Success(Some(uri: String)) => Some(uri)
         case Failure(exception) =>

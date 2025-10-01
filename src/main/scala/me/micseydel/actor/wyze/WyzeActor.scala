@@ -4,15 +4,15 @@ import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlug, WyzePlugAPIResponse, WyzePlugAPIResult}
+import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlug, WyzePlugAPIResponse}
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl._
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.ZonedDateTime
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object WyzeActor {
   sealed trait Message
@@ -25,7 +25,7 @@ object WyzeActor {
 
   private val NoteName = "Wyze Plugs"
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceiveNoteUpdatedPing](NoteName, TinkerColor.rgb(0, 255, 255), "🔌", ReceiveNoteUpdatedPing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdatedPing](NoteName, TinkerColor.rgb(0, 255, 255), "🔌", ReceiveNoteUpdatedPing, Some("_actor_notes")) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
 
     noteRef.readNote() match {

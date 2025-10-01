@@ -3,13 +3,13 @@ package me.micseydel.actor
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirSensorData.Formatter
-import me.micseydel.actor.airgradient.{AirGradientActor, AirGradientManager}
+import me.micseydel.actor.airgradient.AirGradientManager
 import me.micseydel.actor.perimeter.AranetActor
 import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
 import me.micseydel.actor.wyze.WyzeActor
-import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.*
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
@@ -34,7 +34,7 @@ object AirQualityManagerActor {
              wyzeActor: SpiritRef[WyzeActor.Message],
              aranetActor: SpiritRef[AranetActor.Message]
            )(implicit Tinker: Tinker): Ability[Message] =
-    AttentiveActorNoteMakingTinkerer[Message, ReceiveNoteUpdated](Filename, TinkerColor.rgb(245, 245, 250), "🫧", ReceiveNoteUpdated) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, ReceiveNoteUpdated](Filename, TinkerColor.rgb(245, 245, 250), "🫧", ReceiveNoteUpdated, Some("_actor_notes")) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
 
       purpleAirActor !! PurpleAirActor.Subscribe(context.messageAdapter(ReceivePurpleAir))
@@ -213,7 +213,7 @@ object AirPurifierActor {
   final case class SetTo(onOff: Boolean) extends Message // FIXME: needs testing
   private case class ReceiveNotePing(ping: Ping) extends Message
 
-  def apply(wyzeActor: SpiritRef[WyzeActor.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing]("Air Purifier", TinkerColor(200, 250, 250), "🗼", ReceiveNotePing) { (context, noteRef) =>
+  def apply(wyzeActor: SpiritRef[WyzeActor.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Air Purifier", TinkerColor(200, 250, 250), "🗼", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
     implicit val wa: SpiritRef[WyzeActor.Message] = wyzeActor
     implicit val nr: NoteRef = noteRef
 

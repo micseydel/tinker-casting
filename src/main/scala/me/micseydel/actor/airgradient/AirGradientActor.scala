@@ -6,7 +6,7 @@ import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRo
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries}
 import me.micseydel.vault.Note
@@ -30,7 +30,7 @@ object AirGradientActor {
   def apply(api: SpiritRef[AirGradientApiActor.Message], serial: String, nickname: Option[String])(implicit Tinker: Tinker): (String, Ability[Message]) = {
     val baseNoteName = s"Air Gradient measurements - $serial"
     // FIXME: return something that includes the nickname
-    baseNoteName -> AttentiveActorNoteMakingTinkerer[Message, ReceivePing](baseNoteName, TinkerColor(145, 96, 220), "😮‍💨", ReceivePing) { (context, noteRef) =>
+    baseNoteName -> AttentiveNoteMakingTinkerer[Message, ReceivePing](baseNoteName, TinkerColor(145, 96, 220), "😮‍💨", ReceivePing, Some("_actor_notes")) { (context, noteRef) =>
       // FIXME: nickname as alias!
       implicit val c: TinkerContext[?] = context
 

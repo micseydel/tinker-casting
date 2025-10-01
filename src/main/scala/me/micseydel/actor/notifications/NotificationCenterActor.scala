@@ -4,7 +4,7 @@ import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.Notification
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 
 import scala.util.{Failure, Success}
@@ -16,7 +16,7 @@ object NotificationCenterActor {
   private[notifications] case class ClearNotification(id: String) extends Message
 
   private val NoteName = "Notification Center"
-  def apply(completeNotification: SpiritRef[NotificationCenterManager.CompleteNotification])(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(205, 205, 0), "📢", ReceiveNotePing) { (context, noteRef) =>
+  def apply(completeNotification: SpiritRef[NotificationCenterManager.CompleteNotification])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(205, 205, 0), "📢", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
     implicit val c: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>

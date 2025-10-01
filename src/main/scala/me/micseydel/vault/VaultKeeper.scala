@@ -1,26 +1,14 @@
 package me.micseydel.vault
 
-import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
-import cats.data.NonEmptyList
-import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.FolderWatcherActor
-import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.Gossiper
-import me.micseydel.dsl.cast.Gossiper.{SubmitVote, Vote}
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerClock, TinkerContext}
-
-import java.time.ZonedDateTime
-//import me.micseydel.dsl.cast.Gossiper.Vote
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.persistence.{BasicJsonRef, BasicNoteRef, JsonRef, NoteRef}
-import org.yaml.snakeyaml.Yaml
-import spray.json.{DefaultJsonProtocol, JsonFormat, RootJsonFormat}
+import me.micseydel.{Common, NoOp}
 
 import java.nio.file.Path
-import java.util
-import scala.jdk.javaapi.CollectionConverters
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -40,9 +28,7 @@ object VaultKeeper {
 
   final case class RequestAttachmentsContents(attachmentNames: List[String], replyTo: ActorRef[Either[String, List[Array[Byte]]]]) extends Message
 
-  final case class RequestUpdatesForNote(subscriber: ActorRef[Ping] /*FIXME*/ , noteId: NoteId /*, subdirectory: Option[String] = None*/) extends Message
-
-  private case class ReceivePathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+  final case class SubscribeUpdatesForNote(subscriber: ActorRef[Ping], noteId: NoteId, subdirectory: Option[String] = None) extends Message
 
   // outgoing messages
 
@@ -57,9 +43,12 @@ object VaultKeeper {
   private def setup(vaultPath: VaultPath): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("VaultKeeper started")
 
-    context.spawn(FolderWatcherActor(vaultPath.path, context.messageAdapter(ReceivePathUpdatedEvent)), "FolderWatcherActor")
+    val watcherLookup = new LookUpActorByKey[String, FolderWatcherWithSubscribers.Message](Map.empty, { (context, subdirectory) =>
+      // FIXME: ideally these names would be tracked better
+      context.spawnAnonymous(FolderWatcherWithSubscribers(vaultPath.resolve(subdirectory)))
+    })
 
-    behavior(vaultPath, vaultPath.resolve("json"), Set.empty, Set.empty, Map.empty)
+    behavior(vaultPath, vaultPath.resolve("json"), Set.empty, Set.empty, Map.empty, watcherLookup)
   }
 
   private def behavior(
@@ -67,7 +56,8 @@ object VaultKeeper {
                         jsonPath: Path,
                         noteRefCache: Set[String],
                         jsonRefCache: Set[String],
-                        rootSubscribers: Map[NoteId, ActorRef[Ping]]
+                        rootSubscribers: Map[NoteId, ActorRef[Ping]],
+                        watcherLookup: LookUpActorByKey[String, FolderWatcherWithSubscribers.Message]
                       ): Behavior[Message] = Behaviors.receive { (context, message) =>
     message match {
       case msg@RequestExclusiveNoteRef(noteId, replyTo, subdirectory) =>
@@ -87,7 +77,8 @@ object VaultKeeper {
             //            actorRefCache,
             noteRefCache + noteId,
             jsonRefCache,
-            rootSubscribers
+            rootSubscribers,
+            watcherLookup
           )
         }
 
@@ -103,7 +94,8 @@ object VaultKeeper {
             jsonPath,
             noteRefCache,
             jsonRefCache + jsonName,
-            rootSubscribers
+            rootSubscribers,
+            watcherLookup
           )
         }
 
@@ -122,24 +114,52 @@ object VaultKeeper {
 
         Behaviors.same
 
-      case RequestUpdatesForNote(subscriber, noteId) =>
+      case SubscribeUpdatesForNote(subscriber, noteId, maybeSubdirectory) =>
+        implicit val actorContext: ActorContext[Message] = context
+        val maybeUpdatedLookup = watcherLookup :?> maybeSubdirectory.getOrElse("") match {
+          case (latest, watcher) =>
+            watcher ! FolderWatcherWithSubscribers.SubscribeUpdatesForNote(subscriber, noteId)
+            latest
+        }
+
         behavior(vaultPath,
           jsonPath,
           noteRefCache,
           jsonRefCache,
-          rootSubscribers.updated(noteId, subscriber)
+          rootSubscribers.updated(noteId, subscriber),
+          maybeUpdatedLookup
         )
+    }
+  }
+}
+
+private object FolderWatcherWithSubscribers {
+  sealed trait Message
+
+  final case class SubscribeUpdatesForNote(subscriber: ActorRef[Ping], noteId: NoteId) extends Message
+
+  private case class ReceivePathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+
+  def apply(path: Path): Behavior[Message] = Behaviors.setup { context =>
+    context.spawn(FolderWatcherActor(path, context.messageAdapter(ReceivePathUpdatedEvent)), "FolderWatcherActor")
+    behavior(Map.empty)
+  }
+
+  private def behavior(subscribers: Map[NoteId, ActorRef[Ping]]): Behavior[Message] = Behaviors.setup { context =>
+    Behaviors.receiveMessage {
+      case SubscribeUpdatesForNote(subscriber, noteId) =>
+        behavior(subscribers.updated(noteId, subscriber))
 
       case ReceivePathUpdatedEvent(event) =>
         event match {
           case FolderWatcherActor.PathCreatedEvent(path) => context.log.info(s"Ignoring creation of $path")
           case FolderWatcherActor.PathDeletedEvent(path) => context.log.info(s"Ignoring deletion of $path")
-          case pme@FolderWatcherActor.PathModifiedEvent(path) =>
+          case FolderWatcherActor.PathModifiedEvent(path) =>
             val filename = path.getFileName.toString
             if (filename.endsWith(".md")) {
               val noteId = NoteId(filename.dropRight(3))
-              rootSubscribers.get(noteId) match {
-                case None => context.log.info(s"Ignoring update of $path, no subscriber (of ${rootSubscribers.size} subscribers)")
+              subscribers.get(noteId) match {
+                case None => context.log.info(s"Ignoring update of $path, no subscriber (of ${subscribers.size} subscribers)")
                 case Some(subscriber) =>
                   if (context.log.isDebugEnabled) {
                     context.log.debug(s"Pinging $subscriber")
@@ -154,99 +174,26 @@ object VaultKeeper {
   }
 }
 
+// copy-paste with modifications from LookUpSpiritByKey
+private class LookUpActorByKey[K, S](
+                                       map: Map[K, ActorRef[S]],
+                                       caster: (ActorContext[?], K) => ActorRef[S]
+                                     ) {
 
-// model
+  def :?>(key: K)(implicit tinkerContext: ActorContext[?]): (LookUpActorByKey[K, S], ActorRef[S]) = lookup(key)
 
+  override def toString: String = s"LookUpSpiritByKey($map)"
 
-// https://help.obsidian.md/Linking+notes+and+files/Internal+links#Link+to+a+block+in+a+note
-sealed trait LinkId {
-  def asString: String
+  //
 
-  def wikiLinkWithAlias(alias: String): String = s"[[$asString|$alias]]"
-  override def toString: String = s"[[$asString]]"
-}
+  private def lookup(key: K)(implicit tinkerContext: ActorContext[?]): (LookUpActorByKey[K, S], ActorRef[S]) = {
+    map.get(key) match {
+      case Some(existing) =>
+        (this, existing)
 
-
-case class NoteId(id: String
-                  // FIXME: support for subdirectories?
-                  //                  , subdirectory: String
-                 ) extends LinkId {
-  override def asString: String = id
-
-  def heading(heading: String): HeadingId = HeadingId(heading, this)
-
-  def vote(confidence: Either[Double, Option[Boolean]], voter: SpiritRef[NonEmptyList[Vote]], comments: Option[String])(implicit clock: TinkerClock): Vote =
-    Vote(this, confidence, voter, clock.now(), comments)
-
-  def voteConfidently(confidence: Option[Boolean], voter: SpiritRef[NonEmptyList[Vote]], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
-    Gossiper.SubmitVote(Vote(this, Right(confidence), voter, clock.now(), comments))
-
-  def voteMeasuredly(confidence: Double, voter: SpiritRef[NonEmptyList[Vote]], comments: Option[String])(implicit clock: TinkerClock): SubmitVote =
-    Gossiper.SubmitVote(Vote(this, Left(confidence), voter, clock.now(), comments))
-}
-
-object LinkIdJsonProtocol extends DefaultJsonProtocol {
-  implicit def noteIdFormat: JsonFormat[NoteId] = jsonFormat1(NoteId)
-}
-
-case class HeadingId (heading: String, noteId: NoteId) extends LinkId {
-  override def asString: String = s"${noteId.id}#^$heading"
-}
-
-case class Note(
-                                 markdown: String,
-                                 // FIXME https://github.com/jcazevedo/moultingyaml
-                                 maybeFrontmatter: Option[String]
-               ) {
-  def raw: String = {
-    maybeFrontmatter match {
-      case Some(yaml) =>
-        s"""---
-           |$yaml
-           |---
-           |$markdown
-           |""".stripMargin
       case None =>
-        markdown
+        val fresh = caster(tinkerContext, key)
+        (new LookUpActorByKey(map.updated(key, fresh), caster), fresh)
     }
-  }
-
-  def yamlFrontMatter: Try[Map[String, Any]] = maybeFrontmatter match {
-    case Some(frontmatter) =>
-      Try {
-        val Yaml = new Yaml() // not thread safe
-        val javaMap: java.util.Map[String, Any] = Yaml.load(frontmatter)
-        val scalaMap: Map[String, Any] = CollectionConverters.asScala(javaMap).toMap
-        scalaMap
-      }
-    case None =>
-      Success(Map.empty)
-  }
-}
-
-object Note {
-
-  def apply(markdown: String, frontmatter: Map[String, Object]): Note  = {
-    val Yaml = new Yaml()
-    // workaround for Yaml library
-    val asJava: util.Map[String, Object] = new java.util.HashMap[String, Object]()
-    for ((key, value) <- frontmatter) {
-      asJava.put(key, value)
-    }
-
-    Note(markdown, Some(Yaml.dump(asJava)))
-  }
-}
-
-case class SpiritId private[vault](id: String)
-
-object SpiritId {
-  def apply(clazz: Class[_]): SpiritId = {
-    // e.g. me.micseydel.vault.VaultKeeper$
-    SpiritId(clazz.getName)
-  }
-
-  object SpiritIdJsonFormatter extends DefaultJsonProtocol {
-    implicit val spiritIDJsonFormat: RootJsonFormat[SpiritId] = jsonFormat1(SpiritId.apply(_: String))
   }
 }

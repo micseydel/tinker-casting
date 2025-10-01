@@ -3,12 +3,12 @@ package me.micseydel.actor
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
-import javax.sound.sampled.{AudioFormat, Clip, DataLine, Mixer, AudioSystem => JVMAudioSystem}
+import javax.sound.sampled.{AudioFormat, Clip, DataLine, Mixer, AudioSystem as JVMAudioSystem}
 import scala.util.{Failure, Success, Try}
 
 object SoundPlayerActor {
@@ -18,7 +18,7 @@ object SoundPlayerActor {
 
   final case class ReceiveNotePing(ping: Ping) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player", TinkerColor.random(), "🎙️", ReceiveNotePing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player", TinkerColor.random(), "🎙️", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
     context.actorContext.log.info("Refreshing note Markdown")
     noteRef.refreshNote(None)
 
@@ -172,7 +172,7 @@ object SoundPlayerTestActor {
 
   final case class ReceiveNotePing(ping: Ping) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player Testing", TinkerColor.random(), "🥼", ReceiveNotePing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player Testing", TinkerColor.random(), "🥼", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
 
     val soundPlayerActor = context.cast(SoundPlayerActor(), "SoundPlayerActor")

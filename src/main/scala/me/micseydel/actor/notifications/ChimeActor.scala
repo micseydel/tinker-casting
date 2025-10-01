@@ -2,11 +2,11 @@ package me.micseydel.actor.notifications
 
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.*
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.notifications.ChimeActor.{Command, Error, Info, Success, Theme, Warning}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
@@ -52,7 +52,7 @@ object ChimeActor {
 
   // behavior
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("Chime config", TinkerColor.random(), "🔔", ReceivePing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Chime config", TinkerColor.random(), "🔔", ReceivePing, Some("_actor_notes")) { (context, noteRef) =>
     initializing(noteRef)
   }
 
@@ -179,7 +179,7 @@ object ChimeActor {
       "theme" -> theme.str
     )
 
-    import spray.json.DefaultJsonProtocol._
+    import spray.json.DefaultJsonProtocol.*
     val responseFuture: Future[HttpResponse] = Http().singleRequest(
       HttpRequest(
         method = HttpMethods.POST,

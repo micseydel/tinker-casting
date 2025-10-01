@@ -2,19 +2,19 @@ package me.micseydel.dsl.cast.chronicler
 
 import akka.actor.InvalidActorNameException
 import akka.actor.typed.ActorRef
+import me.micseydel.actor.*
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
-import me.micseydel.actor._
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{AutomaticallyIntegrated, NoteState, TranscribedMobileNoteEntry}
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
-import me.micseydel.model._
+import me.micseydel.model.*
 import me.micseydel.util.StringImplicits.RichString
-import me.micseydel.vault._
+import me.micseydel.vault.*
 import me.micseydel.{Common, NoOp}
 
 import java.nio.file.Path
@@ -48,7 +48,7 @@ object Chronicler {
                         gossiper: SpiritRef[Gossiper.Message],
                         whisperEventReceiverHost: String,
                         whisperEventReceiverPort: Int
-                      )(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing) { case (context, noteRef) =>
+                      )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing, Some("_actor_notes")) { case (context, noteRef) =>
     // FIXME: remove noteref if it stays unused
     implicit val tc: TinkerContext[_] = context
     context.self !! ReceiveNotePing(NoOp) // bootstrap

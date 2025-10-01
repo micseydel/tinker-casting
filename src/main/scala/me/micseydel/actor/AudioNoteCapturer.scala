@@ -8,10 +8,8 @@ import me.micseydel.actor.AudioNoteCapturerHelpers.*
 import me.micseydel.actor.EventReceiver.TranscriptionCompleted
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.UntrackedTimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.chronicler.Chronicler.Message
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.model.WhisperResultJsonProtocol.*
 import me.micseydel.model.{LargeModel, WhisperResult}
@@ -20,11 +18,9 @@ import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.FileDoesNotExist
 import spray.json.*
 
-import java.io.{ByteArrayInputStream, File}
+import java.io.File
 import java.nio.file.{Path, Paths}
 import java.time.ZonedDateTime
-import java.util.UUID
-import javax.sound.sampled.{AudioFileFormat, AudioFormat, AudioInputStream, AudioSystem}
 import scala.annotation.unused
 import scala.concurrent.ExecutionContextExecutorService
 import scala.util.{Failure, Success, Try}
@@ -44,7 +40,7 @@ object AudioNoteCapturer {
 
   private val NoteName = "Audio Note Capture"
 
-  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing) { case (context, noteRef) =>
+  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
     noteRef.properties match {
       case Failure(exception) => throw exception
       case Success(None) =>

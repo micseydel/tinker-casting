@@ -2,7 +2,7 @@ package me.micseydel.actor
 
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.*
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
@@ -10,16 +10,16 @@ import me.micseydel.Common
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirPollingActor.AlterPolling
 import me.micseydel.actor.PurpleAirSensorData.Formatter
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl._
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
-import spray.json._
+import spray.json.*
 
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
@@ -41,7 +41,7 @@ object PurpleAirActor {
   private val NoteName = "PurpleAir AQI measurements"
   private val DefaultPollingInterval = 5.minutes
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("PurpleAir AQI measurements", TinkerColor(185, 96, 203), "💨", ReceivePing) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("PurpleAir AQI measurements", TinkerColor(185, 96, 203), "💨", ReceivePing, Some("_actor_notes")) { (context, noteRef) =>
     noteRef.getValidatedConfig(DefaultPollingInterval) match {
       case Validated.Invalid(problems) =>
         context.actorContext.log.warn(s"Failed to read config for $NoteName: $problems")

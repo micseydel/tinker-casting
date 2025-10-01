@@ -4,10 +4,10 @@ import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.EventReceiver.HeartRate
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveActorNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
+import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success}
@@ -17,7 +17,7 @@ object HeartRateMonitorActor {
   private case class ReceivePayload(payload: String) extends Message
   private case class ReceivePing(ping: Ping) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveActorNoteMakingTinkerer[Message, ReceivePing]("Heart Rate Tinkering", TinkerColor.random(), "❤️", ReceivePing) { case (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Heart Rate Tinkering", TinkerColor.random(), "❤️", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
     context.system.eventReceiver ! EventReceiver.ClaimEventType(HeartRate, context.messageAdapter(ReceivePayload).underlying)
 
     noteRef.setMarkdown("- [ ] Click to generate chart\n") match {
