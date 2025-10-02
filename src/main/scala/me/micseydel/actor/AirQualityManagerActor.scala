@@ -3,6 +3,7 @@ package me.micseydel.actor
 import com.softwaremill.quicklens.ModifyPimp
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.PurpleAirCloudAPI.PurpleAirBatchResult
 import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.actor.airgradient.AirGradientActor.AirGradientSensorResult
 import me.micseydel.actor.airgradient.AirGradientManager
@@ -287,10 +288,11 @@ object AirQualityDashboardActor {
 
   private case class ReceiveAranetResults(results: AranetActor.Result) extends Message
   private case class ReceiveAirGradientResults(results: AirGradientSensorResult) extends Message
+  private case class ReceivePurpleAirResults(results: PurpleAirBatchResult) extends Message
 
 //  private case class ReceiveNoteUpdated(ping: Ping) extends Message
 
-  def apply(aranetActor: SpiritRef[AranetActor.Message])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Air Quality Dashboard", TinkerColor.random(), "🎯") { (context, noteRef) =>
+  def apply(purpleAirApiKey: Option[String], aranetActor: SpiritRef[AranetActor.Message])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Air Quality Dashboard", TinkerColor.random(), "🎯") { (context, noteRef) =>
     implicit val tc: TinkerContext[?] = context
 
     aranetActor !! AranetActor.Subscribe(context.messageAdapter(ReceiveAranetResults))
@@ -299,7 +301,14 @@ object AirQualityDashboardActor {
 
     airGradientManager !! AirGradientManager.Subscribe(context.messageAdapter(ReceiveAirGradientResults))
 
-    val state = State(None, Map.empty)
+    purpleAirApiKey match {
+      case Some(value) =>
+        context.cast(PurpleAirCloudActor(value), "PurpleAirCloudActor") !! PurpleAirCloudActor.Subscribe(context.messageAdapter(ReceivePurpleAirResults))
+        context.actorContext.log.info("Started PurpleAirCloudActor")
+      case None => context.actorContext.log.info("No PurpleAir API key found, not starting PurpleAirCloudActor")
+    }
+
+    val state = State(None, Map.empty, None)
 
     noteRef.setMarkdown(state.toMarkdown) match {
       case Failure(exception) => context.actorContext.log.error("Failed to set initial markdown", exception)
@@ -323,6 +332,8 @@ object AirQualityDashboardActor {
           }
         case ReceiveAirGradientResults(results) =>
           state.modify(_.latestAirGradients).using(_.updated(results.noteId, results))
+        case ReceivePurpleAirResults(results) =>
+          state.copy(latestPurpleAir = Some(results))
       }
 
       noteRef.setMarkdown(updatedState.toMarkdown) match {
@@ -334,44 +345,78 @@ object AirQualityDashboardActor {
     }
   }
 
-  private case class State(latestAranet: Option[AranetResults], latestAirGradients: Map[NoteId, AirGradientSensorResult]) {
+  private case class State(latestAranet: Option[AranetResults], latestAirGradients: Map[NoteId, AirGradientSensorResult], latestPurpleAir: Option[PurpleAirBatchResult]) {
     def toMarkdown: String = {
       this match {
-        case State(None, latestAirGradients) if latestAirGradients.isEmpty => "- waiting for sensor readings (note below may take a moment too)\n- ![[Aranet Devices#Today]]\n"
+        case State(None, latestAirGradients, None) if latestAirGradients.isEmpty =>
+          "- waiting for sensor readings (note below may take a moment too)\n- ![[Aranet Devices#Today]]\n"
 
-        case State(None, latestAirGradients) =>
-          val airGradientCo2Lines = latestAirGradients.toList.map {
-            case (id, result) =>
-              s"        - $id: ${result.data.rco2}"
-          }.mkString("\n")
+        case State(latestAranet, latestAirGradients, latestPurpleAir) =>
+          val sections = List(vocs, allCo2, airQualityComparison, temp)
 
-          s"""- state
-             |    - $this
-             |    - co2
-             |$airGradientCo2Lines
-             |- ![[Aranet Devices#Today]]\n
-             |""".stripMargin
-
-        case State(Some(aranetResults), latestAirGradients) =>
-          val airGradientCo2Lines = latestAirGradients.toList.map {
-            case (id, result) =>
-              s"        - $id: ${result.data.rco2}"
-          }.mkString("\n")
-
-
-          val aranetLines = aranetResults.aras.map {
-            case Aranet(address, co2, humidity, name, pressure, rssi, temperature) =>
-              s"        - $address/$name: $co2"
-          }.mkString("\n")
-
-          s"""- state
-             |    - $this
-             |    - co2
-             |$airGradientCo2Lines
-             |$aranetLines
-             |- ![[Aranet Devices#Today]]\n
+          s"""- sections:
+             |${sections.flatten.mkString("    - ", "\n    - ", "")}
+             |- raw state
+             |    - latestAranet=$latestAranet
+             |    - latestAirGradients=$latestAirGradients
+             |    - latestPurpleAir=$latestPurpleAir
+             |
+             |![[Aranet Devices#Today]]\n
              |""".stripMargin
       }
+    }
+
+    private def temp: Option[String] = latestAranet.map {
+      case AranetResults(aras, Meta(_, captureTime)) =>
+        s"Temperature as of ${captureTime.toString.dropRight(27)}: ${aras
+          .map(_.temperature * 9 / 5 + 32)
+          .map(t => f"$t%.1f")
+        }"
+    }
+
+    private def airQualityComparison: Option[String] = {
+      for {
+        purpleAir <- latestPurpleAir
+        outdoorPm25s = purpleAir.results.map(_.pm25).toList
+        airGradients <- Some(latestAirGradients).filter(_.nonEmpty)
+        indoorPm25s = airGradients.map(_._2.data.pm02Count)
+        compensatedIndoorPm25s = airGradients.map(_._2.data.pm02Compensated)
+      } yield {
+        val indoorPm25sAverage = f"${indoorPm25s.sum / indoorPm25s.size}%.1f"
+        val outdoorPm25sAverage = f"${outdoorPm25s.sum / outdoorPm25s.size}%.1f"
+        val compensatedIndoorPm25sAveage = f"${compensatedIndoorPm25s.sum / compensatedIndoorPm25s.size}%.1f"
+        s"Average pm2.5 - outdoor($outdoorPm25sAverage) & indoor($indoorPm25sAverage) & indoor_compensated($compensatedIndoorPm25sAveage)"
+      }
+    }
+
+    private def allCo2: Option[String] = (latestAranet, latestAirGradients) match {
+      case (None, airGrads) if airGrads.isEmpty =>
+        None
+      case (Some(aranetResults), airGrads) if airGrads.isEmpty =>
+        Some("ara(co2) " + aranetResults.aras.map(_.co2).mkString(" & "))
+
+      case (None, airGrads) =>
+        Some("AirGradients(co2) " + airGrads.values.map {
+          case AirGradientSensorResult(noteId, data) =>
+            noteId.wikiLinkWithAlias(data.rco2.toString)
+        }.mkString(" & "))
+
+      case (Some(aranetResults), airGrads) =>
+        val airGradCo2s = airGrads.values.map {
+          case AirGradientSensorResult(noteId, data) =>
+            noteId.wikiLinkWithAlias(data.rco2.toString)
+        }.mkString(" & ")
+        val aras = aranetResults.aras.map(_.co2).mkString(" & ")
+        Some(s"CO2 Aranet4s($aras) & AirGradients($airGradCo2s")
+    }
+
+    private def vocs: Option[String] = if (latestAirGradients.nonEmpty) {
+      Some("vocs " + latestAirGradients.map {
+        case (noteId, AirGradientSensorResult(_, data)) =>
+          noteId.wikiLinkWithAlias(data.tvocIndex.toString)
+      }.mkString(" & "))
+    } else {
+      None
     }
   }
 }

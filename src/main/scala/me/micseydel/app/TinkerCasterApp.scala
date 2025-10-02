@@ -7,6 +7,7 @@ import me.micseydel.actor.hue.HueListener
 import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
+import me.micseydel.actor.perimeter.HomeMonitorActor
 import me.micseydel.actor.tasks.{RecurringResponsibilityManager, TaskManager}
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.*
@@ -106,12 +107,8 @@ object UserTinkerCast {
     @unused // subscribes to gmail via operator
     val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
 
-    purpleAirApiKey match {
-      case Some(value) =>
-        context.cast(PurpleAirCloudActor(value), "PurpleAirCloudActor")
-        context.actorContext.log.info("Started PurpleAirCloudActor")
-      case None => context.actorContext.log.info("No PurpleAir API key found, not starting PurpleAirCloudActor")
-    }
+    @unused // driven internally
+    val homeMonitor = context.spawn(HomeMonitorActor(purpleAirApiKey), "HomeMonitor")
 
     Tinker.receiveMessage {
       case ReceiveMqttEvent(topic, payload) =>

@@ -127,9 +127,6 @@ object RootTinkerBehavior {
     // FIXME: this needs an enhanced tinker
     quickVoiceCaptureActor ! QuickVoiceCaptureActor.StartTinkering(tinker)
 
-    @unused // driven internally
-    val homeMonitor = context.spawn(HomeMonitorActor(), "HomeMonitor")
-
     //    tinkerBrain ! TinkerBrain.SystemStarted()
     context.log.info("Waiting 3 seconds before announcing system started")
     context.scheduleOnce(3.seconds, tinkerBrain, TinkerBrain.SystemStarted())

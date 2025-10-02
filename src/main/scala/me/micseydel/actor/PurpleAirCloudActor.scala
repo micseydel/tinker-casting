@@ -30,9 +30,11 @@ import scala.util.{Failure, Success, Try}
 object PurpleAirCloudActor {
   sealed trait Message
 
+  final case class Subscribe(replyTo: SpiritRef[PurpleAirBatchResult]) extends Message
+
   private case class ReceivePing(ping: Ping) extends Message
 
-  final case class ReceiveApiResult(batchResults: PurpleAirBatchResult) extends Message
+  private final case class ReceiveApiResult(batchResults: PurpleAirBatchResult) extends Message
 
   //
 
@@ -51,16 +53,19 @@ object PurpleAirCloudActor {
         ), "DailyNotesRouter")
 
         // FIXME: this should be more dynamic than relying on startup
-        behavior(config.sensors)
+        behavior(config.sensors, Set.empty)
       case Validated.Invalid(errors) =>
         context.actorContext.log.warn(s"Startup failed: $errors")
         Tinker.ignore
     }
   }
 
-  private def behavior(sensors: NonEmptyList[ConfigEntry])(implicit Tinker: Tinker, noteRef: NoteRef, api: SpiritRef[PurpleAirCloudAPI.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[ReceiveApiResult]]]): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(sensors: NonEmptyList[ConfigEntry], subscribers: Set[SpiritRef[PurpleAirBatchResult]])(implicit Tinker: Tinker, noteRef: NoteRef, api: SpiritRef[PurpleAirCloudAPI.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[ReceiveApiResult]]]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val tc: TinkerContext[?] = context
     message match {
+      case Subscribe(replyTo) =>
+        behavior(sensors, subscribers + replyTo)
+
       case ReceivePing(NoOp) =>
         if (noteRef.checkBoxIsChecked()) {
           context.actorContext.log.info("Checkbox was checked, making a sensors request")
@@ -70,6 +75,7 @@ object PurpleAirCloudActor {
         Tinker.steadily
 
       case r@ReceiveApiResult(batchResult: PurpleAirBatchResult) =>
+        subscribers.foreach(_ !! batchResult)
         dailyNotesAssistant !! DailyNotesRouter.Envelope(
           DailyMarkdownFromPersistedMessagesActor.StoreAndRegenerateMarkdown(r),
           batchResult.time

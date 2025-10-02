@@ -21,7 +21,7 @@ object HomeMonitorActor {
 
   //
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
+  def apply(purpleAirApiKey: Option[String])(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(100, 100, 255), "🏠").setup { context =>
     implicit val t: TinkerContext[_] = context
 
     val aranetActor: SpiritRef[AranetActor.Message] = context.cast(AranetActor(), "CO2_Monitor")
@@ -39,7 +39,8 @@ object HomeMonitorActor {
       context.cast(AirQualityManagerActor(purpleAirActor, wyzeActor, aranetActor), "AirQualityManagerActor")
     }
 
-    val airQualityDashboard = context.cast(AirQualityDashboardActor(aranetActor), "AirQualityDashboardActor")
+    @unused // driven internally
+    val airQualityDashboard = context.cast(AirQualityDashboardActor(purpleAirApiKey, aranetActor), "AirQualityDashboardActor")
 
     context.actorContext.log.info("Started CO2_Monitor; RemindMeEvery(10.minutes) Heartbeat")
     val timeKeeper = context.castTimeKeeper()
