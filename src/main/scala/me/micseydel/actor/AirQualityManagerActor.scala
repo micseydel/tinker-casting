@@ -3,12 +3,11 @@ package me.micseydel.actor
 import com.softwaremill.quicklens.ModifyPimp
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.AirQualityManagerActor.Message
 import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.actor.airgradient.AirGradientActor.AirGradientSensorResult
-import me.micseydel.actor.airgradient.{AirGradientManager, AirGradientSensorData}
+import me.micseydel.actor.airgradient.AirGradientManager
 import me.micseydel.actor.perimeter.AranetActor
-import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
+import me.micseydel.actor.perimeter.AranetActor.{Aranet, AranetResults, Meta}
 import me.micseydel.actor.wyze.WyzeActor
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
@@ -18,7 +17,6 @@ import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
 import java.time.ZonedDateTime
-import scala.annotation.unused
 import scala.util.{Failure, Success, Try}
 
 object AirQualityManagerActor {
@@ -340,8 +338,39 @@ object AirQualityDashboardActor {
     def toMarkdown: String = {
       this match {
         case State(None, latestAirGradients) if latestAirGradients.isEmpty => "- waiting for sensor readings (note below may take a moment too)\n- ![[Aranet Devices#Today]]\n"
-        case _ =>
-          s"- state$this\n- ![[Aranet Devices#Today]]\n"
+
+        case State(None, latestAirGradients) =>
+          val airGradientCo2Lines = latestAirGradients.toList.map {
+            case (id, result) =>
+              s"        - $id: ${result.data.rco2}"
+          }.mkString("\n")
+
+          s"""- state
+             |    - $this
+             |    - co2
+             |$airGradientCo2Lines
+             |- ![[Aranet Devices#Today]]\n
+             |""".stripMargin
+
+        case State(Some(aranetResults), latestAirGradients) =>
+          val airGradientCo2Lines = latestAirGradients.toList.map {
+            case (id, result) =>
+              s"        - $id: ${result.data.rco2}"
+          }.mkString("\n")
+
+
+          val aranetLines = aranetResults.aras.map {
+            case Aranet(address, co2, humidity, name, pressure, rssi, temperature) =>
+              s"        - $address/$name: $co2"
+          }.mkString("\n")
+
+          s"""- state
+             |    - $this
+             |    - co2
+             |$airGradientCo2Lines
+             |$aranetLines
+             |- ![[Aranet Devices#Today]]\n
+             |""".stripMargin
       }
     }
   }
