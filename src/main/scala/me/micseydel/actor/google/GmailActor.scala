@@ -41,6 +41,8 @@ object GmailActor {
 
   //
 
+  private val formatterUnderTest = DateTimeFormatter.ofPattern("EEE,  d MMM yyyy HH:mm:ss Z")
+
   case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]]) {
     private def tryToGetWestCoastTime: Try[ZonedDateTime] =
       Try(ZonedDateTime.parse(sentAt))
@@ -51,6 +53,12 @@ object GmailActor {
       Try(ZonedDateTime.parse(sentAt.replace("PDT", "-0700").replace("PST", "-0800"), formatter)).recoverWith {
         case _: DateTimeParseException =>
           tryToGetWestCoastTime
+      }.recoverWith {
+        case _: DateTimeParseException =>
+          Try {
+
+            ZonedDateTime.parse(sentAt, formatterUnderTest)
+          }
       }
     }
   }
