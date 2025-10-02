@@ -116,7 +116,8 @@ object VaultKeeper {
 
       case SubscribeUpdatesForNote(subscriber, noteId, maybeSubdirectory) =>
         implicit val actorContext: ActorContext[Message] = context
-        val maybeUpdatedLookup = watcherLookup :?> maybeSubdirectory.getOrElse("") match {
+        val subdirectory = maybeSubdirectory.getOrElse("") // root is ""
+        val maybeUpdatedLookup = watcherLookup :?> subdirectory match {
           case (latest, watcher) =>
             watcher ! FolderWatcherWithSubscribers.SubscribeUpdatesForNote(subscriber, noteId)
             latest
@@ -148,6 +149,10 @@ private object FolderWatcherWithSubscribers {
   private def behavior(subscribers: Map[NoteId, ActorRef[Ping]]): Behavior[Message] = Behaviors.setup { context =>
     Behaviors.receiveMessage {
       case SubscribeUpdatesForNote(subscriber, noteId) =>
+        for (replacing <- subscribers.get(noteId) if replacing != subscriber) {
+          context.log.warn(s"Replacing existing subscriber ($replacing) with $subscriber (this was not expected; only one subscriber should ever happen)")
+        }
+
         behavior(subscribers.updated(noteId, subscriber))
 
       case ReceivePathUpdatedEvent(event) =>
