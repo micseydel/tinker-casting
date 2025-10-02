@@ -9,7 +9,7 @@ import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries}
-import me.micseydel.vault.Note
+import me.micseydel.vault.{Note, NoteId}
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
@@ -20,7 +20,7 @@ import scala.util.{Failure, Success}
 object AirGradientActor {
   sealed trait Message
 
-//  final case class Subscribe(subscriber: SpiritRef[RawSensorData]) extends Message
+  final case class Subscribe(subscriber: SpiritRef[AirGradientSensorResult]) extends Message
   final case class DoFetchNow() extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
@@ -66,20 +66,17 @@ object AirGradientActor {
       implicit val n: NoteRef = noteRef
       implicit val dailyNoteName: LocalDate => String = day => s"$baseNoteName ($day)"
 
-      behavior(initialPollingInterval.toMinutes)
+      behavior(initialPollingInterval.toMinutes, Set.empty)
     }
   }
 
-  private def behavior(pollingIntervalMinutes: Long)(implicit Tinker: Tinker, noteRef: NoteRef,
+  private def behavior(pollingIntervalMinutes: Long, subscribers: Set[SpiritRef[AirGradientSensorResult]])(implicit Tinker: Tinker, noteRef: NoteRef,
                                                      dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
                                                      api: SpiritRef[AirGradientApiActor.Message],
                                                      timeKeeper: SpiritRef[TimeKeeper.Message],
                                                      dailyNoteName: LocalDate => String): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[?] = context
     message match {
-//      case Subscribe(subscriber) =>
-//        behavior(pollingIntervalMinutes, subscriber :: subscribers)
-
       case DoFetchNow() =>
         context.actorContext.log.info("Doing a fetch now")
         api !! AirGradientApiActor.Request(context.messageAdapter(ReceiveAirGradientSensorData))
@@ -133,7 +130,7 @@ object AirGradientActor {
                   case Some(updatedInterval) =>
                     context.actorContext.log.info(s"Updating interval from $pollingIntervalMinutes -> $updatedInterval (minutes)")
                     timeKeeper !! TimeKeeper.RemindMeEvery(updatedInterval.minutes, context.self, DoFetchNow(), Some(classOf[DoFetchNow]))
-                    behavior(updatedInterval)
+                    behavior(updatedInterval, subscribers)
                   case None => Tinker.steadily
                 }
             }
@@ -145,9 +142,9 @@ object AirGradientActor {
           context.system.clock.now() // FIXME: hacky, prevents downstream from de-duping properly
         )
 
-//        for (subscriber <- subscribers) {
-//          subscriber !! data
-//        }
+        for (subscriber <- subscribers) {
+          subscriber !! AirGradientSensorResult(noteRef.noteId, data)
+        }
 
 //        val subscriberList = subscribers.map { s =>
 //          s"  - `${s.path.toString.drop(24).takeWhile(_ != '$')}`"
@@ -178,8 +175,19 @@ object AirGradientActor {
         }
 
         Tinker.steadily
+
+      case Subscribe(subscriber) =>
+        if (subscribers.contains(subscriber)) {
+          context.actorContext.log.debug(s"Duplicate subscriber: $subscriber")
+          Tinker.steadily
+        } else {
+          context.actorContext.log.info(s"Adding new subscriber: $subscriber")
+          behavior(pollingIntervalMinutes, subscribers + subscriber)
+        }
     }
   }
+
+  case class AirGradientSensorResult(noteId: NoteId, data: AirGradientSensorData)
 }
 
 private object AirGradientDailyMarkdown {

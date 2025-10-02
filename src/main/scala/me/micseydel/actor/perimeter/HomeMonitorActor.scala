@@ -1,10 +1,10 @@
 package me.micseydel.actor.perimeter
 
 import me.micseydel.actor.wyze.WyzeActor
-import me.micseydel.actor.{AirQualityManagerActor, PurpleAirActor}
+import me.micseydel.actor.{AirQualityDashboardActor, AirQualityManagerActor, PurpleAirActor}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
-import me.micseydel.dsl._
+import me.micseydel.dsl.*
 import me.micseydel.dsl.cast.TimeKeeper
 
 import scala.annotation.unused
@@ -38,6 +38,8 @@ object HomeMonitorActor {
       context.actorContext.log.info("Starting AirQualityManagerActor")
       context.cast(AirQualityManagerActor(purpleAirActor, wyzeActor, aranetActor), "AirQualityManagerActor")
     }
+
+    val airQualityDashboard = context.cast(AirQualityDashboardActor(aranetActor), "AirQualityDashboardActor")
 
     context.actorContext.log.info("Started CO2_Monitor; RemindMeEvery(10.minutes) Heartbeat")
     val timeKeeper = context.castTimeKeeper()

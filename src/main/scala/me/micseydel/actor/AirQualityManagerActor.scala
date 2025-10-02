@@ -1,15 +1,19 @@
 package me.micseydel.actor
 
+import com.softwaremill.quicklens.ModifyPimp
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.AirQualityManagerActor.Message
 import me.micseydel.actor.PurpleAirSensorData.Formatter
-import me.micseydel.actor.airgradient.AirGradientManager
+import me.micseydel.actor.airgradient.AirGradientActor.AirGradientSensorResult
+import me.micseydel.actor.airgradient.{AirGradientManager, AirGradientSensorData}
 import me.micseydel.actor.perimeter.AranetActor
 import me.micseydel.actor.perimeter.AranetActor.{AranetResults, Meta}
 import me.micseydel.actor.wyze.WyzeActor
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
+import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.FileNotFoundException
@@ -39,9 +43,6 @@ object AirQualityManagerActor {
 
       purpleAirActor !! PurpleAirActor.Subscribe(context.messageAdapter(ReceivePurpleAir))
       aranetActor !! AranetActor.Fetch(context.messageAdapter(ReceiveAranetResults))
-
-      @unused // internally driven
-      val airGradientManager = context.cast(AirGradientManager(), "AirGradientManager")
 
       context.actorContext.log.info("Subscribed to Purple Air and did a fetch for Aranet4")
 
@@ -263,7 +264,7 @@ object AirPurifierActor {
         wyzeActor !! WyzeActor.SetPlug(wyzeMac, onOff)
         Tinker.steadily
 
-      case ReceiveNotePing(_) =>
+      case ReceiveNotePing(NoOp) =>
         context.actorContext.log.debug("Ignoring note update")
         Tinker.steadily
     }
@@ -278,6 +279,70 @@ object AirPurifierActor {
         note.yamlFrontMatter.toOption.flatMap(_.get("wyze_mac").map(_.toString))
       case Failure(_: FileNotFoundException) => None
       case Failure(exception) => throw exception
+    }
+  }
+}
+
+
+object AirQualityDashboardActor {
+  sealed trait Message
+
+  private case class ReceiveAranetResults(results: AranetActor.Result) extends Message
+  private case class ReceiveAirGradientResults(results: AirGradientSensorResult) extends Message
+
+//  private case class ReceiveNoteUpdated(ping: Ping) extends Message
+
+  def apply(aranetActor: SpiritRef[AranetActor.Message])(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Air Quality Dashboard", TinkerColor.random(), "🎯") { (context, noteRef) =>
+    implicit val tc: TinkerContext[?] = context
+
+    aranetActor !! AranetActor.Subscribe(context.messageAdapter(ReceiveAranetResults))
+
+    val airGradientManager = context.cast(AirGradientManager(), "AirGradientManager")
+
+    airGradientManager !! AirGradientManager.Subscribe(context.messageAdapter(ReceiveAirGradientResults))
+
+    val state = State(None, Map.empty)
+
+    noteRef.setMarkdown(state.toMarkdown) match {
+      case Failure(exception) => context.actorContext.log.error("Failed to set initial markdown", exception)
+      case Success(NoOp) =>
+    }
+
+    implicit val nr: NoteRef = noteRef
+    behavior(state)
+  }
+
+  private def behavior(state: State)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    Tinker.receiveMessage { message =>
+      val updatedState = message match {
+        case ReceiveAranetResults(results) =>
+          results match {
+            case AranetActor.AranetFailure(throwable) =>
+              context.actorContext.log.warn(s"Something went wrong fetching aranet ($state)", throwable)
+              state
+            case results@AranetResults(_, _) =>
+              state.copy(latestAranet = Some(results))
+          }
+        case ReceiveAirGradientResults(results) =>
+          state.modify(_.latestAirGradients).using(_.updated(results.noteId, results))
+      }
+
+      noteRef.setMarkdown(updatedState.toMarkdown) match {
+        case Failure(exception) => context.actorContext.log.error("Failed to set markdown", exception)
+        case Success(NoOp) =>
+      }
+
+      behavior(updatedState)
+    }
+  }
+
+  private case class State(latestAranet: Option[AranetResults], latestAirGradients: Map[NoteId, AirGradientSensorResult]) {
+    def toMarkdown: String = {
+      this match {
+        case State(None, latestAirGradients) if latestAirGradients.isEmpty => "- waiting for sensor readings (note below may take a moment too)\n- ![[Aranet Devices#Today]]\n"
+        case _ =>
+          s"- state$this\n- ![[Aranet Devices#Today]]\n"
+      }
     }
   }
 }

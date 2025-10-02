@@ -1,8 +1,9 @@
 package me.micseydel.actor.airgradient
 
+import me.micseydel.actor.airgradient.AirGradientActor.AirGradientSensorResult
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.persistence.NoteRef
 import net.jcazevedo.moultingyaml.{PimpedString, *}
 
@@ -10,6 +11,8 @@ import scala.util.{Failure, Success, Try}
 
 object AirGradientManager {
   sealed trait Message
+
+  final case class Subscribe(subscriber: SpiritRef[AirGradientSensorResult]) extends Message
 
   val BaseNoteName = "Air Gradient Manager"
 
@@ -59,8 +62,16 @@ object AirGradientManager {
   }
 
   private def behavior(deviceActors: List[SpiritRef[AirGradientActor.Message]])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
-    context.actorContext.log.warn(s"Did not expect any message! deviceActors: $deviceActors")
-    Tinker.steadily
+    implicit val tc: TinkerContext[?] = context
+
+    message match {
+      case Subscribe(subscriber) =>
+        for (device <- deviceActors) {
+          device !! AirGradientActor.Subscribe(subscriber)
+        }
+
+        Tinker.steadily
+    }
   }
 
   //

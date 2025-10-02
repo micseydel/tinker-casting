@@ -23,11 +23,13 @@ object AranetActor {
 
   sealed trait Message
 
+  case class Subscribe(subscriber: SpiritRef[Result]) extends Message
+
   case class Fetch(replyTo: SpiritRef[Result]) extends Message
 
-  case class ReceiveResult(result: Result) extends Message
+  private case class ReceiveResult(result: Result) extends Message
 
-  case class ReceiveNoteUpdated(ping: Ping) extends Message
+  private case class ReceiveNoteUpdated(ping: Ping) extends Message
 
   //
 
@@ -63,7 +65,7 @@ object AranetActor {
 
           noteRef.setMarkdown(s"[${ZonedDateTime.now()}] initializing...")
 
-          behavior(noteRef, httpRequest, dailyNotesAssistant)
+          behavior(Set.empty)(Tinker, noteRef, httpRequest, dailyNotesAssistant)
 
         case None =>
           Tinker.ignore
@@ -71,12 +73,22 @@ object AranetActor {
     }
   }
 
-  private def behavior(noteRef: NoteRef, httpRequest: HttpRequest, dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]])(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(subscribers: Set[SpiritRef[Result]])(implicit Tinker: Tinker, noteRef: NoteRef, httpRequest: HttpRequest, dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val tc: TinkerContext[_] = context
     import AranetJsonProtocol.payloadFormat
 
     message match {
+      case Subscribe(subscriber) =>
+        if (subscribers.contains(subscriber)) {
+          context.actorContext.log.debug(s"Duplicate subscriber: $subscriber")
+          Tinker.steadily
+        } else {
+          context.actorContext.log.info(s"Adding new subscriber: $subscriber")
+          behavior(subscribers + subscriber)
+        }
+
       case ReceiveResult(result) =>
+        subscribers.foreach(_ !! result)
         result match {
           case AranetFailure(throwable) => context.actorContext.log.error("Aranet fetching failed", throwable)
           case result@AranetResults(aras, Meta(elapsed, captureTime)) =>
