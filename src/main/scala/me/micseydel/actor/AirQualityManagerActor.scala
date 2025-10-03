@@ -402,12 +402,15 @@ object AirQualityDashboardActor {
         }.mkString(" & "))
 
       case (Some(aranetResults), airGrads) =>
-        val airGradCo2s = airGrads.values.map {
+        val formattedAirGradCo2s = airGrads.values.map {
           case AirGradientSensorResult(noteId, data) =>
             noteId.wikiLinkWithAlias(data.rco2.toString)
         }.mkString(" & ")
         val aras = aranetResults.aras.map(_.co2).mkString(" & ")
-        Some(s"CO2 Aranet4s($aras) & AirGradients($airGradCo2s")
+
+        val allCo2s: List[Int] = aranetResults.aras.map(_.co2) ::: airGrads.values.map(_.data.rco2.toInt).toList
+
+        Some(s"CO2 Aranet4s($aras) & AirGradients($formattedAirGradCo2s) ~ ${allCo2s.sum.toDouble / allCo2s.size}")
     }
 
     private def vocs: Option[String] = if (latestAirGradients.nonEmpty) {
