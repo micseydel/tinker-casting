@@ -1,4 +1,4 @@
-package me.micseydel.actor
+package me.micseydel.actor.inactive
 
 import akka.actor.ActorRef as UntypedActorRef
 import akka.actor.typed.Behavior

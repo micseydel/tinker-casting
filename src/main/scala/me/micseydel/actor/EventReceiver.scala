@@ -13,6 +13,7 @@ import me.micseydel.dsl.cast.TinkerBrain
 import me.micseydel.prototyping.EventRouting
 import spray.json.*
 import akka.actor.typed.scaladsl.adapter.*
+import me.micseydel.actor.inactive.QuickVoiceCaptureActor
 
 import scala.util.{Failure, Success}
 
@@ -28,15 +29,11 @@ object EventReceiver {
 
   // behavior
 
-  def apply(config: Config, tinkerBrain: ActorRef[TinkerBrain.Message], quickVoiceCaptureActor: ActorRef[QuickVoiceCaptureActor.Message]): Behavior[Message] = Behaviors.setup { context =>
+  def apply(config: Config, tinkerBrain: ActorRef[TinkerBrain.Message]): Behavior[Message] = Behaviors.setup { context =>
 
     val route = concat(
       EventRouting.route(context.self),
-      WebSocketRouting.websocketRoute(tinkerBrain),
-      {
-        val adapter = context.spawnAnonymous(CustomAdapter(quickVoiceCaptureActor))
-        WebSocketRouting.quickVoiceCaptureWebsocketRoute(quickVoiceCaptureActor, adapter.toClassic)
-      }
+      WebSocketRouting.websocketRoute(tinkerBrain)
     )
     context.log.info(f"Starting event receiver HTTP server on port ${config.httpPort}")
     startHttpServer(route, config.httpPort)(context.system)

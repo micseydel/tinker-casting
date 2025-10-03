@@ -1,13 +1,12 @@
 package me.micseydel.dsl
 
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.adapter.*
 import akka.actor.typed.{Behavior, DispatcherSelector}
 import akka.actor.{ActorRef, ActorSystem, Props, typed}
-import me.micseydel.actor.inactive.owntracks
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
-import me.micseydel.actor.perimeter.HomeMonitorActor
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, QuickVoiceCaptureActor}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor}
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
@@ -15,7 +14,6 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}
 import me.micseydel.vault.VaultKeeper
 import org.slf4j.LoggerFactory
-import akka.actor.typed.scaladsl.adapter.*
 
 import java.nio.file.Files
 import java.util.concurrent.Executors
@@ -94,15 +92,12 @@ object RootTinkerBehavior {
 
     val operator: typed.ActorRef[Operator.Message] = context.spawn(Operator(), "Operator")
 
-    // FIXME: consider where user-space stuff aught to deal with websockets and such
-    val quickVoiceCaptureActor = context.spawn(QuickVoiceCaptureActor(), "QuickVoiceCaptureActor")
 
     // FIXME - ideally this would lazy-start based on NoteConfig; does NOT need EnhancedTinker
     val eventReceiver: typed.ActorRef[EventReceiver.Message] = context.spawn(
       EventReceiver(
         EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),
-        tinkerBrain,
-        quickVoiceCaptureActor
+        tinkerBrain
       ),
       "EventReceiver"
     )
@@ -124,8 +119,6 @@ object RootTinkerBehavior {
     // Cmd+F for "case class StartTinkering" and count
     notificationCenterManager ! NotificationCenterManager.StartTinkering(tinker)
     actorNotesFolderWatcherActor ! ActorNotesFolderWatcherActor.StartTinkering(tinker)
-    // FIXME: this needs an enhanced tinker
-    quickVoiceCaptureActor ! QuickVoiceCaptureActor.StartTinkering(tinker)
 
     //    tinkerBrain ! TinkerBrain.SystemStarted()
     context.log.info("Waiting 3 seconds before announcing system started")
@@ -141,7 +134,7 @@ object RootTinkerBehavior {
       case None =>
         context.log.info("No mqtt config, not subscribing to mqtt events")
       case Some(mqttConfig: AppConfiguration.MqttConfig) =>
-        val topics: Set[String] = Set(owntracks.Topic)
+        val topics: Set[String] = Set.empty // Set(owntracks.Topic)
         context.log.info(s"Starting mqtt actor, listening to ${topics}")
         val props = Props(classOf[PahoWrapperClassicActor], applicationsActor, topics, mqttConfig)
         @unused // this actor receives messages and sends them to tinkercast

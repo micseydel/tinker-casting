@@ -5,8 +5,9 @@ import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusC
 import akka.http.scaladsl.server.Directives.*
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
-import me.micseydel.actor.{EventReceiver, QuickVoiceCaptureActor}
+import me.micseydel.actor.EventReceiver
 import me.micseydel.actor.EventReceiver.IncomingEvent
+import me.micseydel.actor.inactive.QuickVoiceCaptureActor
 import spray.json.*
 
 import java.net.InetAddress
