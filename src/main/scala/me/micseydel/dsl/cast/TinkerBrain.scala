@@ -3,17 +3,20 @@ package me.micseydel.dsl.cast
 import akka.actor.{ActorPath, Cancellable}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.http.scaladsl.server.Directives.concat
 import cats.data.NonEmptyList
+import me.micseydel.actor.EventReceiver.startHttpServer
+import me.micseydel.actor.WebSocketRouting
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TinkerBrain.{PersistedMessage, SentMessage, TranscriptionBroadcast}
 import me.micseydel.dsl.cast.TinkerBrainUtil.{cleanerUri, graphForLast3Days, toURIish}
 import me.micseydel.dsl.{Sender, SpiritRef, Tinker, TinkerClock, TinkerClockImpl, TinkerColor, Tinkerer}
 import me.micseydel.model.NotedTranscription
 import me.micseydel.prototyping.WebSocketMessageActor.{SendClientMessage, SendFrame, SendTranscriptionFrame, TinkerEdge}
-import me.micseydel.prototyping.{TinkerNode, WebSocketMessageActor}
+import me.micseydel.prototyping.{EventRouting, TinkerNode, WebSocketMessageActor}
 import me.micseydel.util.{FileSystemUtil, TimeUtil}
 import org.slf4j.Logger
-import spray.json._
+import spray.json.*
 
 import java.io.FileNotFoundException
 import java.nio.file.Path
@@ -140,6 +143,12 @@ object TinkerBrain {
         context.log.info(s"Sending a graph with ${nodes.size} nodes and ${edges.size} edges")
         webSocketMessageActor ! WebSocketMessageActor.SendGraph(nodes, edges, existingFrames)
         val batcher = context.spawn(RealtimeFrameBatcher(150.milliseconds, webSocketMessageActor), "Batcher")
+
+        val route = concat(
+          WebSocketRouting.websocketRoute(context.self)
+        )
+        startHttpServer(route, 5003)(context.system) // FIXME this port should NOT be hard-coded 😬
+
         systemStarted(appendToJsonl, readJson, webSocketMessageActor, batcher, tinkerers)
 
       //      case ApplicationStarted() =>

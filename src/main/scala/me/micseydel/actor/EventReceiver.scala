@@ -83,7 +83,7 @@ object EventReceiver {
 
   // util
 
-  private def startHttpServer(routes: Route, port: Int)(implicit system: ActorSystem[_]): Unit = {
+  def startHttpServer(routes: Route, port: Int)(implicit system: ActorSystem[_]): Unit = {
     // Akka HTTP still needs a classic ActorSystem to start
     import system.executionContext
 
@@ -119,7 +119,7 @@ object EventReceiver {
   }
 }
 
-private object WebSocketRouting {
+object WebSocketRouting {
   def websocketRoute(messageActor: ActorRef[TinkerBrain.RegisterClient]): Route = {
     path("ws-messages") {
       handleWebSocketMessages {

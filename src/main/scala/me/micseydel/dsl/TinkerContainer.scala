@@ -7,11 +7,11 @@ import akka.actor.{ActorRef, ActorSystem, Props, typed}
 import me.micseydel.NoOp
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
-import me.micseydel.actor.{EventReceiver, PahoWrapperClassicActor, SubscribeMqttTopic}
+import me.micseydel.actor.{PahoWrapperClassicActor, SubscribeMqttTopic}
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.{AppConfig, MqttConfig}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}
+import me.micseydel.dsl.cast.TinkerBrain
 import me.micseydel.vault.VaultKeeper
 import org.slf4j.LoggerFactory
 
@@ -74,8 +74,6 @@ object RootTinkerBehavior {
       DispatcherSelector.fromConfig("vaultkeeper-high-priority-dispatcher")
     )
 
-    // perimeter
-
     val notificationCenterManager: typed.ActorRef[NotificationCenterManager.Message] =
       context.spawn(NotificationCenterManager(notificationCenterAbilities), "NotificationCenterManager")
 
@@ -87,7 +85,6 @@ object RootTinkerBehavior {
       context.system,
       tinkerBrain,
       vaultKeeper,
-      // perimeter
       notificationCenterManager,
       operator,
       typedMqtt
