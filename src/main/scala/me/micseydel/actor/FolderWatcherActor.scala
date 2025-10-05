@@ -2,13 +2,13 @@ package me.micseydel.actor
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
-import me.micseydel.Common
+import me.micseydel.{Common, NoOp}
 import me.micseydel.actor.FolderWatcherActor.{NonPathUpdate, PathCreatedEvent, PathDeletedEvent, PathModifiedEvent}
 
 import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW}
-import java.nio.file._
+import java.nio.file.*
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.{Failure, Success, Try}
 
 object FolderWatcherActor {
@@ -71,6 +71,8 @@ object FolderWatcherActor {
         Behaviors.same
     }
   }
+
+  type Ping = NoOp.type
 }
 
 private class VaultFolderWatcherThread(watchedPath: Path, folderWatcherActor: ActorRef[FolderWatcherActor.Message]) extends Thread {

@@ -3,9 +3,8 @@ package me.micseydel.actor
 import akka.actor.typed.ActorRef
 import com.softwaremill.quicklens.*
 import me.micseydel.Common
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturerHelpers.*
-import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
+import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent, Ping}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.cast.chronicler.Chronicler

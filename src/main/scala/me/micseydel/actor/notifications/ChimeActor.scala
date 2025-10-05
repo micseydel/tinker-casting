@@ -3,7 +3,7 @@ package me.micseydel.actor.notifications
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.ChimeActor.{Command, Error, Info, Success, Theme, Warning}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer

@@ -2,7 +2,7 @@ package me.micseydel.actor
 
 import com.softwaremill.quicklens.ModifyPimp
 import me.micseydel.NoOp
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import FolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirCloudAPI.PurpleAirBatchResult
 import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.actor.airgradient.AirGradientActor.AirGradientSensorResult

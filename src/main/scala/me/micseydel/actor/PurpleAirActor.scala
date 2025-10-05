@@ -7,7 +7,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import FolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirPollingActor.AlterPolling
 import me.micseydel.actor.PurpleAirSensorData.Formatter
 import me.micseydel.dsl.*

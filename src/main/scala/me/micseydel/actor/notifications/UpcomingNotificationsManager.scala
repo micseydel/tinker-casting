@@ -1,7 +1,7 @@
 package me.micseydel.actor.notifications
 
 import me.micseydel.actor.*
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability

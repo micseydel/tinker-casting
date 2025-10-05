@@ -4,7 +4,7 @@ import akka.actor.typed
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, ActorSystem}
 import cats.data.NonEmptyList
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, RasaActor}
+import me.micseydel.actor.{EventReceiver, RasaActor}
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.perimeter.HueControl
 import me.micseydel.dsl.cast.chronicler.Chronicler

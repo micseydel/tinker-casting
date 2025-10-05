@@ -1,7 +1,8 @@
 package me.micseydel.actor.tasks
 
 import me.micseydel.NoOp
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.tasks.TaskNote.ModelTaskNote
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer

@@ -3,7 +3,7 @@ package me.micseydel.dsl.cast.chronicler
 import akka.actor.InvalidActorNameException
 import akka.actor.typed.ActorRef
 import me.micseydel.actor.*
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import FolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper
 import me.micseydel.dsl.Tinker.Ability

@@ -1,7 +1,8 @@
 package me.micseydel.actor.tasks
 
 import me.micseydel.NoOp
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.{CompleteNotification, NewNotification, Notification, NotificationId}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.*

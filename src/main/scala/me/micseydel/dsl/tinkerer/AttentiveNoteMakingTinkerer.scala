@@ -1,6 +1,6 @@
 package me.micseydel.dsl.tinkerer
 
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.VaultKeeper

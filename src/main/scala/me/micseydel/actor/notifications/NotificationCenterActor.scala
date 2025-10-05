@@ -1,6 +1,6 @@
 package me.micseydel.actor.notifications
 
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.Notification
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb

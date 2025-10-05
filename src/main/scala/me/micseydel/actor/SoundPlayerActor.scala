@@ -1,7 +1,7 @@
 package me.micseydel.actor
 
 import me.micseydel.NoOp
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import FolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}

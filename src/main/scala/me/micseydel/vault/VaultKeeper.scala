@@ -2,8 +2,8 @@ package me.micseydel.vault
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.FolderWatcherActor
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.persistence.{BasicJsonRef, BasicNoteRef, JsonRef, NoteRef}
 import me.micseydel.{Common, NoOp}

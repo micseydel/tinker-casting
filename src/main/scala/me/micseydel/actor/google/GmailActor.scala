@@ -10,7 +10,7 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.gmail.Gmail
 import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability

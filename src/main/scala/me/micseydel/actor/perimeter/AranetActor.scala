@@ -4,7 +4,7 @@ import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability

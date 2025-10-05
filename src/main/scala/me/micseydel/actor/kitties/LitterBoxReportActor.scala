@@ -1,18 +1,17 @@
 package me.micseydel.actor.kitties
 
-import cats.data.Validated.{Invalid, catchOnly}
+import cats.data.Validated.Invalid
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
-import com.softwaremill.quicklens.ModifyPimp
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.DailyNotesRouter
-import me.micseydel.actor.kitties.LitterBoxReportActor.{AddToInbox, EventCapture, LitterSiftedObservation, Message, ReceiveNotePing}
+import me.micseydel.actor.FolderWatcherActor.Ping
+import me.micseydel.actor.kitties.LitterBoxReportActor.*
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, HasInbox, LitterSummaryForDay}
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
-import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.*
-import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.*
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
 import me.micseydel.util.{MarkdownUtil, TimeUtil}

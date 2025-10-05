@@ -6,7 +6,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Scheduler}
 import akka.util.Timeout
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, RasaActor}
+import me.micseydel.actor.{EventReceiver, RasaActor}
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.SideEffect
 import me.micseydel.actor.perimeter.{HueControl, NtfyerActor}

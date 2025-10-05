@@ -3,7 +3,7 @@ package me.micseydel.actor.wyze
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.wyze.WyzePlugModel.{WyzePlug, WyzePlugAPIResponse}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability

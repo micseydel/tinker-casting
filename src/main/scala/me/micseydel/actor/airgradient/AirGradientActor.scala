@@ -1,7 +1,7 @@
 package me.micseydel.actor.airgradient
 
 
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
@@ -9,8 +9,8 @@ import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries}
-import me.micseydel.vault.{Note, NoteId}
 import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.vault.{Note, NoteId}
 
 import java.io.FileNotFoundException
 import java.time.LocalDate

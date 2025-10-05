@@ -7,7 +7,7 @@ import akka.actor.{ActorRef, ActorSystem, Props, typed}
 import me.micseydel.NoOp
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, SubscribeMqttTopic}
+import me.micseydel.actor.{EventReceiver, PahoWrapperClassicActor, SubscribeMqttTopic}
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.{AppConfig, MqttConfig}
 import me.micseydel.dsl.Tinker.Ability

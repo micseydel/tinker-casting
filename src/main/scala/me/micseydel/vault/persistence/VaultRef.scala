@@ -1,7 +1,6 @@
 package me.micseydel.vault.persistence
 
 import me.micseydel.NoOp
-import me.micseydel.actor.ActorNotesFolderWatcherActor
 import me.micseydel.dsl.TinkerContext
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.persistence.NoteRef.{Contents, FileDoesNotExist, FileReadResult}

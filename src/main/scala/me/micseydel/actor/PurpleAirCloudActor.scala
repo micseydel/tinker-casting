@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.*
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
-import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
+import FolderWatcherActor.Ping
 import me.micseydel.actor.PurpleAirCloudAPI.{PurpleAirBatchResult, Request, SimplePurpleAirResult}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
