@@ -1,12 +1,13 @@
 package me.micseydel.actor.ollama
 
-import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
-import me.micseydel.actor.ollama.OllamaModel._
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, VaultPathAdapter}
+import me.micseydel.actor.FolderWatcherActor
+import me.micseydel.actor.FolderWatcherActor.PathUpdatedEvent
+import me.micseydel.actor.ollama.OllamaModel.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
-import spray.json._
+import me.micseydel.vault.VaultKeeper
+import spray.json.*
 
 import java.time.ZonedDateTime
 import scala.util.{Failure, Success}
@@ -15,13 +16,13 @@ import scala.util.{Failure, Success}
 object OllamaActor {
 
   val OllamaPrompts: String = "ollamaprompts"
-  val OllamaPromptsSubdirectory: String = s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/${OllamaActor.OllamaPrompts}"
+  val OllamaPromptsSubdirectory: String = s"_actor_notes/${OllamaActor.OllamaPrompts}"
 
   sealed trait Message
 
   private case class ReceiveModels(models: Models) extends Message
 
-  private case class ReceivePathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
+  private case class ReceivePathUpdatedEvent(event: PathUpdatedEvent) extends Message
 
   val NoteName = "Ollama Testing"
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(NoteName, TinkerColor(7, 164, 223), "🦙") { (context, noteRef) =>
@@ -46,7 +47,8 @@ object OllamaActor {
     context.castAnonymous(FetchModelsActor(hostAndPort, context.messageAdapter(ReceiveModels)))
 
     context.actorContext.log.info(s"Subscribing to updates to $OllamaPrompts")
-    context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(OllamaPrompts, context.messageAdapter(ReceivePathUpdatedEvent))
+    context.system.vaultKeeper !! VaultKeeper.SubscribeUpdatesForFolder(context.messageAdapter(ReceivePathUpdatedEvent).underlying, OllamaPromptsSubdirectory)
+//    context.system.actorNotesFolderWatcherActor !! ActorNotesFolderWatcherActor.SubscribeSubdirectory(OllamaPrompts, context.messageAdapter(ReceivePathUpdatedEvent))
 
     Tinker.receiveMessage {
       case ReceiveModels(Models(models)) =>
@@ -60,12 +62,12 @@ object OllamaActor {
 
       case ReceivePathUpdatedEvent(event) =>
         event match {
-          case VaultPathAdapter.PathCreatedEvent(path) =>
-            val notename = path.path.getFileName.toString
+          case FolderWatcherActor.PathCreatedEvent(path) =>
+            val notename = path.getFileName.toString
             context.actorContext.log.info(s"Path $path created, spawning prompt manager for [[$notename]]")
             context.castAnonymous(PromptFromFileManagerActor(hostAndPort, notename))
             Tinker.steadily
-          case VaultPathAdapter.PathModifiedEvent(_) | VaultPathAdapter.PathDeletedEvent(_) =>
+          case FolderWatcherActor.PathModifiedEvent(_) | FolderWatcherActor.PathDeletedEvent(_) =>
             context.actorContext.log.debug(s"Ignoring $event")
             Tinker.steadily
         }

@@ -30,6 +30,7 @@ object VaultKeeper {
   final case class RequestAttachmentContents(attachmentName: String, replyTo: ActorRef[(String, Try[Array[Byte]])]) extends Message
 
   final case class SubscribeUpdatesForNote(subscriber: ActorRef[Ping], noteId: NoteId, subdirectory: Option[String] = None) extends Message
+  final case class SubscribeUpdatesForFolder(subscriber: ActorRef[FolderWatcherActor.PathUpdatedEvent], subdirectory: String) extends Message
 
   // outgoing messages
 
@@ -60,6 +61,7 @@ object VaultKeeper {
                         rootSubscribers: Map[NoteId, ActorRef[Ping]],
                         watcherLookup: LookUpActorByKey[String, FolderWatcherWithSubscribers.Message]
                       ): Behavior[Message] = Behaviors.receive { (context, message) =>
+    implicit val actorContext: ActorContext[Message] = context
     message match {
       case msg@RequestExclusiveNoteRef(noteId, replyTo, subdirectory) =>
         context.log.debug(s"Received message $msg")
@@ -121,7 +123,6 @@ object VaultKeeper {
         Behaviors.same
 
       case SubscribeUpdatesForNote(subscriber, noteId, maybeSubdirectory) =>
-        implicit val actorContext: ActorContext[Message] = context
         val subdirectory = maybeSubdirectory.getOrElse("") // root is ""
         val maybeUpdatedLookup = watcherLookup :?> subdirectory match {
           case (latest, watcher) =>
@@ -136,6 +137,21 @@ object VaultKeeper {
           rootSubscribers.updated(noteId, subscriber),
           maybeUpdatedLookup
         )
+
+      case SubscribeUpdatesForFolder(subscriber, subdirectory) =>
+        val maybeUpdatedLookup = watcherLookup :?> subdirectory match {
+          case (latest, watcher) =>
+            watcher ! FolderWatcherWithSubscribers.SubscribeUpdatesForFolder(subscriber)
+            latest
+        }
+
+        behavior(vaultPath,
+          jsonPath,
+          noteRefCache,
+          jsonRefCache,
+          rootSubscribers,
+          maybeUpdatedLookup
+        )
     }
   }
 }
@@ -144,24 +160,26 @@ private object FolderWatcherWithSubscribers {
   sealed trait Message
 
   final case class SubscribeUpdatesForNote(subscriber: ActorRef[Ping], noteId: NoteId) extends Message
+  final case class SubscribeUpdatesForFolder(subscriber: ActorRef[FolderWatcherActor.PathUpdatedEvent]) extends Message
 
   private case class ReceivePathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
 
   def apply(path: Path): Behavior[Message] = Behaviors.setup { context =>
     context.spawn(FolderWatcherActor(path, context.messageAdapter(ReceivePathUpdatedEvent)), "FolderWatcherActor")
-    behavior(Map.empty)
+    behavior(Map.empty, Set.empty)
   }
 
-  private def behavior(subscribers: Map[NoteId, ActorRef[Ping]]): Behavior[Message] = Behaviors.setup { context =>
+  private def behavior(noteSubscribers: Map[NoteId, ActorRef[Ping]], folderSubscribers: Set[ActorRef[FolderWatcherActor.PathUpdatedEvent]]): Behavior[Message] = Behaviors.setup { context =>
     Behaviors.receiveMessage {
       case SubscribeUpdatesForNote(subscriber, noteId) =>
-        for (replacing <- subscribers.get(noteId) if replacing != subscriber) {
+        for (replacing <- noteSubscribers.get(noteId) if replacing != subscriber) {
           context.log.warn(s"Replacing existing subscriber ($replacing) with $subscriber (this was not expected; only one subscriber should ever happen)")
         }
 
-        behavior(subscribers.updated(noteId, subscriber))
+        behavior(noteSubscribers.updated(noteId, subscriber), folderSubscribers)
 
       case ReceivePathUpdatedEvent(event) =>
+        folderSubscribers.foreach(_ ! event)
         event match {
           case FolderWatcherActor.PathCreatedEvent(path) => context.log.info(s"Ignoring creation of $path")
           case FolderWatcherActor.PathDeletedEvent(path) => context.log.info(s"Ignoring deletion of $path")
@@ -169,8 +187,8 @@ private object FolderWatcherWithSubscribers {
             val filename = path.getFileName.toString
             if (filename.endsWith(".md")) {
               val noteId = NoteId(filename.dropRight(3))
-              subscribers.get(noteId) match {
-                case None => context.log.info(s"Ignoring update of $path, no subscriber (of ${subscribers.size} subscribers)")
+              noteSubscribers.get(noteId) match {
+                case None => context.log.info(s"Ignoring update of $path, no subscriber (of ${noteSubscribers.size} subscribers)")
                 case Some(subscriber) =>
                   if (context.log.isDebugEnabled) {
                     context.log.debug(s"Pinging $subscriber")
@@ -181,6 +199,9 @@ private object FolderWatcherWithSubscribers {
             }
         }
         Behaviors.same
+
+      case SubscribeUpdatesForFolder(subscriber) =>
+        behavior(noteSubscribers, folderSubscribers + subscriber)
     }
   }
 }

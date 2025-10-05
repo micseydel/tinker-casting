@@ -2,9 +2,7 @@ package me.micseydel.actor.tasks
 
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.VaultPathAdapter.VaultPathUpdatedEvent
 import me.micseydel.actor.tasks.TaskNote.ModelTaskNote
-import me.micseydel.actor.{FolderWatcherActor, VaultPathAdapter}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
@@ -27,17 +25,17 @@ import scala.util.{Failure, Success, Try}
 object TaskManager {
   sealed trait Message
 
-  final case class ReceiveVaultPathUpdatedEvent(event: VaultPathUpdatedEvent) extends Message
+//  final case class ReceiveVaultPathUpdatedEvent(event: ?) extends Message
 
   def apply(taskNotesTasksPath: Path)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
-    @unused // driven by an internal thread
-    val actorNotesFolderWatcher = context.spawn(
-      FolderWatcherActor(
-        taskNotesTasksPath,
-        context.cast(VaultPathAdapter(taskNotesTasksPath, context.messageAdapter(ReceiveVaultPathUpdatedEvent)), "FolderWatcher").underlying
-      ),
-      s"FolderWatcherActor_for_tasks"
-    )
+//    @unused // driven by an internal thread
+//    val actorNotesFolderWatcher = context.spawn(
+//      FolderWatcherActor(
+//        taskNotesTasksPath,
+//        context.cast(VaultPathAdapter(taskNotesTasksPath, context.messageAdapter(ReceiveVaultPathUpdatedEvent)), "FolderWatcher").underlying
+//      ),
+//      s"FolderWatcherActor_for_tasks"
+//    )
 
     // FIXME: need to list taskNotesTasksPath and create actors, then wait for new ones
     val existing = Files.list(taskNotesTasksPath).toScala(List)

@@ -82,11 +82,6 @@ object RootTinkerBehavior {
     val notificationCenterManager: typed.ActorRef[NotificationCenterManager.Message] =
       context.spawn(NotificationCenterManager(notificationCenterAbilities), "NotificationCenterManager")
 
-    val actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message] = context.spawn(
-      ActorNotesFolderWatcherActor(config.vaultRoot),
-      "ActorNotesFolderWatcherActor"
-    )
-
     val operator: typed.ActorRef[Operator.Message] = context.spawn(Operator(), "Operator")
 
     val typedMqtt = context.spawn(TypedMqtt(config.mqttConfig), "TypedMqtt")
@@ -99,7 +94,6 @@ object RootTinkerBehavior {
       notificationCenterManager,
       networkPerimeter,
       operator,
-      actorNotesFolderWatcherActor,
       typedMqtt
     )
 
@@ -107,7 +101,6 @@ object RootTinkerBehavior {
 
     // Cmd+F for "case class StartTinkering" and count
     notificationCenterManager ! NotificationCenterManager.StartTinkering(tinker)
-    actorNotesFolderWatcherActor ! ActorNotesFolderWatcherActor.StartTinkering(tinker)
 
     //    tinkerBrain ! TinkerBrain.SystemStarted()
     context.log.info("Waiting 3 seconds before announcing system started")

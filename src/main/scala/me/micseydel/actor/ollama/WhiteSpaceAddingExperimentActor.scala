@@ -1,6 +1,5 @@
 package me.micseydel.actor.ollama
 
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, LLMTinkeringActor}
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult}
 import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.dsl.Tinker.Ability
@@ -23,9 +22,9 @@ object WhiteSpaceAddingExperimentActor {
 
   def apply(filename: String)(implicit Tinker: Tinker): Ability[Message] = {
     val noteName = dropDotMdFromEndOfFileNameIfPresent(filename)
-    val subfolder = s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/${LLMTinkeringActor.Folder}"
+//    val subfolder = s"${ActorNotesFolderWatcherActor.ActorNotesSubdirectory}/${LLMTinkeringActor.Folder}"
 
-    NoteMakingTinkerer[Message](noteName, TinkerColor.random(), "🪐", Some(subfolder)) { (context, noteRef) =>
+    NoteMakingTinkerer[Message](noteName, TinkerColor.random(), "🪐", /*Some(subfolder) FIXME*/None) { (context, noteRef) =>
       context.actorContext.log.info(s"Initialized for $filename, doing an async file read...")
 
       implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext

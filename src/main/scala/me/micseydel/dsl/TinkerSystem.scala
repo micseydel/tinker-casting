@@ -25,8 +25,6 @@ abstract class TinkerSystem {
 
   def notifier: SpiritRef[NotificationCenterManager.NotificationMessage]
 
-  def actorNotesFolderWatcherActor: SpiritRef[ActorNotesFolderWatcherActor.Message]
-
   // experimental
   def networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost]
 
@@ -86,9 +84,8 @@ object TinkerSystem {
             notifier: ActorRef[NotificationCenterManager.NotificationMessage],
             networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
-            actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message],
             typedMqtt: typed.ActorRef[TypedMqtt.Message]): TinkerSystem = {
-    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, typedMqtt)
+    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, networkPerimeter, operatorActor, typedMqtt)
   }
 }
 
@@ -99,7 +96,6 @@ class TinkerSystemImplementation(
                                   notifierActor: ActorRef[NotificationCenterManager.NotificationMessage],
                                   val networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
                                   operatorActor: ActorRef[Operator.Message],
-                                  actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message],
                                   val typedMqtt: typed.ActorRef[TypedMqtt.Message]
                                 ) extends TinkerSystem {
   override def newContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
@@ -114,8 +110,6 @@ class TinkerSystemImplementation(
   override def notifier: SpiritRef[NotificationCenterManager.NotificationMessage] = this.wrap(notifierActor)
 
   override def operator: SpiritRef[Operator.Message] = wrap(operatorActor)
-
-  override def actorNotesFolderWatcherActor: SpiritRef[ActorNotesFolderWatcherActor.Message] = wrap(actorNotesFolderWatcherActor)
 
   override def clock: TinkerClock = new TinkerClockImpl()
 }
