@@ -40,21 +40,19 @@ object Chronicler {
   final case class ReceiveNotePing(ping: Ping) extends Message
 
 
-  def apply(config: ChroniclerConfig, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
-    initializing(config.vaultRoot, gossiper, config.eventReceiverHost, config.eventReceiverPort)
+  def apply(vaultRoot: VaultPath, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
+    initializing(vaultRoot, gossiper)
 
   private def initializing(
                         vaultRoot: VaultPath,
-                        gossiper: SpiritRef[Gossiper.Message],
-                        whisperEventReceiverHost: String,
-                        whisperEventReceiverPort: Int
+                        gossiper: SpiritRef[Gossiper.Message]
                       )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing, Some("_actor_notes")) { case (context, noteRef) =>
     // FIXME: remove noteref if it stays unused
     implicit val tc: TinkerContext[_] = context
     context.self !! ReceiveNotePing(NoOp) // bootstrap
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
-        finishInitializing(vaultRoot, gossiper, whisperEventReceiverHost, whisperEventReceiverPort)
+        finishInitializing(vaultRoot, gossiper)
 
       case other =>
         context.actorContext.log.warn(s"Waiting for necessary config, ignoring message $other")
@@ -64,13 +62,12 @@ object Chronicler {
 
   private def finishInitializing(
                         vaultRoot: VaultPath,
-                        gossiper: SpiritRef[Gossiper.Message],
-                        whisperEventReceiverHost: String, whisperEventReceiverPort: Int
+                        gossiper: SpiritRef[Gossiper.Message]
                       )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
     // FIXME: I can send voice files to Chronicler, who can pass it to this
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
-      vaultRoot, context.self.underlying, whisperEventReceiverHost, whisperEventReceiverPort
+      vaultRoot, context.self.underlying
     ), "AudioNoteCapturer")
 
     val moc: ActorRef[ChroniclerMOC.Message] = context.spawn(ChroniclerMOC(), "ChroniclerMOC")

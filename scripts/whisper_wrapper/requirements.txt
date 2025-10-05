@@ -1,3 +1,4 @@
+paho-mqtt<2.0.0
 flask
 flask[async]
 pyyaml>=5.4

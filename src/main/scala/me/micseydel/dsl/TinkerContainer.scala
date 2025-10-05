@@ -4,18 +4,19 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter.*
 import akka.actor.typed.{Behavior, DispatcherSelector}
 import akka.actor.{ActorRef, ActorSystem, Props, typed}
+import me.micseydel.NoOp
 import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
-import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor}
+import me.micseydel.actor.{ActorNotesFolderWatcherActor, EventReceiver, PahoWrapperClassicActor, SubscribeMqttTopic}
 import me.micseydel.app.AppConfiguration
-import me.micseydel.app.AppConfiguration.AppConfig
-import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
+import me.micseydel.app.AppConfiguration.{AppConfig, MqttConfig}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.{NetworkPerimeterActor, TinkerBrain}
 import me.micseydel.vault.VaultKeeper
 import org.slf4j.LoggerFactory
 
 import java.nio.file.Files
+import java.time.ZonedDateTime
 import java.util.concurrent.Executors
 import scala.annotation.unused
 import scala.concurrent.duration.DurationInt
@@ -24,7 +25,7 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 case class TinkerContainer(actorSystem: ActorSystem, tinkerCast: typed.ActorRef[RootTinkerBehavior.Message])
 
 object TinkerContainer {
-  def apply[CentralCast](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent]): TinkerContainer = {
+  def apply[CentralCast](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[NoOp.type]): TinkerContainer = {
     implicit val httpExecutionContext: ExecutionContextExecutorService =
       ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(20))
 
@@ -40,7 +41,6 @@ object TinkerContainer {
     suppressSLF4JSpam()
 
     // the classic actor system is needed in order to get events from MQTT
-    // FIXME ...even though none are sourced from there right now, this is worth keeping for now to easily add later
     val actorSystem: ActorSystem = ActorSystem("AkkaActor")
 
     val tinkerCast = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
@@ -62,10 +62,7 @@ object RootTinkerBehavior {
   sealed trait Message
   // no messages
 
-  // this is what the `applications` must accept
-  case class ReceiveMqttEvent(topic: String, payload: Array[Byte])
-
-  def apply(config: AppConfig, applications: Tinker => Ability[ReceiveMqttEvent], notificationCenterAbilities: NotificationCenterAbilities)(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>
+  def apply(config: AppConfig, applications: Tinker => Ability[?], notificationCenterAbilities: NotificationCenterAbilities)(implicit httpExecutionContext: ExecutionContextExecutorService): Behavior[Message] = Behaviors.setup { context =>
     val jsonPath = config.vaultRoot.resolve("json")
 
     // generally hidden, internal use only
@@ -92,15 +89,7 @@ object RootTinkerBehavior {
 
     val operator: typed.ActorRef[Operator.Message] = context.spawn(Operator(), "Operator")
 
-
-    // FIXME - ideally this would lazy-start based on NoteConfig; does NOT need EnhancedTinker
-    val eventReceiver: typed.ActorRef[EventReceiver.Message] = context.spawn(
-      EventReceiver(
-        EventReceiver.Config(config.eventReceiverHost, config.eventReceiverPort),
-        tinkerBrain
-      ),
-      "EventReceiver"
-    )
+    val typedMqtt = context.spawn(TypedMqtt(config.mqttConfig), "TypedMqtt")
 
     val tinkerSystem = TinkerSystem(
       context.system,
@@ -111,7 +100,7 @@ object RootTinkerBehavior {
       networkPerimeter,
       operator,
       actorNotesFolderWatcherActor,
-      eventReceiver
+      typedMqtt
     )
 
     implicit val tinker: Tinker = new Tinker(tinkerSystem)
@@ -127,19 +116,8 @@ object RootTinkerBehavior {
 
     // this should be internally-driven, doesn't need messages FROM here
     @unused
-    val applicationsActor: typed.ActorRef[ReceiveMqttEvent] = context.spawn(applications(tinker), "Applications")
+    val applicationsActor = context.spawn(applications(tinker), "Applications")
     // FIXME: should applications be given an enhanced tinker?
-
-    config.mqttConfig match {
-      case None =>
-        context.log.info("No mqtt config, not subscribing to mqtt events")
-      case Some(mqttConfig: AppConfiguration.MqttConfig) =>
-        val topics: Set[String] = Set.empty // Set(owntracks.Topic)
-        context.log.info(s"Starting mqtt actor, listening to ${topics}")
-        val props = Props(classOf[PahoWrapperClassicActor], applicationsActor, topics, mqttConfig)
-        @unused // this actor receives messages and sends them to tinkercast
-        val mqtt: ActorRef = context.system.classicSystem.actorOf(props, "ClassicActor")
-    }
 
     //    // FIXME TinkerBrain -nodelist+edges-> WebSocket
     //    tinkerBrain ! TinkerBrain.ApplicationStarted()
@@ -152,9 +130,64 @@ object RootTinkerBehavior {
   }
 }
 
+object TypedMqtt {
+  sealed trait Message
+
+  final case class Publish(topic: String, msg: Array[Byte]) extends Message
+
+  case class MqttMessage(topic: String, payload: Array[Byte])
+
+  final case class Subscribe(topic: String, subscriber: typed.ActorRef[MqttMessage]) extends Message
+
+  def apply(maybeMqttConfig: Option[MqttConfig]): Behavior[Message] = Behaviors.setup { context =>
+    maybeMqttConfig match {
+      case None =>
+        context.log.info("No mqtt config, not subscribing to mqtt events")
+        inert()
+
+      case Some(mqttConfig: AppConfiguration.MqttConfig) =>
+
+        context.log.info(s"Starting mqtt actor")
+        val props = Props(classOf[PahoWrapperClassicActor], context.self, mqttConfig)
+        val mqtt: ActorRef = {
+          val actor = context.system.classicSystem.actorOf(props, "ClassicActor")
+          actor ! com.sandinh.paho.akka.Publish("test", s"hello world ${ZonedDateTime.now()}".getBytes) // FIXME
+          actor
+        }
+
+        behavior(mqtt)
+    }
+  }
+
+  private def inert(): Behavior[Message] = Behaviors.receive { (context, message) =>
+    message match {
+      case Publish(topic, msg) =>
+        context.log.warn(s"Ignoring message for topic $topic, ${msg.length} bytes")
+        Behaviors.same
+
+      case Subscribe(topic, subscriber) =>
+        context.log.warn(s"Ignoring subscription request for topic $topic from $subscriber, there is no mqtt config")
+        Behaviors.same
+    }
+  }
+
+  private def behavior(mqtt: ActorRef): Behavior[Message] = Behaviors.receive { (context, message) =>
+    message match {
+      case Publish(topic, msg) =>
+        context.log.info(s"Sending message to topic $topic, ${msg.length} bytes")
+        mqtt ! com.sandinh.paho.akka.Publish(topic, msg)
+        Behaviors.same
+
+      case Subscribe(topic, subscriber) =>
+        mqtt ! SubscribeMqttTopic(topic, subscriber)
+        Behaviors.same
+    }
+  }
+}
+
 
 object TinkerOrchestrator {
-  def apply[CentralCast](centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[ReceiveMqttEvent])(implicit Tinker: Tinker): Ability[ReceiveMqttEvent] = Tinker.setup[ReceiveMqttEvent] { context =>
+  def apply[CentralCast](centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[NoOp.type])(implicit Tinker: Tinker): Ability[NoOp.type] = Tinker.setup[NoOp.type] { context =>
     val enhancedTinker: EnhancedTinker[CentralCast] = new EnhancedTinker[CentralCast](context.system, centralCastFactory(Tinker, context))
     userCast(enhancedTinker)
   }

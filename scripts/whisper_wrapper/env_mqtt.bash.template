@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+export mqttBroker="localhost"
+export mqttBrokerPort="1883"
+export mqttUsername="mosquitto"
+export mqttPassword=""
+
+# needs the model - {base, turbo, large}
+echo "python mqtt_transcriber.py $1"
+python mqtt_transcriber.py $1

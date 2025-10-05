@@ -5,14 +5,14 @@ import com.softwaremill.quicklens.*
 import me.micseydel.Common
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
 import me.micseydel.actor.AudioNoteCapturerHelpers.*
-import me.micseydel.actor.EventReceiver.TranscriptionCompleted
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TypedMqtt}
 import me.micseydel.model.WhisperResultJsonProtocol.*
-import me.micseydel.model.{LargeModel, WhisperResult}
+import me.micseydel.model.{BaseModel, LargeModel, TurboModel, WhisperResult}
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.FileDoesNotExist
@@ -30,17 +30,19 @@ object AudioNoteCapturer {
 
   case class TranscriptionEvent(payload: String) extends Message
 
+  private case class MqttTranscriptionEvent(mqttMessage: MqttMessage) extends Message
+
   private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
 
-//  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
+  //  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
 
   // behavior
 
   private val NoteName = "Audio Note Capture"
 
-  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], whisperEventReceiverHost: String, whisperEventReceiverPort: Int)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
+  def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
     noteRef.properties match {
       case Failure(exception) => throw exception
       case Success(None) =>
@@ -49,11 +51,11 @@ object AudioNoteCapturer {
 
       case Success(Some(properties)) =>
         context.actorContext.log.info(s"Using properties $properties")
-        finishInitializing(vaultRoot, properties, whisperEventReceiverHost, whisperEventReceiverPort, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
+        finishInitializing(vaultRoot, properties, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
     }
   }
 
-  private def finishInitializing(vaultRoot: VaultPath, config: AudioNoteCaptureProperties, whisperEventReceiverHost: String, whisperEventReceiverPort: Int, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
+  private def finishInitializing(vaultRoot: VaultPath, config: AudioNoteCaptureProperties, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
     val newFileCreationEventAdapter = context.messageAdapter(AudioPathUpdatedEvent).underlying
     @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
     val folderWatcherActor = context.spawn(
@@ -63,49 +65,12 @@ object AudioNoteCapturer {
       "MobileAudioFolderWatcherActor"
     )
 
-    context.actorContext.log.info(s"Claiming EventReceiver key $TranscriptionCompleted")
-    val transcriptionAdapter = context.messageAdapter(TranscriptionEvent).underlying
-    context.system.eventReceiver ! EventReceiver.ClaimEventType(TranscriptionCompleted, transcriptionAdapter)
-
-    context.actorContext.log.info(s"Starting WhisperLargeUploadActor on ${config.whisperLarge} and WhisperBaseUploadActor on ${config.whisperBase}")
-
-    val maybeWhisperLargeActor = config.whisperLarge.map { host =>
-      context.spawn(
-        WhisperUploadActor(WhisperUploadActor.Config(
-          host,
-          whisperEventReceiverHost,
-          whisperEventReceiverPort,
-          vaultRoot
-        )),
-        "WhisperLargeUploadActor"
-      )
-    }
-
-    val maybeWhisperTurboActor = config.whisperTurbo.map { host =>
-      context.spawn(
-        WhisperUploadActor(WhisperUploadActor.Config(
-          host,
-          whisperEventReceiverHost,
-          whisperEventReceiverPort,
-          vaultRoot
-        )),
-        "WhisperTurboUploadActor"
-      )
-    }
-
-    val maybeWhisperBaseActor = config.whisperBase.map { host =>
-      context.spawn(
-        WhisperUploadActor(WhisperUploadActor.Config(
-          host,
-          whisperEventReceiverHost,
-          whisperEventReceiverPort,
-          vaultRoot
-        )),
-        "WhisperBaseUploadActor"
-      )
-    }
-
-    val recipients: List[ActorRef[WhisperFlaskProtocol.Message]] = List(maybeWhisperLargeActor, maybeWhisperBaseActor, maybeWhisperTurboActor).flatten
+    // FIXME: these need to keep track of queued message, track/log things that don't come back in time
+    val recipients: List[SpiritRef[WhisperMqttActor.Message]] = List(
+      context.cast(WhisperMqttActor(context.self.underlying, BaseModel), "WhisperMqttActor_base"),
+      context.cast(WhisperMqttActor(context.self.underlying, TurboModel), "WhisperMqttActor_turbo"),
+      context.cast(WhisperMqttActor(context.self.underlying, LargeModel), "WhisperMqttActor_large")
+    )
 
     val clock = context.system.clock
 
@@ -124,11 +89,11 @@ object AudioNoteCapturer {
           val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
           chronicler ! Chronicler.TranscriptionStartedEvent(capture)
 
-          val enqueueRequest = WhisperFlaskProtocol.Enqueue(audioPath.toString.replace(vaultRoot.toString + "/", ""))
-          recipients.foreach(_ ! enqueueRequest)
+          val vaultPath = audioPath.toString.replace(vaultRoot.toString + "/", "")
+          val enqueueRequest = WhisperMqttActor.Enqueue(vaultPath)
+          recipients.foreach(_ !!!! enqueueRequest)
       }
     }
-
 
     behavior(
       vaultRoot,
@@ -178,7 +143,7 @@ object AudioNoteCapturer {
 
       case TranscriptionEvent(payload) =>
         Try(payload.parseJson.convertTo[WhisperResult]) match {
-          case Failure(exception) => context.actorContext.log.error("Failed to deserialize transcription", exception)
+          case Failure(exception) => context.actorContext.log.error(s"Failed to deserialize transcription; payload=$payload", exception)
           case Success(whisperResultEvent) =>
             if (!pathSupportedByFfmpeg(whisperResultEvent.whisperResultMetadata.vaultPath.toLowerCase)) {
               context.actorContext.log.warn(s"Whisper result filename ${whisperResultEvent.whisperResultMetadata.vaultPath} expected to end with $FFMPEGFormats!")
@@ -204,15 +169,20 @@ object AudioNoteCapturer {
 
         Tinker.steadily
 
+      case MqttTranscriptionEvent(MqttMessage(topic, payload)) =>
+        context.self !!!! TranscriptionEvent(new String(payload))
+
+        Tinker.steadily
+
       case ReceivePing(_) =>
         context.actorContext.log.debug("Ignoring ping, already initialized")
         Tinker.steadily
 
-//      case m@ReceiveWavFile(filename, bytes) =>
-////        writeWavWithJavax(audioWatchPath.resolve(filename), bytes)
-//        // FIXME
-//        context.actorContext.log.warn(s"Ignoring $m, never finished impl")
-//        Tinker.steadily
+      //      case m@ReceiveWavFile(filename, bytes) =>
+      ////        writeWavWithJavax(audioWatchPath.resolve(filename), bytes)
+      //        // FIXME
+      //        context.actorContext.log.warn(s"Ignoring $m, never finished impl")
+      //        Tinker.steadily
     }
   }
 

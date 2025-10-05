@@ -30,7 +30,7 @@ abstract class TinkerSystem {
   // experimental
   def networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost]
 
-  def eventReceiver: ActorRef[EventReceiver.ClaimEventType]
+  def typedMqtt: typed.ActorRef[TypedMqtt.Message]
 
   def operator: SpiritRef[Operator.Message]
 
@@ -86,8 +86,9 @@ object TinkerSystem {
             notifier: ActorRef[NotificationCenterManager.NotificationMessage],
             networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
-            actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message], eventReceiver: ActorRef[EventReceiver.ClaimEventType]): TinkerSystem = {
-    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, eventReceiver)
+            actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message],
+            typedMqtt: typed.ActorRef[TypedMqtt.Message]): TinkerSystem = {
+    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, networkPerimeter, operatorActor, actorNotesFolderWatcherActor, typedMqtt)
   }
 }
 
@@ -99,7 +100,7 @@ class TinkerSystemImplementation(
                                   val networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
                                   operatorActor: ActorRef[Operator.Message],
                                   actorNotesFolderWatcherActor: typed.ActorRef[ActorNotesFolderWatcherActor.Message],
-                                  val eventReceiver: ActorRef[EventReceiver.ClaimEventType]
+                                  val typedMqtt: typed.ActorRef[TypedMqtt.Message]
                                 ) extends TinkerSystem {
   override def newContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
     new TinkerContextImpl[T](actorContext, this)

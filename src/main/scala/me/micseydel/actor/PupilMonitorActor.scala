@@ -2,7 +2,6 @@ package me.micseydel.actor
 
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.EventReceiver.Pupil
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
@@ -22,7 +21,8 @@ object PupilMonitorActor {
   private case class ReceivePing(ping: Ping) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Pupil Tinkering", TinkerColor.random(), "👁️", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
-    context.system.eventReceiver ! EventReceiver.ClaimEventType(Pupil, context.messageAdapter(ReceivePayload).underlying)
+    // FIXME: delete this??
+//    context.system.eventReceiver ! EventReceiver.ClaimEventType(Pupil, context.messageAdapter(ReceivePayload).underlying)
 
     noteRef.setMarkdown("- [ ] Click to generate chart\n") match {
       case Failure(exception) => throw exception

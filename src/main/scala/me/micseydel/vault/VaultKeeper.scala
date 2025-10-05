@@ -27,6 +27,7 @@ object VaultKeeper {
   final case class RequestExclusiveJsonRef(filename: String, replyTo: ActorRef[JsonRefResponse]) extends Message
 
   final case class RequestAttachmentsContents(attachmentNames: List[String], replyTo: ActorRef[Either[String, List[Array[Byte]]]]) extends Message
+  final case class RequestAttachmentContents(attachmentName: String, replyTo: ActorRef[(String, Try[Array[Byte]])]) extends Message
 
   final case class SubscribeUpdatesForNote(subscriber: ActorRef[Ping], noteId: NoteId, subdirectory: Option[String] = None) extends Message
 
@@ -112,6 +113,11 @@ object VaultKeeper {
             replyTo ! Right(byteArrays)
         }
 
+        Behaviors.same
+
+      case RequestAttachmentContents(attachmentName, replyTo) =>
+        val path = vaultPath.resolve(attachmentName) // FIXME: clarify this being different from the above!
+        replyTo ! (attachmentName -> Try(FileSystemUtil.getPathBytes(path)))
         Behaviors.same
 
       case SubscribeUpdatesForNote(subscriber, noteId, maybeSubdirectory) =>

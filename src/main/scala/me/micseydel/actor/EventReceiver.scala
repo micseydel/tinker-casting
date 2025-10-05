@@ -77,9 +77,9 @@ object EventReceiver {
   // model
 
   sealed trait EventType
-  object TranscriptionCompleted extends EventType
-  object HeartRate extends EventType
-  object Pupil extends EventType
+//  object TranscriptionCompleted extends EventType
+//  object HeartRate extends EventType
+//  object Pupil extends EventType
 
   // util
 
@@ -106,9 +106,9 @@ object EventReceiver {
 
       def read(value: JsValue): EventType = value match {
         case JsString(s) => s match {
-          case "TranscriptionCompleted" | "transcription_completed" => TranscriptionCompleted
-          case "HeartRate" | "heart_rate" => HeartRate
-          case "Pupil" | "pupil" => Pupil
+//          case "TranscriptionCompleted" | "transcription_completed" => TranscriptionCompleted
+//          case "HeartRate" | "heart_rate" => HeartRate
+//          case "Pupil" | "pupil" => Pupil
           case _ => throw DeserializationException(s"Expected transcription_completed")
         }
         case _ => throw DeserializationException(s"Expected transcription_completed")

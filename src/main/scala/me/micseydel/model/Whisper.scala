@@ -3,10 +3,10 @@ package me.micseydel.model
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsString, JsValue, RootJsonFormat}
 
 
-sealed trait WhisperModel
-case object BaseModel extends WhisperModel
-case object LargeModel extends WhisperModel
-case object TurboModel extends WhisperModel
+sealed abstract class WhisperModel(val simpleName: String)
+case object BaseModel extends WhisperModel("base")
+case object LargeModel extends WhisperModel("large")
+case object TurboModel extends WhisperModel("turbo")
 
 case class WhisperResultMetadata(
                                   model: WhisperModel,

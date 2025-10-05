@@ -1,6 +1,7 @@
 package me.micseydel.app
 
 import cats.data.Validated
+import me.micseydel.NoOp
 import me.micseydel.actor.*
 import me.micseydel.actor.google.GoogleAuthManager
 import me.micseydel.actor.hue.HueListener
@@ -11,7 +12,6 @@ import me.micseydel.actor.perimeter.HomeMonitorActor
 import me.micseydel.actor.tasks.{RecurringResponsibilityManager, TaskManager}
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.*
-import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
@@ -36,25 +36,22 @@ object TinkerCasterApp {
   }
 
   def run(config: AppConfig): Unit = {
-    // Chronicler, unlike my other actors, leverages EventReceiver for HTTP responses so needs non-note-config
-    val chroniclerConfig = ChroniclerConfig(config.vaultRoot, config.eventReceiverHost, config.eventReceiverPort)
-
     val taskNotesTasksPath = config.vaultRoot.resolve("TaskNotes/Tasks/")
 
     @unused
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
-        centralCastFactory(chroniclerConfig, config.vaultRoot)(_, _), // effectively globals
+        centralCastFactory(config.vaultRoot)(_, _), // effectively globals
         UserTinkerCast(config.purpleAirReadAPIKey, taskNotesTasksPath)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
   }
 
-  def centralCastFactory(config: ChroniclerConfig, vaultRoot: VaultPath)(implicit Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
+  def centralCastFactory(vaultRoot: VaultPath)(implicit Tinker: Tinker, context: TinkerContext[_]): MyCentralCast = {
     context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and Rasa")
     val gossiper = context.cast(Gossiper(), "Gossiper")
-    val chronicler = context.cast(Chronicler(config, gossiper), "Chronicler")
+    val chronicler = context.cast(Chronicler(vaultRoot, gossiper), "Chronicler")
     val rasaActor = context.cast(RasaActor(), "RasaActor")
     MyCentralCast(chronicler, gossiper, rasaActor)
   }
@@ -69,7 +66,7 @@ case class MyCentralCast(
 
 
 object UserTinkerCast {
-  def apply(purpleAirApiKey: Option[String], taskNotesTasksPath: Path)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[ReceiveMqttEvent] = Tinker.setup { context =>
+  def apply(purpleAirApiKey: Option[String], taskNotesTasksPath: Path)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[NoOp.type] = Tinker.setup { context =>
     @unused
     val appRestartTracker = context.cast(AppRestartTracker(), "AppRestartTracker")
 
@@ -98,11 +95,11 @@ object UserTinkerCast {
     @unused // internally driven by time
     val recurringResponsibilityManager = context.cast(RecurringResponsibilityManager(), "RecurringResponsibilityManager")
 
-    @unused
-    val taskManager = context.cast(TaskManager(taskNotesTasksPath), "TaskManager")
+//    @unused
+//    val taskManager = context.cast(TaskManager(taskNotesTasksPath), "TaskManager")
 
-    @unused // driven internally by a note
-    val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
+//    @unused // driven internally by a note
+//    val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
 
     @unused // subscribes to gmail via operator
     val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
@@ -111,8 +108,8 @@ object UserTinkerCast {
     val homeMonitor = context.spawn(HomeMonitorActor(purpleAirApiKey), "HomeMonitor")
 
     Tinker.receiveMessage {
-      case ReceiveMqttEvent(topic, payload) =>
-        context.actorContext.log.warn(s"Unexpected topic $topic message, payload ${payload.length} bytes")
+      case NoOp =>
+        context.actorContext.log.warn("didn't expect to receive a message")
         Tinker.steadily
     }
   }

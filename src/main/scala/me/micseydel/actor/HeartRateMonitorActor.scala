@@ -2,7 +2,6 @@ package me.micseydel.actor
 
 import me.micseydel.NoOp
 import me.micseydel.actor.ActorNotesFolderWatcherActor.Ping
-import me.micseydel.actor.EventReceiver.HeartRate
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
@@ -18,7 +17,8 @@ object HeartRateMonitorActor {
   private case class ReceivePing(ping: Ping) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Heart Rate Tinkering", TinkerColor.random(), "❤️", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
-    context.system.eventReceiver ! EventReceiver.ClaimEventType(HeartRate, context.messageAdapter(ReceivePayload).underlying)
+    // FIXME: use mqtt
+//    context.system.eventReceiver ! EventReceiver.ClaimEventType(HeartRate, context.messageAdapter(ReceivePayload).underlying)
 
     noteRef.setMarkdown("- [ ] Click to generate chart\n") match {
       case Failure(exception) => throw exception

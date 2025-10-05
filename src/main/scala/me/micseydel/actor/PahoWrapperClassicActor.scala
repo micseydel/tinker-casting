@@ -1,13 +1,14 @@
 package me.micseydel.actor
 
 import akka.actor.{Actor, ActorRef, Props, typed}
-import com.sandinh.paho.akka.{ConnOptions, MqttPubSub, PSConfig, Subscribe, SubscribeAck, Message => PahoMessage}
+import com.sandinh.paho.akka.{ConnOptions, MqttPubSub, PSConfig, Publish, Subscribe, SubscribeAck}
 import me.micseydel.app.AppConfiguration.MqttConfig
-import me.micseydel.dsl.RootTinkerBehavior.ReceiveMqttEvent
+import me.micseydel.dsl.SpiritRef
+import me.micseydel.dsl.TypedMqtt.MqttMessage
 
 import scala.concurrent.duration.DurationInt
 
-class PahoWrapperClassicActor(typedMqtt: typed.ActorRef[ReceiveMqttEvent], topics: Set[String], mqttConfig: MqttConfig) extends Actor {
+class PahoWrapperClassicActor(typedMqtt: typed.ActorRef[Nothing], mqttConfig: MqttConfig) extends Actor {
   private val config = PSConfig(
     brokerUrl = mqttConfig.brokerUrl,
     conOpt = ConnOptions(
@@ -22,28 +23,36 @@ class PahoWrapperClassicActor(typedMqtt: typed.ActorRef[ReceiveMqttEvent], topic
 
   this.context.system.log.info(s"Starting mqtt actor")
   private val mqtt: ActorRef = this.context.system.actorOf(Props(classOf[MqttPubSub], config))
-  for (topic <- topics) {
-    this.context.system.log.info(s"Subscribing to $topic")
-    mqtt ! Subscribe(topic, self)
-  }
 
-  def receive: Receive = waitingForSubScribeAck
+  def receive: Receive = ready(Map.empty)(typedMqtt)
 
-  private def waitingForSubScribeAck: Receive = {
-    case SubscribeAck(Subscribe(topic, `self`, _), fail) if topics.contains(topic) =>
-      if (fail.isEmpty) context become ready(typedMqtt)
-      else this.context.system.log.error(fail.get, s"Can't subscribe to $topic")
+  def ready(subscribersMap: Map[String, Set[typed.ActorRef[MqttMessage]]])(implicit typedMqtt: typed.ActorRef[Nothing]): Receive = {
+    case publish: com.sandinh.paho.akka.Publish =>
+      mqtt ! publish
 
-    case other =>
-      this.context.system.log.warning(s"Received ack for subscription on $other topic, but did not subscribe (ignoring")
-  }
+    case subscribe: com.sandinh.paho.akka.Subscribe =>
+      this.context.system.log.info(s"subscribing: $subscribe")
+      mqtt ! subscribe
 
-  def ready(typedMqtt: typed.ActorRef[ReceiveMqttEvent]): Receive = {
-    case pm: PahoMessage =>
-      this.context.system.log.info(s"Forwarding $pm")
-      typedMqtt ! ReceiveMqttEvent(pm.topic, pm.payload)
+    case message: com.sandinh.paho.akka.Message =>
+      for {
+        subscribers <- subscribersMap.get(message.topic)
+        subscriber <- subscribers
+      } subscriber ! MqttMessage(message.topic, message.payload)
+
+    case SubscribeMqttTopic(topic: String, subscriber: typed.ActorRef[MqttMessage]) =>
+      this.context.system.log.info(s"SubscribeMqttTopic: $topic $subscriber")
+      context become ready(subscribersMap.updatedWith(topic) {
+        case None =>
+          Some(Set(subscriber))
+        case Some(existingSubscribersForTopic) =>
+          Some(existingSubscribersForTopic + subscriber)
+      })
+      mqtt ! Subscribe(topic, self)
 
     case msg =>
       this.context.system.log.info(s"unexpected ?? $msg")
   }
 }
+
+case class SubscribeMqttTopic(topic: String, subscriber: typed.ActorRef[MqttMessage])
