@@ -345,6 +345,7 @@ private object TinkerBrainUtil {
     (
       nodes
         .filterNot(_.id.contains("TranscriptionNoteWrapper_"))
+        .filterNot(_.id.contains("VaultKeeper"))
         .filterNot(_.id.contains("ChroniclerMOC"))
         .filterNot(_.id.contains("Operator"))
         .filterNot(_.id.contains("AudioNoteCapturer"))
@@ -355,6 +356,7 @@ private object TinkerBrainUtil {
       edges.filterNot {
         case TinkerEdge(source, target) =>
           source.contains("TranscriptionNoteWrapper_") || target.contains("TranscriptionNoteWrapper_") ||
+            source.contains("VaultKeeper") || target.contains("VaultKeeper") ||
             source.contains("ChroniclerMOC") || target.contains("ChroniclerMOC") ||
             source.contains("Operator") || target.contains("Operator") ||
             source.contains("AudioNoteCapturer") || target.contains("AudioNoteCapturer") ||
