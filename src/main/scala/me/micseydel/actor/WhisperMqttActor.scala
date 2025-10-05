@@ -26,7 +26,7 @@ object WhisperMqttActor {
     val Topic = s"${context.self.path}(model::${model.simpleName})"
     val OutTopic = s"python/transcription/${model.simpleName}"
 
-    context.system.typedMqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
+    context.system.mqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
     context.actorContext.log.info(s"Subscribed to $Topic")
 
     Tinker.receiveMessage {
@@ -49,7 +49,7 @@ object WhisperMqttActor {
             if (outMessageBytes.length > 268435456) {
               context.actorContext.log.warn(s"Ignoring $vaultPath, too big at ${outMessageBytes.length} bytes")
             } else {
-              context.system.typedMqtt ! TypedMqtt.Publish(OutTopic, outMessageBytes)
+              context.system.mqtt ! TypedMqtt.Publish(OutTopic, outMessageBytes)
             }
         }
 

@@ -76,9 +76,6 @@ object RootTinkerBehavior {
 
     // perimeter
 
-    // FIXME: this needs its own exclusive execution context
-    val networkPerimeter: typed.ActorRef[NetworkPerimeterActor.Message] = context.spawn(NetworkPerimeterActor(), "NetworkPerimeterActor")
-
     val notificationCenterManager: typed.ActorRef[NotificationCenterManager.Message] =
       context.spawn(NotificationCenterManager(notificationCenterAbilities), "NotificationCenterManager")
 
@@ -92,7 +89,6 @@ object RootTinkerBehavior {
       vaultKeeper,
       // perimeter
       notificationCenterManager,
-      networkPerimeter,
       operator,
       typedMqtt
     )

@@ -31,8 +31,10 @@ object NtfyerActor {
         val perimeterKey = UUID.randomUUID().toString
         val adapter = context.messageAdapter(NtfyHttpCallResult)
 
-        context.actorContext.log.info(s"Sending HTTP POST request for perimeterKey $perimeterKey")
-        context.system.networkPerimeter ! NetworkPerimeterActor.DoHttpPost(url, message, adapter.underlying, perimeterKey)
+//        context.actorContext.log.info(s"Sending HTTP POST request for perimeterKey $perimeterKey")
+        context.actorContext.log.error(s"NtfyActor needs to be updated!!!")
+        // FIXME
+//        context.system.networkPerimeter ! NetworkPerimeterActor.DoHttpPost(url, message, adapter.underlying, perimeterKey)
 
         Behaviors.same
 

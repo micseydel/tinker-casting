@@ -25,10 +25,7 @@ abstract class TinkerSystem {
 
   def notifier: SpiritRef[NotificationCenterManager.NotificationMessage]
 
-  // experimental
-  def networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost]
-
-  def typedMqtt: typed.ActorRef[TypedMqtt.Message]
+  def mqtt: typed.ActorRef[TypedMqtt.Message]
 
   def operator: SpiritRef[Operator.Message]
 
@@ -82,10 +79,9 @@ object TinkerSystem {
             tinkerBrain: ActorRef[TinkerBrain.Message],
             vaultKeeper: ActorRef[VaultKeeper.Message],
             notifier: ActorRef[NotificationCenterManager.NotificationMessage],
-            networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
             operatorActor: ActorRef[Operator.Message],
             typedMqtt: typed.ActorRef[TypedMqtt.Message]): TinkerSystem = {
-    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, networkPerimeter, operatorActor, typedMqtt)
+    new TinkerSystemImplementation(actorSystem, tinkerBrain, vaultKeeper, notifier, operatorActor, typedMqtt)
   }
 }
 
@@ -94,9 +90,8 @@ class TinkerSystemImplementation(
                                   val tinkerBrain: ActorRef[TinkerBrain.Message],
                                   vaultKeeperActor: ActorRef[VaultKeeper.Message],
                                   notifierActor: ActorRef[NotificationCenterManager.NotificationMessage],
-                                  val networkPerimeter: ActorRef[NetworkPerimeterActor.DoHttpPost],
                                   operatorActor: ActorRef[Operator.Message],
-                                  val typedMqtt: typed.ActorRef[TypedMqtt.Message]
+                                  val mqtt: typed.ActorRef[TypedMqtt.Message]
                                 ) extends TinkerSystem {
   override def newContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
     new TinkerContextImpl[T](actorContext, this)
