@@ -83,7 +83,7 @@ private object LitterGraphHelper {
           s"- [[Litter boxes sifting ($forDay)]]: $auditType"
         }.reverse.mkString("", "\n", "\n")
 
-        val textLines = "# Days\n\n" + sorted.map {
+        val textLines = "# Days\n\n" + sorted.reverse.map {
           case (date, LitterSummaryForDay(_, peeClumps, poops, _)) =>
             s"- [[Litter boxes sifting ($date)|$date]] $peeClumps💦 $poops💩"
         }.mkString("\n")
@@ -148,7 +148,7 @@ private object LitterGraphHelper {
                     Try(maybeFrontmatter.map(_.parseJson.convertTo[Document]))
                 }
             case other =>
-              log.warn(s"falling back on frontmatter, no raw json section found in markdown: $other")
+              log.warn(s"falling back on frontmatter, no raw json section found in ${noteRef.noteId} markdown: $markdown")
               // FIXME: logging
               Try(maybeFrontmatter.map(_.parseJson.convertTo[Document]))
           }
