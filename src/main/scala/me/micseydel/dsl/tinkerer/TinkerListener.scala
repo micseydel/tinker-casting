@@ -57,7 +57,7 @@ object RasaAnnotatingListener {
     Tinker.userExtension.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
     implicit val scheduler: Scheduler = context.system.actorSystem.scheduler
-    implicit val duration: FiniteDuration = 1.seconds // FIXME: hopefully can be faster, or more likely, replaced
+    implicit val duration: FiniteDuration = 30.seconds // FIXME: hopefully can be faster, or more likely, replaced
     implicit val timeout: Timeout = Timeout(duration)
 
 //    val maybeExperiment = replacementCandidate.map { replacement =>
