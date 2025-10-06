@@ -1,14 +1,14 @@
 package me.micseydel.dsl
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
 import com.softwaremill.quicklens.ModifyPimp
-import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.google.GmailActor
+import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.perimeter.{AranetActor, HomeMonitorActor}
 import me.micseydel.dsl.cast.{SystemWideTimeKeeper, UntrackedTimeKeeper}
 
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.ZonedDateTime
 import scala.concurrent.duration.DurationInt
 
 object Operator {
@@ -18,6 +18,7 @@ object Operator {
 
   sealed trait Register extends Message
   case class RegisterHomeMonitor(registrant: SpiritRef[HomeMonitorActor.Monitoring]) extends Register
+  // FIXME: make generic, don't rely on email
   case class RegisterGmail(registrant: SpiritRef[GmailActor.Subscribe]) extends Register
 
   private val TotalAllowedRetries: Int = 3

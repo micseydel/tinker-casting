@@ -4,11 +4,8 @@ import akka.actor.typed
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.{ActorRef, ActorSystem}
 import cats.data.NonEmptyList
-import me.micseydel.actor.{EventReceiver, RasaActor}
 import me.micseydel.actor.notifications.NotificationCenterManager
-import me.micseydel.actor.perimeter.HueControl
-import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.{Gossiper, NetworkPerimeterActor, TinkerBrain}
+import me.micseydel.dsl.cast.TinkerBrain
 import me.micseydel.vault.VaultKeeper
 
 import java.util.concurrent.Executors
@@ -17,7 +14,7 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 abstract class TinkerSystem {
   def newContext[T](actorContext: ActorContext[T]): TinkerContext[T]
 
-  def actorSystem: ActorSystem[_]
+  def actorSystem: ActorSystem[?]
 
   private[dsl] def tinkerBrain: ActorRef[TinkerBrain.Message]
 
@@ -25,7 +22,7 @@ abstract class TinkerSystem {
 
   def notifier: SpiritRef[NotificationCenterManager.NotificationMessage]
 
-  def mqtt: typed.ActorRef[TypedMqtt.Message]
+  def mqtt: ActorRef[TypedMqtt.Message]
 
   def operator: SpiritRef[Operator.Message]
 
@@ -75,7 +72,7 @@ abstract class TinkerSystem {
 }
 
 object TinkerSystem {
-  def apply(actorSystem: ActorSystem[_],
+  def apply(actorSystem: ActorSystem[?],
             tinkerBrain: ActorRef[TinkerBrain.Message],
             vaultKeeper: ActorRef[VaultKeeper.Message],
             notifier: ActorRef[NotificationCenterManager.NotificationMessage],
@@ -86,12 +83,12 @@ object TinkerSystem {
 }
 
 class TinkerSystemImplementation(
-                                  val actorSystem: ActorSystem[_],
+                                  val actorSystem: ActorSystem[?],
                                   val tinkerBrain: ActorRef[TinkerBrain.Message],
                                   vaultKeeperActor: ActorRef[VaultKeeper.Message],
                                   notifierActor: ActorRef[NotificationCenterManager.NotificationMessage],
                                   operatorActor: ActorRef[Operator.Message],
-                                  val mqtt: typed.ActorRef[TypedMqtt.Message]
+                                  val mqtt: ActorRef[TypedMqtt.Message]
                                 ) extends TinkerSystem {
   override def newContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
     new TinkerContextImpl[T](actorContext, this)

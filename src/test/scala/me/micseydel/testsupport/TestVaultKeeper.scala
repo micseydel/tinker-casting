@@ -33,6 +33,8 @@ object TestVaultKeeper {
       case VaultKeeper.RequestAttachmentsContents(attachmentNames, replyTo) =>
         context.log.warn(s"FYI, ignoring request for $attachmentNames with replyTo path ${replyTo.path}")
         Behaviors.same
+
+      case other => ???
     }
   }
 }
