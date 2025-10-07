@@ -20,8 +20,11 @@ import scala.util.{Failure, Success, Try}
 
 object LitterCharts {
   sealed trait AuditStatus
+
   case object AuditCompleted extends AuditStatus
+
   case object AuditNotCompleted extends AuditStatus
+
   case object HasInbox extends AuditStatus
 
   case class LitterSummaryForDay(forDay: LocalDate, peeClumps: Int, poops: Int, auditStatus: AuditStatus)
@@ -71,43 +74,47 @@ private object LitterGraphHelper {
 
       val series: List[Series[_]] = List(
         IntSeries("#1", number1s.takeRight(limitDays)),
-        IntSeries("#2", number2s.takeRight(limitDays))//,
-//        DoubleSeries("avg #1", runningAverage(number1s).takeRight(limitDays)),
-//        DoubleSeries("avg #2", runningAverage(number2s).takeRight(limitDays))
+        IntSeries("#2", number2s.takeRight(limitDays)) //,
+        //        DoubleSeries("avg #1", runningAverage(number1s).takeRight(limitDays)),
+        //        DoubleSeries("avg #2", runningAverage(number2s).takeRight(limitDays))
       )
 
       val chart = ObsidianCharts.chart(labels, series)
 
-      val extras = if (needsAudit.nonEmpty) {
-        val auditLines = needsAudit.map { case (forDay, auditType) =>
-          s"- [[Litter boxes sifting ($forDay)]]: $auditType"
-        }.reverse.mkString("", "\n", "\n")
-
-        val textLines = "# Days\n\n" + sorted.reverse.map {
-          case (date, LitterSummaryForDay(_, peeClumps, poops, _)) =>
-            s"- [[Litter boxes sifting ($date)|$date]] $peeClumps💦 $poops💩"
-        }.mkString("\n")
-
-        import DocumentJsonProtocol.documentJsonFormat
-        s"""
-           |# Needs auditing
-           |
-           |$auditLines
-           |$textLines
-           |
-           |# Raw
-           |
-           |```json
-           |${Document(summaries).toJson.toString}
-           |```
-           |""".stripMargin
-      } else {
-        ""
+      val auditSection = {
+        if (needsAudit.nonEmpty) {
+          Some(
+            "Needs auditing" -> needsAudit.map { case (forDay, auditType) =>
+              s"- [[Litter boxes sifting ($forDay)]]: $auditType"
+            }.reverse.mkString("", "\n", "\n")
+          )
+        } else {
+          None
+        }
       }
 
-      s"""# Chart
-         |
-         |$chart$extras""".stripMargin
+      val textLines = sorted.reverse.map {
+        case (date, LitterSummaryForDay(_, peeClumps, poops, _)) =>
+          s"- [[Litter boxes sifting ($date)|$date]] $peeClumps💦 $poops💩"
+      }.mkString("\n")
+
+      import DocumentJsonProtocol.documentJsonFormat
+
+      val raw =
+        s"""```json
+           |${Document(summaries).toJson.toString}
+           |```""".stripMargin
+
+      val sections = List(
+        Some("Chart" -> chart),
+        auditSection,
+        Some("Days" -> textLines),
+        Some("Raw" -> raw)
+      ).flatten
+      
+      sections.map { case (header, body) =>
+        s"# $header\n\n$body\n"
+      }.mkString("\n")
     }
 
     private def runningAverage(elements: List[Int], lookback: Int = 7): List[Double] = {
@@ -191,24 +198,24 @@ object MonthlyAbility {
       implicit val l: Logger = context.actorContext.log
       l.info(s"Started ${noteRef.noteId}")
       Tinker.receiveMessage { summary: LitterSummaryForDay =>
-          noteRef.readDocument().flatMap {
-            case Some(document) =>
-              document.integrate(summary) match {
-                case (false, _) =>
-                  Success(NoOp)
-                case (true, updatedDocument) =>
-                  noteRef.setDocument(updatedDocument, 30)
-                  // FIXME: dynamic days in month?
-              }
-            case None =>
-              val document = LitterGraphHelper.Document(Map(summary.forDay -> summary))
-              noteRef.setDocument(document, 30)
-          } match {
-            case Failure(exception) => context.actorContext.log.error(s"Failed to process summary for ${summary.forDay}", exception)
-            case Success(NoOp) =>
-          }
+        noteRef.readDocument().flatMap {
+          case Some(document) =>
+            document.integrate(summary) match {
+              case (false, _) =>
+                Success(NoOp)
+              case (true, updatedDocument) =>
+                noteRef.setDocument(updatedDocument, 30)
+              // FIXME: dynamic days in month?
+            }
+          case None =>
+            val document = LitterGraphHelper.Document(Map(summary.forDay -> summary))
+            noteRef.setDocument(document, 30)
+        } match {
+          case Failure(exception) => context.actorContext.log.error(s"Failed to process summary for ${summary.forDay}", exception)
+          case Success(NoOp) =>
+        }
 
-          Tinker.steadily
+        Tinker.steadily
       }
     }
   }
@@ -216,6 +223,7 @@ object MonthlyAbility {
 
 
 object Last30DaysLitterGraphActor {
+
   import LitterGraphHelper.RichNoteRef
 
   def apply()(implicit Tinker: Tinker): Ability[LitterSummaryForDay] = {
