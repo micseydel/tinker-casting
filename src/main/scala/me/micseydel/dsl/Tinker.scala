@@ -17,11 +17,11 @@ import scala.util.{Failure, Success}
 
 class Tinker(val tinkerSystem: TinkerSystem) {
   def setup[T](factory: TinkerContext[T] => Ability[T]): Ability[T] = Behaviors.setup { ctx =>
-    factory(tinkerSystem.newContext(ctx))
+    factory(tinkerSystem.wrapActorContext(ctx))
   }
 
   def receive[T](onMessage: (TinkerContext[T], T) => Ability[T]): Ability[T] = Behaviors.receive { (ctx, message) =>
-    onMessage(tinkerSystem.newContext(ctx), message)
+    onMessage(tinkerSystem.wrapActorContext(ctx), message)
   }
 
   def receiveMessage[T](onMessage: T => Ability[T]): Ability[T] = setup { _ =>

@@ -52,12 +52,12 @@ class TinkerContextImpl[T](val actorContext: ActorContext[T], val system: Tinker
 
   def log: Logger = actorContext.log
 
-  def self: SpiritRef[T] = system.wrap(actorContext.self)
+  def self: SpiritRef[T] = system.wrapActorRef(actorContext.self)
 
   def pipeToSelf[Value](future: Future[Value])(mapResult: Try[Value] => T): Unit = actorContext.pipeToSelf(future)(mapResult)
 
   def messageAdapter[U: ClassTag](f: U => T): SpiritRef[U] = {
-    system.wrap(actorContext.messageAdapter(f))
+    system.wrapActorRef(actorContext.messageAdapter(f))
   }
 
   // side-effect capture for testing

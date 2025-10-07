@@ -12,63 +12,54 @@ import java.util.concurrent.Executors
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 
 abstract class TinkerSystem {
-  def newContext[T](actorContext: ActorContext[T]): TinkerContext[T]
-
+  /**
+   * The underlying Akka ActorSystem
+   */
   def actorSystem: ActorSystem[?]
 
-  private[dsl] def tinkerBrain: ActorRef[TinkerBrain.Message]
+  /**
+   * Wrap an ActorContext with a TinkerContext
+   */
+  def wrapActorContext[T](actorContext: ActorContext[T]): TinkerContext[T]
 
+  /**
+   * Wrap an ActorRef with a SpiritRef
+   */
+  def wrapActorRef[U](actorRef: ActorRef[U]): SpiritRef[U]
+
+  /**
+   * Actor responsible for accessing Markdown notes.
+   */
   def vaultKeeper: SpiritRef[VaultKeeper.Message]
 
+  /**
+   * \[\[Notification Center\]\]
+   */
   def notifier: SpiritRef[NotificationCenterManager.NotificationMessage]
 
+  /**
+   * MQTT - for messages outside Akka
+   */
   def mqtt: ActorRef[TypedMqtt.Message]
 
+  /**
+   * Provides certain basic functionality like email
+   */
   def operator: SpiritRef[Operator.Message]
 
   /**
-   * Enables !! for message tracking, but does not provide the actor with TinkerSystem access
+   * Clock to be used for testing/dependency injeciton.
    */
-  def wrap[U](actorRef: ActorRef[U]): SpiritRef[U]
-
   def clock: TinkerClock
+
+  def getRandomElement[T](list: NonEmptyList[T]): T
 
   // FIXME: not sure how to abstract this away without silliness, it seems to need to be part of the interface
   // and tests can just ignore it
   implicit val httpExecutionContext: ExecutionContextExecutorService =
     ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(30))
 
-  // FIXME: testing, shift this into impl instead of interface, etc
-  //  def getRandomElement[T](list: List[T]): Option[T] = list match {
-  //    case Nil => None
-  //    case _ => list.lift(scala.util.Random.nextInt(list.size))
-  //  }
-  def getRandomElement[T](list: NonEmptyList[T]): T =
-    list.toList.apply(scala.util.Random.nextInt(list.size))
-
-  // this was an experiment where SpiritRefs got serialized, and worked OTHER THAN for adapters
-//  def spiritRefJsonFormat[T](): RootJsonFormat[SpiritRef[T]] = {
-//    object SpiritRefJsonFormat extends DefaultJsonProtocol {
-//      object MessageJsonFormat extends RootJsonFormat[SpiritRef[T]] {
-//        private val key = "path"
-//
-//        def write(m: SpiritRef[T]): JsValue = Map(key -> m.path.toSerializationFormat).toJson.asJsObject
-//
-//        def read(value: JsValue): SpiritRef[T] = {
-//          value.asJsObject.getFields(key) match {
-//            case Seq(JsString(path)) =>
-//              val underlying = ActorRefResolver(actorSystem).resolveActorRef[T](path)
-//              new SpiritRefImpl[T](underlying, clock, tinkerBrain)
-//
-//            case other => throw DeserializationException(s"Expected an actor path under key `path`, got: $other")
-//          }
-//        }
-//      }
-//
-//    }
-//
-//    SpiritRefJsonFormat.MessageJsonFormat
-//  }
+  private[dsl] def tinkerBrain: ActorRef[TinkerBrain.Message]
 }
 
 object TinkerSystem {
@@ -90,18 +81,21 @@ class TinkerSystemImplementation(
                                   operatorActor: ActorRef[Operator.Message],
                                   val mqtt: ActorRef[TypedMqtt.Message]
                                 ) extends TinkerSystem {
-  override def newContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
+  override def wrapActorContext[T](actorContext: ActorContext[T]): TinkerContext[T] = {
     new TinkerContextImpl[T](actorContext, this)
   }
 
-  def wrap[T](actorRef: ActorRef[T]): SpiritRef[T] =
+  def wrapActorRef[T](actorRef: ActorRef[T]): SpiritRef[T] =
     new SpiritRefImpl[T](actorRef, clock, tinkerBrain)
 
-  override def vaultKeeper: SpiritRef[VaultKeeper.Message] = this.wrap(vaultKeeperActor)
+  override def vaultKeeper: SpiritRef[VaultKeeper.Message] = this.wrapActorRef(vaultKeeperActor)
 
-  override def notifier: SpiritRef[NotificationCenterManager.NotificationMessage] = this.wrap(notifierActor)
+  override def notifier: SpiritRef[NotificationCenterManager.NotificationMessage] = this.wrapActorRef(notifierActor)
 
-  override def operator: SpiritRef[Operator.Message] = wrap(operatorActor)
+  override def operator: SpiritRef[Operator.Message] = wrapActorRef(operatorActor)
 
   override def clock: TinkerClock = new TinkerClockImpl()
+
+  override def getRandomElement[T](list: NonEmptyList[T]): T =
+    list.toList.apply(scala.util.Random.nextInt(list.size))
 }
