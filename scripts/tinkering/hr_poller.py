@@ -2,32 +2,33 @@ import asyncio
 import bitstruct
 import struct
 import sys
+import os
+import random
 
-import requests
 from bleak import BleakClient, BleakScanner, exc
+from paho.mqtt import client as paho_client
 
 
 HR_MEAS = "00002A37-0000-1000-8000-00805F9B34FB"
 
-HEADERS = {
-    "Content-Type": "application/json"
-}
 
-def send_to_server(url, heart_rate):
-    data = {
-        "eventType": "HeartRate",
-        "payload": str(heart_rate)
-    }
+def connect_mqtt(client_id, broker, port, username, password) -> paho_client:
+    def on_connect(mqtt_client, userdata, flags, rc):
+        if rc == 0:
+            print("Connected to MQTT Broker!")
+        else:
+            print("Failed to connect, return code %d\n", rc)
 
-    response = requests.post(url, json=data, headers=HEADERS)
+    mqtt_client = paho_client.Client(client_id)
+    mqtt_client.username_pw_set(username, password)
+    mqtt_client.on_connect = on_connect
+    mqtt_client.connect(broker, port)
+    return mqtt_client
 
-    if response.status_code != 202:
-        print(f"Expected status code 202 but got {response.status_code} and ${response.text}")
 
-
-async def run(address, url, debug=False):
-    async with BleakClient(address) as client:
-        connected = await client.is_connected()
+async def run(address, mqtt_client, debug=False):
+    async with BleakClient(address) as bt_client:
+        connected = await bt_client.is_connected()
         print("Connected: {0}".format(connected))
 
         def hr_val_handler(sender, data):
@@ -42,11 +43,18 @@ async def run(address, url, debug=False):
             else:
                 hr_val, = struct.unpack_from("<B", data, 1)
             print(f"HR Value: {hr_val}")
-            send_to_server(url, hr_val)
+            result = mqtt_client.publish("simple_heart_rate", str(hr_val))
+            # result: [0, 1]
+            status = result[0]
+            if status == 0:
+                # print(f"Send `{msg}` to topic `{out_topic}`")
+                pass
+            else:
+                print(f"Failed to send message to topic {out_topic}")
 
-        await client.start_notify(HR_MEAS, hr_val_handler)
+        await bt_client.start_notify(HR_MEAS, hr_val_handler)
 
-        while await client.is_connected():
+        while await bt_client.is_connected():
             await asyncio.sleep(1)
 
 async def print_devices(out):
@@ -67,16 +75,28 @@ async def print_devices(out):
 
 if __name__ == "__main__":
     try:
-        _, address, url = sys.argv
+        _, address = sys.argv
     except ValueError:
         print("An address and URL are required parameters, fetching then printing the available addresses now...\n", file=sys.stderr)
         asyncio.run(print_devices(sys.stderr))
         exit(1)
 
-    print(f"Using {address} and connecting to {url}")
+    broker = os.environ.get("mqttBroker")
+    port = int(os.environ.get("mqttBrokerPort"))
+    username = os.environ.get("mqttUsername")
+    password = os.environ.get("mqttPassword")
+
+    # Generate a Client ID with the subscribe prefix.
+    client_id = f'subscribe-{random.randint(0, 100)}'
+
+    print(f"pid {os.getpid()}")
+
+    mqtt_client = connect_mqtt(client_id, broker, port, username, password)
+
+    print(f"Using {address} and connecting to mqtt {broker}")
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(run(address, url))
+        loop.run_until_complete(run(address, mqtt_client))
     except KeyboardInterrupt:
         print("Exiting per Ctrl+C")
     except exc.BleakDeviceNotFoundError:

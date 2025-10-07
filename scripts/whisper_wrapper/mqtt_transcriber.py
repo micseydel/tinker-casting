@@ -79,7 +79,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
                 # print(f"Send `{msg}` to topic `{out_topic}`")
                 pass
             else:
-                print(f"Failed to send message to topic {out_topic}")
+                print(f"Failed to send message to topic {response_topic}")
 
             temp_path = incoming_data.get("$tempPath")
             if temp_path:

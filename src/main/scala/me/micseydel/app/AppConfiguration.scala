@@ -9,8 +9,6 @@ import scala.util.{Failure, Success, Try}
 object AppConfiguration {
   case class AppConfig(
     vaultRoot: VaultPath,
-    eventReceiverHost: String,
-    eventReceiverPort: Int,
     mqttConfig: Option[MqttConfig],
     purpleAirReadAPIKey: Option[String],
   )
@@ -40,8 +38,6 @@ object AppConfiguration {
 
         Validated.Valid(AppConfig(
           vaultRoot,
-          config.getString("transcription.whisper.event-receiver.host"),
-          config.getInt("transcription.whisper.event-receiver.port"),
           maybeMqttConfig,
           getOptionalString(config, "purpleAir.readAPIKey")
         ))

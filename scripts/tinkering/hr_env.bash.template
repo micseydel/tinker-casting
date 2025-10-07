@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+export mqttBroker=localhost
+export mqttBrokerPort=1883
+export mqttUsername="mosquitto"
+export mqttPassword=""
+
+echo "Running 'python hr_poller.py $1'"
+python hr_poller.py $1

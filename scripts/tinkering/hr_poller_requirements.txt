@@ -1,0 +1,4 @@
+paho-mqtt<2.0.0
+
+bitstruct
+bleak
