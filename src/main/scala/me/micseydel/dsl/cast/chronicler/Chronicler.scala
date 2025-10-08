@@ -134,6 +134,7 @@ object Chronicler {
           if (notedTranscription.capture.whisperResult.whisperResultMetadata.model == LargeModel) {
             // FIXME: this is the attachment...
             context.actorContext.log.info(s"Sending note ${notedTranscription.noteId} to MOC")
+            // FIXME: this should not be conditional on the large model, and the receiver needs to be updated to handle it
             moc ! ChroniclerMOC.AddNote(TranscribedMobileNoteEntry(captureTime, notedTranscription.noteId, notedTranscription.capture.whisperResult.whisperResultContent.text.wordCount))
           } else {
             context.actorContext.log.debug(s"Ignoring ${notedTranscription.noteId} because ${notedTranscription.capture.whisperResult.whisperResultMetadata.model} != LargeModel")

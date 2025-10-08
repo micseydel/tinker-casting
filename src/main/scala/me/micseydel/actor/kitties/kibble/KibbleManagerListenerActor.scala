@@ -9,7 +9,7 @@ import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.TinkerListener
 import me.micseydel.dsl.tinkerer.TinkerListener.{Acknowledged, Ignored}
 import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerContext}
-import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent}
+import me.micseydel.model.{LargeModel, NotedTranscription, TranscriptionCapture, WhisperResult, WhisperResultContent}
 import me.micseydel.util.StringImplicits.RichString
 import org.slf4j.Logger
 
@@ -38,7 +38,12 @@ object KibbleManagerListenerActor {
                   if (lowerText.contains("discard")) {
                     context.actorContext.log.info(s"Detected ${mass}g discarded kibble")
                     manager !! KibbleDiscarded(mass, captureTime, noteId, meta.model)
-                    Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble discarded"))
+                    // FIXME: why does this get duplicated? with different times
+                    if (meta.model == LargeModel) {
+                      Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble discarded"))
+                    } else {
+                      Ignored
+                    }
                   } else {
                     getContainer(text) match {
                       case None =>
@@ -49,11 +54,19 @@ object KibbleManagerListenerActor {
                         if (isRefill(lowerText)) {
                           context.actorContext.log.info(s"Detected refill for $container of ${mass}g")
                           manager !! KibbleRefill(container, mass, captureTime, noteId, meta.model)
-                          Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
+                          if (meta.model == LargeModel) {
+                            Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
+                          } else {
+                            Ignored
+                          }
                         } else if (lowerText.contains("measure")) {
                           context.actorContext.log.info(s"Detected measure for $container of ${mass}g")
                           manager !! RemainingKibbleMeasure(container, mass, captureTime, noteId, meta.model)
-                          Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
+                          if (meta.model == LargeModel) {
+                            Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
+                          } else {
+                            Ignored
+                          }
                         } else {
                           context.actorContext.log.warn(s"Identified kibble/dry food reference for container $container and mass ${mass}g but could not identify choice {refill, measure}: $text")
                           manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
