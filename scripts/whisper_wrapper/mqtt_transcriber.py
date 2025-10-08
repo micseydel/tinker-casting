@@ -17,12 +17,16 @@ import whisper
 from paho.mqtt import client as mqtt_client
 
 
+def print_with_time(s, *args, **kwargs) -> None:
+    print(f"[{time.ctime()}] {s}", *args, **kwargs)
+
+
 def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            print("Connected to MQTT Broker!")
+            print_with_time(f"Connected to MQTT Broker!")
         else:
-            print("Failed to connect, return code %d\n", rc)
+            print_with_time(f"Failed to connect, return code %d\n", rc)
 
     client = mqtt_client.Client(client_id)
     client.username_pw_set(username, password)
@@ -32,11 +36,11 @@ def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
 
 
 def subscribe(model_choice, topic, client: mqtt_client):
-    print("Loading model")
+    print_with_time("Loading model")
     start = time.perf_counter()
     model = whisper.load_model(model_choice)
     elapsed = time.perf_counter() - start
-    print(f"Model {model_choice} loaded in {elapsed:.1f}s")
+    print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
 
     def on_message(client, userdata, msg):
         try:
@@ -48,7 +52,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
             temp = NamedTemporaryFile(delete=False, dir="queued_temp_files")
             temp.write(base64.b64decode(contents))
 
-            print(f"Transcribing {vault_path}... ", end='', flush=True)
+            print_with_time(f"Transcribing {vault_path}... ", end='', flush=True)
 
             try:
                 start = time.perf_counter()
@@ -56,11 +60,11 @@ def subscribe(model_choice, topic, client: mqtt_client):
                 result = model.transcribe(temp.file.name, fp16=False, language='english')
                 elapsed = time.perf_counter() - start
             except Exception:
-                print("Transcription failed unexpectedly for", temp.file.name)
+                print_with_time("Transcription failed unexpectedly for", temp.file.name)
                 traceback.print_exc()
                 return
 
-            print(f"completed in {elapsed:.1f}s, publishing result to mqtt now on {response_topic}")
+            print_with_time(f"completed in {elapsed:.1f}s, publishing result to mqtt now on {response_topic}")
 
             data = json.dumps({
                     "whisperResultContent": result,
@@ -76,16 +80,16 @@ def subscribe(model_choice, topic, client: mqtt_client):
             # result: [0, 1]
             status = result[0]
             if status == 0:
-                # print(f"Send `{msg}` to topic `{out_topic}`")
+                # print_with_time(f"Send `{msg}` to topic `{out_topic}`")
                 pass
             else:
-                print(f"Failed to send message to topic {response_topic}")
+                print_with_time(f"Failed to send message to topic {response_topic}")
 
             temp_path = incoming_data.get("$tempPath")
             if temp_path:
                 os.remove(temp_path)
         except:
-            print(f"Something went wrong processing a message: {traceback.format_exc()}")
+            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}")
 
     client.subscribe(topic)
     client.on_message = on_message
@@ -104,7 +108,7 @@ def run():
 
     topic = f"python/transcription/{model_choice}"
     
-    print(f"pid {os.getpid()}, subscribing to {topic}...")
+    print_with_time(f"pid {os.getpid()}, subscribing to {topic}...")
 
     client = connect_mqtt(client_id, broker, port, username, password)
     subscribe(model_choice, topic, client)
