@@ -83,23 +83,19 @@ object ChroniclerMOCDailyMarkdown {
       getNoteId(contents).contains(noteId)
     }
 
-    private def getTimeFromFront(string: String): Validated[NonEmptyList[String], (LocalTime, String)] = {
-      ParseUtil.extractLocalTimeFromBrackets(string).map(_ -> string)
-    }
-
     private def addComment(existing: List[String], listenerAcknowledgement: ListenerAcknowledgement)(implicit log: Logger): List[String] = {
       val formattedTime = TimeUtil.WithinDayDateTimeFormatter.format(listenerAcknowledgement.time)
       val newComment = s"    - \\[$formattedTime\\] ${listenerAcknowledgement.details}"
-      existing.map(getTimeFromFront).partitionMap {
+      existing.map(string => ParseUtil.extractLocalTimeFromBrackets(string.trim.drop(2)).map(_ -> string)).partitionMap {
         case Validated.Valid(tuple) => Left(tuple)
         case Validated.Invalid(errors) => Right(errors)
       } match {
         case (timed, Nil) =>
           val added = (listenerAcknowledgement.timeOfAck.toLocalTime -> newComment) :: timed
-          added.distinct.sortBy(_._1).map(_._2)
+          added.sortBy(_._1).map(_._2).distinct
         case (_, errors) =>
           log.warn(s"Failed to parse some line(s), appending comment without sorting; errors = $errors")
-          existing.appended(newComment)
+          existing.appended(newComment).distinct
       }
     }
 
@@ -311,7 +307,7 @@ object ChroniclerMOCDailyMarkdown {
   def main(args: Array[String]): Unit = {
     val forDate = LocalDate.now()
 
-    val path = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes (2025-10-10).md"
+    val path = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes (2025-10-11).md"
     val markdown = FileSystemUtil.getPathContents(Path.of(path))
 
     val originalDocument = parse(markdown, forDate)
@@ -441,11 +437,13 @@ object ChroniclerMOCDailyMarkdown {
       override def error(marker: Marker, msg: String, t: Throwable): Unit = ???
     }
     val noteId = NoteId("Transcription for mobile_audio_capture_20251010-162620.wav")
+    val t = ZonedDateTime.now().withHour(23)
+    val ackTime = t.plusSeconds(20)
     val document = originalDocument
-      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now().withHour(23), noteId, -1))
-      //      .addAcknowledgement(ListenerAcknowledgement(noteId, ZonedDateTime.now(), "blah blah", None))
-      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now().withHour(23), noteId, -1))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ZonedDateTime.now(), "blah blah", None))
+      .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
+      .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
 
     println(document)
 
