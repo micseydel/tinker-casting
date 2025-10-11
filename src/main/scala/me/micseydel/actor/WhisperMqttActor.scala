@@ -23,7 +23,7 @@ object WhisperMqttActor {
   def apply(replyTo: ActorRef[AudioNoteCapturer.TranscriptionEvent], model: WhisperModel)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
-    val Topic = s"${context.self.path}(model::${model.simpleName})"
+    val Topic = s"${context.self.path}" // can't be actor class name because of collisions, path works well
     val OutTopic = s"python/transcription/${model.simpleName}"
 
     context.system.mqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
