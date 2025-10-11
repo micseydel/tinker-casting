@@ -88,7 +88,7 @@ object LitterBoxesHelper {
         Tinker.steadily
 
       case ReceivePartialMatch(PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId), maybeRasaResult)))) =>
-        Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "added to inbox", Some(NeedsAttention))
+        Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"""added to ${noteId.heading("Inbox")}""", Some(NeedsAttention))
         justSiftingReport !! LitterBoxReportActor.AddToInbox(MarkdownUtil.listLineWithTimestampAndRef(captureTime,
           whisperResult.whisperResultContent.text,  // siftedContents.toEmojis,
           noteId).drop(2), // FIXME: hack
