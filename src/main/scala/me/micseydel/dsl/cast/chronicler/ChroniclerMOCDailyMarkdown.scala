@@ -27,37 +27,14 @@ object ChroniclerMOCDailyMarkdown {
     }).toMarkdown
   }
 
-  sealed trait LineParseResult
-
-  case class ParseSuccessGenericTimedListItem(time: ZonedDateTime, contents: String, prefix: Option[DataPointState], comments: List[String]) extends LineParseResult {
-    def toMarkdownBlock: String = {
-      val line = prefix.map {
-        case Todo =>
-          val beforeTimestamp = Some(Todo.prefix)
-          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
-        case Completed =>
-          val beforeTimestamp = Some(Completed.prefix)
-          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
-        case StruckThrough =>
-          MarkdownUtil.listLineWithTimestamp(time, s"~~$contents~~")
-      }.getOrElse {
-        MarkdownUtil.listLineWithTimestamp(time, contents)
-      }
-
-      line + Some(comments.reverse).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
-    }
-  }
+  // model
 
   private case class Document(all: List[LineParseResult], notesWithoutAcknowledgements: List[LineParseResult]) {
     def addEntry(noteEntry: TranscribedMobileNoteEntry)(implicit log: Logger): Document = {
-      val t = all.collect {
-        case ParseSuccessGenericTimedListItem(time, contents, prefix, comments) => contents
-      }
-      println(s"""CANARY ${t.mkString("\n")}""")
       val exists = all.exists {
         case ParseSuccessGenericTimedListItem(time, contents, prefix, comments) if contents.endsWith(".wav|ref]])") =>
           // FIXME: hacky
-          val noteId = "Transcription for " + contents.dropRight(".wav|ref]])".length).split(" ").last
+          val noteId = "Transcription for " + contents.dropRight("|ref]])".length).split(" ").last
           noteEntry.ref.id == noteId
         case other => false
       }
@@ -89,7 +66,6 @@ object ChroniclerMOCDailyMarkdown {
         .map(c => s" ($c words)")
         .getOrElse("")
       val listItem = s"${segments.wikiLinkWithAlias(timeWithoutDate)}" + formattedWordCount
-//      println(s"CANARY $listItem")
       val contents = MarkdownUtil.listLineWithRef(listItem, noteEntry.ref).drop(2) // FIXME HACK HACK HACK
       ParseSuccessGenericTimedListItem(noteEntry.time, contents, None, Nil)
     }
@@ -114,7 +90,6 @@ object ChroniclerMOCDailyMarkdown {
     private def addComment(existing: List[String], listenerAcknowledgement: ListenerAcknowledgement)(implicit log: Logger): List[String] = {
       val formattedTime = TimeUtil.WithinDayDateTimeFormatter.format(listenerAcknowledgement.time)
       val newComment = s"    - \\[$formattedTime\\] ${listenerAcknowledgement.details}"
-//      val newComment = listenerAcknowledgement.details
       existing.map(getTimeFromFront).partitionMap {
         case Validated.Valid(tuple) => Left(tuple)
         case Validated.Invalid(errors) => Right(errors)
@@ -155,7 +130,7 @@ object ChroniclerMOCDailyMarkdown {
           }
           val updatedAll = all.map {
             case ParseSuccessGenericTimedListItem(_, contents, _, _) if contentsHasNoteId(contents, listenerAcknowledgement.noteRef) =>
-                updatedEntry
+              updatedEntry
             case other => other
           }
           Document(updatedAll, filteredNotesWithoutAcknowledgements)
@@ -186,6 +161,29 @@ object ChroniclerMOCDailyMarkdown {
     }
   }
 
+  // parsing
+
+  private sealed trait LineParseResult
+
+  private case class ParseSuccessGenericTimedListItem(time: ZonedDateTime, contents: String, prefix: Option[DataPointState], comments: List[String]) extends LineParseResult {
+    def toMarkdownBlock: String = {
+      val line = prefix.map {
+        case Todo =>
+          val beforeTimestamp = Some(Todo.prefix)
+          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
+        case Completed =>
+          val beforeTimestamp = Some(Completed.prefix)
+          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
+        case StruckThrough =>
+          MarkdownUtil.listLineWithTimestamp(time, s"~~$contents~~")
+      }.getOrElse {
+        MarkdownUtil.listLineWithTimestamp(time, contents)
+      }
+
+      line + Some(comments.reverse).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
+    }
+  }
+
   private def parse(markdown: String, forDate: LocalDate): Document = {
     @tailrec
     def parseLines(linesToParse: List[String], accumulator: List[LineParseResult]): List[LineParseResult] = {
@@ -195,7 +193,7 @@ object ChroniclerMOCDailyMarkdown {
 
         case line :: theRest =>
           val (comments, remaining) = batchConsecutiveComments(theRest)
-          TimeSortedSimpleLineParser.apply(line, forDate) match {
+          lineToLineParseResult(line, forDate) match {
             case ps@ParseSuccessGenericTimedListItem(time, contents, maybePrefix, _) =>
               parseLines(remaining, ps.copy(comments = comments) :: accumulator)
 
@@ -209,8 +207,7 @@ object ChroniclerMOCDailyMarkdown {
       }
     }
 
-
-    def parseLinesTest(lines: List[String]): Document = {
+    def linesToDocument(lines: List[String]): Document = {
       val nonEmptyLines = lines.filter(_.nonEmpty)
 
       @tailrec
@@ -237,12 +234,8 @@ object ChroniclerMOCDailyMarkdown {
     }
 
     val lines = markdown.split('\n').toList
-    parseLinesTest(lines)
+    linesToDocument(lines)
   }
-
-//  private def toMarkdownList(addNotes: Seq[AddNote], acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
-//    addNotes.map(addNote2String(_, acksMap)).mkString("\n")
-//  }
 
   private def actionPrefix(acknowledgements: List[ListenerAcknowledgement]): Option[String] = {
     val noteState: Option[NoteState] = acknowledgements.flatMap(_.setState) match {
@@ -263,20 +256,18 @@ object ChroniclerMOCDailyMarkdown {
     }
   }
 
-  private object TimeSortedSimpleLineParser {
-    def apply(line: String, day: LocalDate): LineParseResult = {
-      // \[1:38:03AM\] (contents)
-      val validated = getZonedDateTimeFromListLineFrontWithOptionalPrefix(line.split(' ').toList, day).map {
-        case (entryTime, contentsSeparatedByWhitespace, maybePrefix) =>
-          ParseSuccessGenericTimedListItem(entryTime, contentsSeparatedByWhitespace.mkString(" "), maybePrefix, Nil)
-      }
+  private def lineToLineParseResult(line: String, day: LocalDate): LineParseResult = {
+    // \[1:38:03AM\] (contents)
+    val validated = getZonedDateTimeFromListLineFrontWithOptionalPrefix(line.split(' ').toList, day).map {
+      case (entryTime, contentsSeparatedByWhitespace, maybePrefix) =>
+        ParseSuccessGenericTimedListItem(entryTime, contentsSeparatedByWhitespace.mkString(" "), maybePrefix, Nil)
+    }
 
-      validated match {
-        case Validated.Valid(ps: LineParseResult) =>
-          ps
-        case Validated.Invalid(reasons: NonEmptyList[String]) =>
-          ParseFailure(line, reasons, Nil)
-      }
+    validated match {
+      case Validated.Valid(ps: LineParseResult) =>
+        ps
+      case Validated.Invalid(reasons: NonEmptyList[String]) =>
+        ParseFailure(line, reasons, Nil)
     }
   }
 
@@ -451,9 +442,9 @@ object ChroniclerMOCDailyMarkdown {
     }
     val noteId = NoteId("Transcription for mobile_audio_capture_20251010-162620.wav")
     val document = originalDocument
-      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now(), noteId, -1))
+      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now().withHour(23), noteId, -1))
       //      .addAcknowledgement(ListenerAcknowledgement(noteId, ZonedDateTime.now(), "blah blah", None))
-      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now(), noteId, -1))
+      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now().withHour(23), noteId, -1))
       .addAcknowledgement(ListenerAcknowledgement(noteId, ZonedDateTime.now(), "blah blah", None))
 
     println(document)
