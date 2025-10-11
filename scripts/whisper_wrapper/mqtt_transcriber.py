@@ -52,7 +52,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
             temp = NamedTemporaryFile(delete=False, dir="queued_temp_files")
             temp.write(base64.b64decode(contents))
 
-            print_with_time(f"Transcribing {vault_path}... ", end='', flush=True)
+            print_with_time(f"📝 {vault_path}... ", end='', flush=True)
 
             try:
                 start = time.perf_counter()
@@ -64,7 +64,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
                 traceback.print_exc()
                 return
 
-            print_with_time(f"completed in {elapsed:.1f}s, publishing result to mqtt now on {response_topic}")
+            print(f"completed in {elapsed:.1f}s, publishing result to mqtt now on {response_topic}")
 
             data = json.dumps({
                     "whisperResultContent": result,
