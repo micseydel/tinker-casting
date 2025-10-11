@@ -145,4 +145,42 @@ object ParseUtil {
         Validated.Invalid(NonEmptyList.of(Common.getStackTraceString(exception)))
     }
   }
+
+  def extractLocalTimeFromBrackets(maybeTime: String): ValidatedNel[String, LocalTime] = {
+    // e.g. \[07:29:22PM\] or [07:29:22PM] or even 7:29:22PM
+
+    val withoutFrontBackslash = if (maybeTime.startsWith("\\")) {
+      maybeTime.drop(1)
+    } else {
+      maybeTime
+    }
+
+    val withoutOpenBracket = if (withoutFrontBackslash.startsWith("[")) {
+      withoutFrontBackslash.drop(1)
+    } else {
+      withoutFrontBackslash
+    }
+
+    val withoutCloseBracket = if (withoutOpenBracket.endsWith("]")) {
+      withoutOpenBracket.dropRight(1)
+    } else {
+      withoutOpenBracket
+    }
+
+    val withoutEndingBackslash = if (withoutCloseBracket.endsWith("\\")) {
+      withoutCloseBracket.dropRight(1)
+    } else {
+      withoutCloseBracket
+    }
+
+    Try(LocalTime.parse(withoutEndingBackslash, TimeUtil.WithinDayDateTimeFormatter)) match {
+      case Success(parsedTime) =>
+        Validated.Valid(parsedTime)
+
+      case Failure(dtpe: java.time.format.DateTimeParseException) =>
+        Validated.Invalid(NonEmptyList.of(dtpe.getMessage))
+      case Failure(exception) =>
+        Validated.Invalid(NonEmptyList.of(Common.getStackTraceString(exception)))
+    }
+  }
 }

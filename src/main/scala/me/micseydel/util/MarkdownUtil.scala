@@ -9,6 +9,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.Temporal
 
 object MarkdownUtil {
+  def listLineWithRef(line: String, refLink: LinkId, beforeTimestamp: Option[String] = None, blockId: Option[String] = None): String = {
+    val before = beforeTimestamp.getOrElse("")
+    s"- $before$line (${refLink.wikiLinkWithAlias("ref")})" + blockId.map(id => s" ^$id").getOrElse("")
+//    listLineWithTimestamp(time, s"$line (${refLink.wikiLinkWithAlias("ref")})", beforeTimestamp, blockId)
+  }
+
   def listLineWithTimestampAndRef(time: ZonedDateTime, line: String, refLink: LinkId, beforeTimestamp: Option[String] = None, blockId: Option[String] = None, dateTimeFormatter: DateTimeFormatter = TimeUtil.WithinDayDateTimeFormatter): String = {
     listLineWithTimestamp(time, s"$line (${refLink.wikiLinkWithAlias("ref")})", beforeTimestamp, blockId, dateTimeFormatter)
   }

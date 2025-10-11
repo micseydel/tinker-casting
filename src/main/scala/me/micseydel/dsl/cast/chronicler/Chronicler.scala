@@ -130,15 +130,10 @@ object Chronicler {
         case ReceiveNotedTranscription(notedTranscription) =>
           val captureTime = notedTranscription.capture.captureTime
 
-          // add to the MOC, but just for the large model
-          if (notedTranscription.capture.whisperResult.whisperResultMetadata.model == LargeModel) {
-            // FIXME: this is the attachment...
-            context.actorContext.log.info(s"Sending note ${notedTranscription.noteId} to MOC")
-            // FIXME: this should not be conditional on the large model, and the receiver needs to be updated to handle it
-            moc ! ChroniclerMOC.AddNote(TranscribedMobileNoteEntry(captureTime, notedTranscription.noteId, notedTranscription.capture.whisperResult.whisperResultContent.text.wordCount))
-          } else {
-            context.actorContext.log.debug(s"Ignoring ${notedTranscription.noteId} because ${notedTranscription.capture.whisperResult.whisperResultMetadata.model} != LargeModel")
-          }
+          // FIXME: this is the attachment...
+          context.actorContext.log.info(s"Sending note ${notedTranscription.noteId} to MOC")
+          // FIXME: this should not be conditional on the large model, and the receiver needs to be updated to handle it
+          moc ! ChroniclerMOC.AddNote(TranscribedMobileNoteEntry(captureTime, notedTranscription.noteId, notedTranscription.capture.whisperResult.whisperResultContent.text.wordCount))
 
           // tell the actor who will tell the listeners
           // (Gossiper has separate Base / Large listeners / keys)

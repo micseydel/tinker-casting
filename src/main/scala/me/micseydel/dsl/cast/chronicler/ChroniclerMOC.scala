@@ -54,7 +54,6 @@ object ChroniclerMOC {
           context.actorContext.log.info(s"Forwarding AddNote ${noteEntry.ref}")
           ChroniclerMOCDailyNote.AddNote(noteEntry)
         case ListenerAcknowledgement(noteRef, timeOfAck, details, setState) =>
-          // FIXME: this should be idempotent
           context.actorContext.log.info(s"Forwarding ListenerAcknowledgement $noteRef")
           ChroniclerMOCDailyNote.ListenerAcknowledgement(noteRef, timeOfAck, details, setState)
       }

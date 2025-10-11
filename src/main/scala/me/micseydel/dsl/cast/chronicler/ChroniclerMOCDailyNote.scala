@@ -1,21 +1,18 @@
 package me.micseydel.dsl.cast.chronicler
 
-import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import cats.data.{Validated, ValidatedNel}
-import ChroniclerMOC.{NoteState, TranscribedMobileNoteEntry}
-import ChroniclerMOCDailyMarkdown.ParseSuccessGenericTimedListItem
-import me.micseydel.dsl.Tinker
+import me.micseydel.NoOp
+import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{NoteState, TranscribedMobileNoteEntry}
-import me.micseydel.dsl.cast.chronicler.ChroniclerMOCDailyMarkdown.ParseSuccessGenericTimedListItem
-import me.micseydel.vault.persistence.{BasicNoteRef, JsonlRef, JsonlRefT, NoteRef}
-import me.micseydel.vault.{Note, NoteId}
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.vault.NoteId
+import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
 
-import java.io.FileNotFoundException
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, ZonedDateTime}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object ChroniclerMOCDailyNote {
   sealed trait Message
@@ -34,103 +31,69 @@ object ChroniclerMOCDailyNote {
 
   // behavior
 
-  def apply(forDate: LocalDate)(implicit Tinker: Tinker): Behavior[Message] = Behaviors.setup { context =>
-    context.log.info(s"Starting daily transcriptions note for $forDate")
-
-    val isoDate = forDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
-    val noteName = s"$BaseNoteName ($isoDate)"
-    val jsonFilename = s"""${BaseNoteName.replace(" ", "_").toLowerCase}_$isoDate"""
-
-    Tinker.initializedWithNoteAndPersistedMessages(noteName, jsonFilename, TranscribedMobileNotesJsonProtocol.PostInitializationMessageJsonFormat) {
-      case (context, noteRef, jsonlRef) =>
-        context.actorContext.log.info(s"Starting")
-        behavior(forDate, noteRef, jsonlRef)
+  def apply(forDate: LocalDate)(implicit Tinker: Tinker): Ability[Message] = {
+    val noteName = s"$BaseNoteName (${forDate.format(DateTimeFormatter.ISO_LOCAL_DATE)})"
+    NoteMakingTinkerer(noteName, TinkerColor.random(), "👨‍💻") { (context, noteRef) =>
+      context.actorContext.log.info(s"Starting daily transcriptions note for $forDate")
+      behavior(forDate, noteRef)
     }
   }
 
-  private def behavior(forDate: LocalDate, noteRef: NoteRef, jsonlRef: JsonlRefT[PostInitMessage])(implicit Tinker: Tinker): Behavior[Message] =
-    Behaviors.receive { (context, message) =>
-      context.log.info(s"Received PostInitMessage of type ${message.getClass.getCanonicalName}")
+  private def behavior(forDate: LocalDate, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = {
+    // FIXME: remove forDate?
+    Tinker.receive { (context, message) =>
+      implicit val l: Logger = context.actorContext.log
+      l.info(s"Received PostInitMessage of type ${message.getClass.getCanonicalName}")
 
       message match {
         case message: PostInitMessage =>
 
-          // !!! side effect!
-          val todaysCaptures: List[PostInitMessage] = jsonlRef.appendAndGet(message) match {
-            case Failure(exception) =>
-              throw new RuntimeException(s"Failure for jsonlRef ${jsonlRef}", exception)
-            case Success(latest) => latest
-          }
+          (noteRef.readMarkdownSafer() match {
+            case NoteRef.Contents(Success(markdown)) =>
+              val latestMarkdown = ChroniclerMOCDailyMarkdown.updatedMarkdown(markdown, message)
+//              if (latestMarkdown != markdown) {
+//                noteRef.setMarkdown(latestMarkdown)
+//              } else {
+//                Success(NoOp)
+//              }
+              Success(latestMarkdown)
+            case NoteRef.Contents(f@Failure(exception)) => f
+            case NoteRef.FileDoesNotExist =>
+              Success(ChroniclerMOCDailyMarkdown.updatedMarkdown("", message))
+          }).flatMap(noteRef.setMarkdown)
 
-          val (_: Seq[AddNote], acks: Seq[ListenerAcknowledgement]) = todaysCaptures.partitionMap {
-            case an: AddNote => Left(an)
-            case la: ListenerAcknowledgement => Right(la)
-          }
 
-          val acksMap: Map[NoteId, Seq[ListenerAcknowledgement]] = acks.groupMap(_.noteRef)(identity)
+//          noteRef.updateWith(message) match {
+//            case Failure(exception) => context.actorContext.log.warn("Failed to set markdown", exception)
+//            case Success(NoOp) =>
+//          }
 
-          val timeForNoteId: Map[NoteId, ZonedDateTime] = todaysCaptures.collect {
-            case AddNote(TranscribedMobileNoteEntry(time, ref, _)) =>
-              ref -> time
-          }.toMap
-
-          populateMarkdownFromCapturesOrHandleSuccessfulParse(forDate, noteRef, context.log, todaysCaptures) { (frontmatter, listItemParseResult) =>
-            context.log.info(s"Extracted ${listItemParseResult.size} valid datapoints")
-            val updatedDatapoints = message match {
-              case an@AddNote(TranscribedMobileNoteEntry(time, ref, wordCount)) =>
-                val listItem = ChroniclerMOCDailyMarkdown.addNote2String(an, acksMap)
-
-                //                context.log.warn(s"canary $listItem")
-                ChroniclerMOCDailyMarkdown.combineConsecutiveTimestampedDatapoints(
-                  // inefficient, but these should always be small (literally "atomic") files
-                  listItemParseResult :+ ParseSuccessGenericTimedListItem(
-                    time,
-                    // FIXME: stupid awful hack to prevent duplication; this whole code needs a refactor
-                    listItem.slice(15, listItem.length),
-                    None, Nil
-                  ), Nil).sortBy(_.time)
-
-              case ListenerAcknowledgement(noteId, _, _, _) =>
-                timeForNoteId.get(noteId) match {
-                  case Some(time) =>
-                    listItemParseResult.filter(_.time != time)
-                  case None =>
-                    listItemParseResult
-                }
-            }
-
-            val newMarkdown = ChroniclerMOCDailyMarkdown(todaysCaptures, updatedDatapoints)
-            context.log.info(s"Generated new markdown for $noteRef, writing to disk...")
-            noteRef.setTo(Note(newMarkdown, frontmatter))
-          }
-
-          Behaviors.same
+          Tinker.steadily
       }
     }
-
-  private def populateMarkdownFromCapturesOrHandleSuccessfulParse(forDate: LocalDate, noteRef: NoteRef, log: Logger, todaysCaptures: List[PostInitMessage])(handler: (Option[String], List[ParseSuccessGenericTimedListItem]) => Unit): Unit = {
-    noteRef.read() match {
-      case Success(Note(markdown, frontmatter)) =>
-        log.info("Successfully read Note from disk")
-        val unacknowledged: ValidatedNel[String, List[ChroniclerMOCDailyMarkdown.ParseSuccessGenericTimedListItem]] = ChroniclerMOCDailyMarkdown.extractUnacknowledged(markdown, forDate)
-
-        unacknowledged match {
-          case Validated.Valid(listItemParseResult) =>
-            log.info(s"Extracted ${listItemParseResult.size} valid datapoints")
-            handler(frontmatter, listItemParseResult)
-
-          case Validated.Invalid(errors) =>
-            log.warn(s"Failed to extract unacknowledged: $errors")
-        }
-
-      case Failure(_: FileNotFoundException) =>
-        log.debug(s"File $noteRef did not exist, creating for the first time")
-        noteRef.setRaw(ChroniclerMOCDailyMarkdown(todaysCaptures, parseResults = Nil))
-
-      case Failure(exception) =>
-        log.warn(s"Unexpected failure fetching the note", exception)
-    }
   }
+
+//  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+//    def updateWith(message: PostInitMessage)(implicit log: Logger): Try[NoOp.type] = {
+//      noteRef.readMarkdown().map(ChroniclerMOCDailyMarkdown.parse(_, message.time.toLocalDate)) match {
+//        case f@Failure(exception) =>
+////          log.warn("Failed to read/parse document", exception)
+//          f.map(_ => NoOp)
+//        case Success(document) =>
+//          val latest = message match {
+//            case AddNote(noteEntry) =>
+//              document.addEntry(noteEntry)
+//            case ack@ListenerAcknowledgement(_, _, _, _) =>
+//              document.addAcknowledgement(ack)
+//          }
+//          if (document != latest) {
+//            noteRef.setMarkdown(latest.toMarkdown)
+//          } else {
+//            Success(NoOp)
+//          }
+//      }
+//    }
+//  }
 
   // model
 

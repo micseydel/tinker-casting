@@ -1,21 +1,192 @@
 package me.micseydel.dsl.cast.chronicler
 
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
-import ChroniclerMOC.{AutomaticallyIntegrated, NeedsAttention, NoteState, TranscribedMobileNoteEntry}
-import ChroniclerMOCDailyNote._
+import cats.data.{NonEmptyList, Validated}
+import me.micseydel.NoOp
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{AutomaticallyIntegrated, NeedsAttention, NoteState, TranscribedMobileNoteEntry}
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOCDailyNote.*
 import me.micseydel.model.LargeModel
-import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getZonedDateTimeFromListLineFrontWithOptionalPrefix}
-import me.micseydel.util.{MarkdownUtil, TimeUtil}
+import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getZonedDateTimeFromListLineFrontWithOptionalPrefix}
+import me.micseydel.util.{FileSystemUtil, MarkdownUtil, ParseUtil, TimeUtil}
 import me.micseydel.vault.NoteId
+import org.slf4j.{Logger, Marker}
 
-import java.time.{LocalDate, ZonedDateTime}
+import java.nio.file.Path
+import java.time.{LocalDate, LocalTime, ZonedDateTime}
 import scala.annotation.tailrec
+import scala.util.{Failure, Success}
 
 object ChroniclerMOCDailyMarkdown {
 
-  def extractUnacknowledged(markdown: String, forDate: LocalDate): ValidatedNel[String, List[ParseSuccessGenericTimedListItem]] = {
-    val allLinesToParse = getLinesAfterHeader(markdown, "Notes without acknowledgements")
+  def updatedMarkdown(markdown: String, message: PostInitMessage)(implicit log: Logger): String = {
+    val document = parse(markdown, message.time.toLocalDate)
+    (message match {
+      case AddNote(noteEntry) =>
+        document.addEntry(noteEntry)
+      case ack@ListenerAcknowledgement(_, _, _, _) =>
+        document.addAcknowledgement(ack)
+    }).toMarkdown
+  }
 
+  sealed trait LineParseResult
+
+  case class ParseSuccessGenericTimedListItem(time: ZonedDateTime, contents: String, prefix: Option[DataPointState], comments: List[String]) extends LineParseResult {
+    def toMarkdownBlock: String = {
+      val line = prefix.map {
+        case Todo =>
+          val beforeTimestamp = Some(Todo.prefix)
+          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
+        case Completed =>
+          val beforeTimestamp = Some(Completed.prefix)
+          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
+        case StruckThrough =>
+          MarkdownUtil.listLineWithTimestamp(time, s"~~$contents~~")
+      }.getOrElse {
+        MarkdownUtil.listLineWithTimestamp(time, contents)
+      }
+
+      line + Some(comments.reverse).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
+    }
+  }
+
+  private case class Document(all: List[LineParseResult], notesWithoutAcknowledgements: List[LineParseResult]) {
+    def addEntry(noteEntry: TranscribedMobileNoteEntry)(implicit log: Logger): Document = {
+      val t = all.collect {
+        case ParseSuccessGenericTimedListItem(time, contents, prefix, comments) => contents
+      }
+      println(s"""CANARY ${t.mkString("\n")}""")
+      val exists = all.exists {
+        case ParseSuccessGenericTimedListItem(time, contents, prefix, comments) if contents.endsWith(".wav|ref]])") =>
+          // FIXME: hacky
+          val noteId = "Transcription for " + contents.dropRight(".wav|ref]])".length).split(" ").last
+          noteEntry.ref.id == noteId
+        case other => false
+      }
+      if (exists) {
+        this
+      } else {
+        val (successes, failures) = all.partitionMap {
+          case s@ParseSuccessGenericTimedListItem(_, _, _, _) => Left(s)
+          case f@ParseFailure(_, _, _) => Right(f)
+        }
+
+        val wrapped = wrapNoteEntry(noteEntry)
+        val updatedAcks = notesWithoutAcknowledgements.appended(wrapped)
+        if (failures.nonEmpty) {
+          log.warn(s"Parsing resulted in at least one failure will append ${noteEntry.ref} and not bother with sorting; failures = $failures")
+          Document(all.appended(wrapped), updatedAcks)
+        } else {
+          Document((wrapped :: successes).sortBy(_.time), updatedAcks)
+        }
+      }
+    }
+
+    private def wrapNoteEntry(noteEntry: TranscribedMobileNoteEntry): ParseSuccessGenericTimedListItem = {
+      val timeWithoutDate = TimeUtil.zonedDateTimeToTimeWithinDay24Hour(noteEntry.time)
+      val segments = noteEntry.ref.heading(s"$LargeModel Segments")
+
+      val formattedWordCount = Some(noteEntry.wordCount)
+        .filter(_ > 0)
+        .map(c => s" ($c words)")
+        .getOrElse("")
+      val listItem = s"${segments.wikiLinkWithAlias(timeWithoutDate)}" + formattedWordCount
+//      println(s"CANARY $listItem")
+      val contents = MarkdownUtil.listLineWithRef(listItem, noteEntry.ref).drop(2) // FIXME HACK HACK HACK
+      ParseSuccessGenericTimedListItem(noteEntry.time, contents, None, Nil)
+    }
+
+    private def getNoteId(contents: String)(implicit log: Logger): Option[NoteId] = {
+      ParseUtil.getNoteId(contents.split(' ').takeRight(3).toList) match {
+        case Validated.Valid(extractedNoteId: NoteId) => Some(extractedNoteId)
+        case Validated.Invalid(e) =>
+          log.warn(s"Failed to get noteId from $contents: $e")
+          None
+      }
+    }
+
+    private def contentsHasNoteId(contents: String, noteId: NoteId)(implicit log: Logger): Boolean = {
+      getNoteId(contents).contains(noteId)
+    }
+
+    private def getTimeFromFront(string: String): Validated[NonEmptyList[String], (LocalTime, String)] = {
+      ParseUtil.extractLocalTimeFromBrackets(string).map(_ -> string)
+    }
+
+    private def addComment(existing: List[String], listenerAcknowledgement: ListenerAcknowledgement)(implicit log: Logger): List[String] = {
+      val formattedTime = TimeUtil.WithinDayDateTimeFormatter.format(listenerAcknowledgement.time)
+      val newComment = s"    - \\[$formattedTime\\] ${listenerAcknowledgement.details}"
+//      val newComment = listenerAcknowledgement.details
+      existing.map(getTimeFromFront).partitionMap {
+        case Validated.Valid(tuple) => Left(tuple)
+        case Validated.Invalid(errors) => Right(errors)
+      } match {
+        case (timed, Nil) =>
+          val added = (listenerAcknowledgement.timeOfAck.toLocalTime -> newComment) :: timed
+          added.distinct.sortBy(_._1).map(_._2)
+        case (_, errors) =>
+          log.warn(s"Failed to parse some line(s), appending comment without sorting; errors = $errors")
+          existing.appended(newComment)
+      }
+    }
+
+    def addAcknowledgement(listenerAcknowledgement: ListenerAcknowledgement)(implicit log: Logger): Document = {
+      all.collectFirst {
+        case entry@ParseSuccessGenericTimedListItem(_, contents, _, _) if contentsHasNoteId(contents, listenerAcknowledgement.noteRef) =>
+          entry
+      } match {
+        case None =>
+          log.warn(s"Listener acknowledgement for id not in all! Ignoring: $listenerAcknowledgement")
+          this
+        case Some(ParseSuccessGenericTimedListItem(time, contents, _, comments)) =>
+          val updatedEntry = ParseSuccessGenericTimedListItem(
+            time,
+            contents,
+            listenerAcknowledgement.setState.map {
+              case ChroniclerMOC.NeedsAttention => Todo
+              case ChroniclerMOC.AutomaticallyIntegrated => StruckThrough // FIXME: Completed
+            },
+            addComment(comments, listenerAcknowledgement)
+          )
+
+          val filteredNotesWithoutAcknowledgements = notesWithoutAcknowledgements.filter {
+            case ParseSuccessGenericTimedListItem(_, contents, _, _) =>
+              // we ONLY filter out when we successfully extract the noteId
+              !getNoteId(contents).contains(listenerAcknowledgement.noteRef)
+            case ParseFailure(_, _, _) => true
+          }
+          val updatedAll = all.map {
+            case ParseSuccessGenericTimedListItem(_, contents, _, _) if contentsHasNoteId(contents, listenerAcknowledgement.noteRef) =>
+                updatedEntry
+            case other => other
+          }
+          Document(updatedAll, filteredNotesWithoutAcknowledgements)
+      }
+    }
+
+    private def sectionListToMarkdownList(section: List[LineParseResult]): String = {
+      section.map {
+        case ps@ParseSuccessGenericTimedListItem(_, _, _, _) =>
+          ps.toMarkdownBlock
+        case ParseFailure(rawLine, _, comments) =>
+          (rawLine :: comments).mkString("\n")
+      }
+    }.mkString("\n")
+
+    def toMarkdown: String = {
+      val bySection = List(
+        "All" -> all,
+        "Notes without acknowledgements" -> notesWithoutAcknowledgements
+      )
+
+      bySection.filter(_._2.nonEmpty).map { case (header, contents) =>
+        s"""# $header
+           |
+           |${sectionListToMarkdownList(contents)}
+           |""".stripMargin
+      }.mkString("\n")
+    }
+  }
+
+  private def parse(markdown: String, forDate: LocalDate): Document = {
     @tailrec
     def parseLines(linesToParse: List[String], accumulator: List[LineParseResult]): List[LineParseResult] = {
       linesToParse match {
@@ -38,112 +209,40 @@ object ChroniclerMOCDailyMarkdown {
       }
     }
 
-    val (failures, parseResults) = parseLines(allLinesToParse, Nil).partitionMap {
-      case ps@ParseSuccessGenericTimedListItem(_, _, _, _) => Right(ps)
-      case pf@ParseFailure(_, _, _) => Left(pf)
-    }
 
-    failures match {
-      case head :: tail =>
-        Validated.invalid(NonEmptyList(head, tail).map {
-          case pf@ParseFailure(_, _, _) =>
-            pf.toString
-        })
+    def parseLinesTest(lines: List[String]): Document = {
+      val nonEmptyLines = lines.filter(_.nonEmpty)
 
-      case Nil =>
-        Validated.Valid(parseResults)
-    }
-  }
-
-  @tailrec
-  def combineConsecutiveTimestampedDatapoints(datapoints: List[ParseSuccessGenericTimedListItem], accumulator: List[ParseSuccessGenericTimedListItem]): List[ParseSuccessGenericTimedListItem] = {
-    datapoints match {
-      case Nil =>
-        accumulator
-
-      case older :: newer :: tail if older.time == newer.time =>
-
-        val combinedComments: List[String] = (older.comments, newer.comments) match {
-          case (Nil, Nil) =>
-            Nil
-
-          case (Nil, newComments) =>
-            newComments
-
-          case (oldComments, Nil) =>
-            "    - *comments on incomplete transcription*" :: oldComments.map("    " + _)
-
-          case (oldComments, newComments) =>
-            "    - *comments on incomplete transcription*" :: oldComments.map("    " + _) ::: newComments
+      @tailrec
+      def helper(remainingLines: List[String], accumulator: List[String]): (List[LineParseResult], List[LineParseResult]) = {
+        remainingLines match {
+          case Nil =>
+            (parseLines(accumulator.reverse, Nil), Nil)
+          case "# Notes without acknowledgements" :: theRest =>
+            (parseLines(accumulator.reverse, Nil), parseLines(theRest, Nil))
+          case line :: theRest =>
+            helper(theRest, line :: accumulator)
         }
+      }
 
-        combineConsecutiveTimestampedDatapoints(tail, newer.copy(comments = combinedComments) :: accumulator)
+      nonEmptyLines match {
+        case Nil =>
+          Document(Nil, Nil)
+        case "# All" :: theRest =>
+          val (all, withoutAck) = helper(theRest, Nil)
+          Document(all, withoutAck)
 
-      case head :: tail =>
-        combineConsecutiveTimestampedDatapoints(tail, head :: accumulator)
-    }
-  }
-
-  def apply(list: List[PostInitMessage], parseResults: List[ParseSuccessGenericTimedListItem]): String = {
-    val (addNotes: Seq[AddNote], acks: Seq[ListenerAcknowledgement]) = list.partitionMap {
-      case an: AddNote => Left(an)
-      case la: ListenerAcknowledgement => Right(la)
-    }
-
-    val acksMap: Map[NoteId, Seq[ListenerAcknowledgement]] = acks.groupMap(_.noteRef)(identity)
-
-    // FIXME: grab the last thing from this and add to notes without acks?
-    val allSectionContents: String = toMarkdownList(addNotes.sortBy(_.time), acksMap)
-
-    val notesWithoutAcksSectionContents = if (parseResults.nonEmpty) {
-      parseResults.map(_.toMarkdownBlock).mkString("\n")
-    } else {
-      val notesWithoutAcks = addNotes.filter(addNote => acksMap.contains(addNote.noteEntry.ref))
-      toMarkdownList(notesWithoutAcks, Map.empty)
+        case _ => Document(parseLines(lines, Nil), Nil)
+      }
     }
 
-    s"""# All
-       |
-       |$allSectionContents
-       |
-       |# Notes without acknowledgements
-       |
-       |$notesWithoutAcksSectionContents
-       |""".stripMargin
+    val lines = markdown.split('\n').toList
+    parseLinesTest(lines)
   }
 
-  private def toMarkdownList(addNotes: Seq[AddNote], acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
-    addNotes.map(addNote2String(_, acksMap)).mkString("\n")
-  }
-
-  def addNote2String(an: AddNote, acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
-    an match {
-      case AddNote(TranscribedMobileNoteEntry(time, noteId, wordCount)) =>
-        val segments = noteId.heading(s"$LargeModel Segments")
-
-        val timeWithoutDate = TimeUtil.zonedDateTimeToTimeWithinDay24Hour(time)
-
-        val formattedWordCount = Some(wordCount)
-          .filter(_ > 0)
-          .map(c => s" ($c words)")
-          .getOrElse("")
-
-        val acknowledgements: List[ListenerAcknowledgement] = acksMap.getOrElse(noteId, Seq.empty).toList
-
-        val listItem = s"${segments.wikiLinkWithAlias(timeWithoutDate)}" + formattedWordCount
-
-        val allDetails: Seq[String] = acknowledgements.map {
-          case ListenerAcknowledgement(_, timeOfAck, details, setState) =>
-            MarkdownUtil.listLineWithTimestamp(timeOfAck, details)
-        }
-
-        MarkdownUtil.listLineWithTimestampAndRef(time, listItem, noteId, beforeTimestamp = actionPrefix(acknowledgements)) + (if (allDetails.nonEmpty) {
-          allDetails.mkString("\n    ", "\n    ", "")
-        } else {
-          ""
-        })
-    }
-  }
+//  private def toMarkdownList(addNotes: Seq[AddNote], acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
+//    addNotes.map(addNote2String(_, acksMap)).mkString("\n")
+//  }
 
   private def actionPrefix(acknowledgements: List[ListenerAcknowledgement]): Option[String] = {
     val noteState: Option[NoteState] = acknowledgements.flatMap(_.setState) match {
@@ -164,29 +263,6 @@ object ChroniclerMOCDailyMarkdown {
     }
   }
 
-  sealed trait LineParseResult
-
-  case class ParseSuccessGenericTimedListItem(time: ZonedDateTime, contents: String, prefix: Option[DataPointState], comments: List[String]) extends LineParseResult {
-    def toMarkdownBlock: String = {
-      val line = prefix.map {
-        case Todo =>
-          val beforeTimestamp = Some(Todo.prefix)
-          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
-        case Completed =>
-          val beforeTimestamp = Some(Completed.prefix)
-          MarkdownUtil.listLineWithTimestamp(time, contents, beforeTimestamp = beforeTimestamp)
-        case StruckThrough =>
-          MarkdownUtil.listLineWithTimestamp(time, s"~~$contents~~")
-      }.getOrElse {
-        MarkdownUtil.listLineWithTimestamp(time, contents)
-      }
-
-      line + Some(comments).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
-    }
-  }
-
-  private case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
-
   private object TimeSortedSimpleLineParser {
     def apply(line: String, day: LocalDate): LineParseResult = {
       // \[1:38:03AM\] (contents)
@@ -196,11 +272,192 @@ object ChroniclerMOCDailyMarkdown {
       }
 
       validated match {
-        case Validated.Valid(ps) =>
+        case Validated.Valid(ps: LineParseResult) =>
           ps
-        case Validated.Invalid(reasons) =>
+        case Validated.Invalid(reasons: NonEmptyList[String]) =>
           ParseFailure(line, reasons, Nil)
       }
     }
+  }
+
+  // FIXME use?
+  private def addNote2String(an: AddNote, acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
+    an match {
+      case AddNote(TranscribedMobileNoteEntry(time, noteId, wordCount)) =>
+        val segments = noteId.heading(s"$LargeModel Segments")
+
+        // FIXME: this is closer to right!
+        val timeWithoutDate = TimeUtil.zonedDateTimeToTimeWithinDay24Hour(time)
+
+        val formattedWordCount = Some(wordCount)
+          .filter(_ > 0)
+          .map(c => s" ($c words)")
+          .getOrElse("")
+
+        val acknowledgements: List[ListenerAcknowledgement] = acksMap.getOrElse(noteId, Seq.empty).toList
+
+        // FIXME: revisit
+        val listItem = s"${segments.wikiLinkWithAlias(timeWithoutDate)}" + formattedWordCount
+
+        val allDetails: Seq[String] = acknowledgements.map {
+          case ListenerAcknowledgement(_, timeOfAck, details, setState) =>
+            MarkdownUtil.listLineWithTimestamp(timeOfAck, details)
+        }
+
+        // FIXME actionPrefix would be useful
+        MarkdownUtil.listLineWithTimestampAndRef(time, listItem, noteId, beforeTimestamp = actionPrefix(acknowledgements)) + (if (allDetails.nonEmpty) {
+          allDetails.mkString("\n    ", "\n    ", "")
+        } else {
+          ""
+        })
+    }
+  }
+
+  private case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
+
+  //
+
+  def main(args: Array[String]): Unit = {
+    val forDate = LocalDate.now()
+
+    val path = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes (2025-10-10).md"
+    val markdown = FileSystemUtil.getPathContents(Path.of(path))
+
+    val originalDocument = parse(markdown, forDate)
+
+    implicit val l: Logger = new Logger {
+
+      override def getName: String = ???
+
+      override def isTraceEnabled: Boolean = ???
+
+      override def trace(msg: String): Unit = ???
+
+      override def trace(format: String, arg: Any): Unit = ???
+
+      override def trace(format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def trace(format: String, arguments: Any*): Unit = ???
+
+      override def trace(msg: String, t: Throwable): Unit = ???
+
+      override def isTraceEnabled(marker: Marker): Boolean = ???
+
+      override def trace(marker: Marker, msg: String): Unit = ???
+
+      override def trace(marker: Marker, format: String, arg: Any): Unit = ???
+
+      override def trace(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def trace(marker: Marker, format: String, argArray: Any*): Unit = ???
+
+      override def trace(marker: Marker, msg: String, t: Throwable): Unit = ???
+
+      override def isDebugEnabled: Boolean = ???
+
+      override def debug(msg: String): Unit = ???
+
+      override def debug(format: String, arg: Any): Unit = ???
+
+      override def debug(format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def debug(format: String, arguments: Any*): Unit = ???
+
+      override def debug(msg: String, t: Throwable): Unit = ???
+
+      override def isDebugEnabled(marker: Marker): Boolean = ???
+
+      override def debug(marker: Marker, msg: String): Unit = ???
+
+      override def debug(marker: Marker, format: String, arg: Any): Unit = ???
+
+      override def debug(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def debug(marker: Marker, format: String, arguments: Any*): Unit = ???
+
+      override def debug(marker: Marker, msg: String, t: Throwable): Unit = ???
+
+      override def isInfoEnabled: Boolean = ???
+
+      override def info(msg: String): Unit = ???
+
+      override def info(format: String, arg: Any): Unit = ???
+
+      override def info(format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def info(format: String, arguments: Any*): Unit = ???
+
+      override def info(msg: String, t: Throwable): Unit = ???
+
+      override def isInfoEnabled(marker: Marker): Boolean = ???
+
+      override def info(marker: Marker, msg: String): Unit = ???
+
+      override def info(marker: Marker, format: String, arg: Any): Unit = ???
+
+      override def info(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def info(marker: Marker, format: String, arguments: Any*): Unit = ???
+
+      override def info(marker: Marker, msg: String, t: Throwable): Unit = ???
+
+      override def isWarnEnabled: Boolean = ???
+
+      override def warn(msg: String): Unit = println(s"!!! $msg !!!")
+
+      override def warn(format: String, arg: Any): Unit = ???
+
+      override def warn(format: String, arguments: Any*): Unit = ???
+
+      override def warn(format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def warn(msg: String, t: Throwable): Unit = ???
+
+      override def isWarnEnabled(marker: Marker): Boolean = ???
+
+      override def warn(marker: Marker, msg: String): Unit = ???
+
+      override def warn(marker: Marker, format: String, arg: Any): Unit = ???
+
+      override def warn(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def warn(marker: Marker, format: String, arguments: Any*): Unit = ???
+
+      override def warn(marker: Marker, msg: String, t: Throwable): Unit = ???
+
+      override def isErrorEnabled: Boolean = ???
+
+      override def error(msg: String): Unit = ???
+
+      override def error(format: String, arg: Any): Unit = ???
+
+      override def error(format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def error(format: String, arguments: Any*): Unit = ???
+
+      override def error(msg: String, t: Throwable): Unit = ???
+
+      override def isErrorEnabled(marker: Marker): Boolean = ???
+
+      override def error(marker: Marker, msg: String): Unit = ???
+
+      override def error(marker: Marker, format: String, arg: Any): Unit = ???
+
+      override def error(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+
+      override def error(marker: Marker, format: String, arguments: Any*): Unit = ???
+
+      override def error(marker: Marker, msg: String, t: Throwable): Unit = ???
+    }
+    val noteId = NoteId("Transcription for mobile_audio_capture_20251010-162620.wav")
+    val document = originalDocument
+      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now(), noteId, -1))
+      //      .addAcknowledgement(ListenerAcknowledgement(noteId, ZonedDateTime.now(), "blah blah", None))
+      .addEntry(TranscribedMobileNoteEntry(ZonedDateTime.now(), noteId, -1))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ZonedDateTime.now(), "blah blah", None))
+
+    println(document)
+
+    println(document.toMarkdown)
   }
 }
