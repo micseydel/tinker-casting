@@ -9,8 +9,11 @@ import me.micseydel.actor.kitties.LitterBoxReportActor.*
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, HasInbox, LitterSummaryForDay}
 import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
+import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.chronicler.Chronicler
+import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.NeedsAttention
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.*
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
@@ -42,10 +45,10 @@ object LitterBoxReportActor {
 
   // behavior
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = setup()
+  def apply()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = setup()
 
 
-  private def setup()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
+  private def setup()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
 
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
@@ -70,7 +73,7 @@ object LitterBoxReportActor {
 }
 
 private[kitties] object DailyAbility {
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: Tinker): (String, Ability[Message]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterSummaryForDay])(implicit Tinker: EnhancedTinker[MyCentralCast]): (String, Ability[Message]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
@@ -95,6 +98,8 @@ private[kitties] object DailyAbility {
 
             val latestMarkdown = document.toMarkdown
             if (latestMarkdown != existingMarkdown) {
+              val noteId = noteRef.noteId
+              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"""added to ${noteId.heading("Inbox")}""", Some(NeedsAttention))
               noteRef.setMarkdown(document.toMarkdown) match {
                 case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
                 case Success(NoOp) =>
