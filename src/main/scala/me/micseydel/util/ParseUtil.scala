@@ -173,7 +173,7 @@ object ParseUtil {
       withoutCloseBracket
     }
 
-    Try(LocalTime.parse(withoutEndingBackslash.take(10), TimeUtil.WithinDayDateTimeFormatter)) match {
+    Try(LocalTime.parse(withoutEndingBackslash.takeWhile(_ != 'M') + 'M', TimeUtil.WithinDayDateTimeFormatter)) match {
       case Success(parsedTime) =>
         Validated.Valid(parsedTime)
 

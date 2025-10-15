@@ -1,7 +1,6 @@
 package me.micseydel.dsl.cast.chronicler
 
 import cats.data.{NonEmptyList, Validated}
-import me.micseydel.NoOp
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{AutomaticallyIntegrated, NeedsAttention, NoteState, TranscribedMobileNoteEntry}
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOCDailyNote.*
 import me.micseydel.model.LargeModel
@@ -11,9 +10,8 @@ import me.micseydel.vault.NoteId
 import org.slf4j.{Logger, Marker}
 
 import java.nio.file.Path
-import java.time.{LocalDate, LocalTime, ZonedDateTime}
+import java.time.{LocalDate, LocalTime, ZoneId, ZonedDateTime}
 import scala.annotation.tailrec
-import scala.util.{Failure, Success}
 
 object ChroniclerMOCDailyMarkdown {
 
@@ -307,7 +305,7 @@ object ChroniclerMOCDailyMarkdown {
   def main(args: Array[String]): Unit = {
     val forDate = LocalDate.now()
 
-    val path = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes (2025-10-11).md"
+    val path = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes (2025-10-13).md"
     val markdown = FileSystemUtil.getPathContents(Path.of(path))
 
     val originalDocument = parse(markdown, forDate)
@@ -437,13 +435,14 @@ object ChroniclerMOCDailyMarkdown {
       override def error(marker: Marker, msg: String, t: Throwable): Unit = ???
     }
     val noteId = NoteId("Transcription for mobile_audio_capture_20251010-162620.wav")
-    val t = ZonedDateTime.now().withHour(23)
+    val t = ZonedDateTime.of(forDate, LocalTime.of(23, 0, 0), ZoneId.systemDefault())
     val ackTime = t.plusSeconds(20)
     val document = originalDocument
       .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
       .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime.plusSeconds(20), "blah blah", Some(AutomaticallyIntegrated)))
 
     println(document)
 
