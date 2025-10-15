@@ -305,7 +305,7 @@ object ChroniclerMOCDailyMarkdown {
   def main(args: Array[String]): Unit = {
     val forDate = LocalDate.now()
 
-    val path = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes (2025-10-13).md"
+    val path = s"/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes ($forDate).md"
     val markdown = FileSystemUtil.getPathContents(Path.of(path))
 
     val originalDocument = parse(markdown, forDate)
@@ -442,7 +442,8 @@ object ChroniclerMOCDailyMarkdown {
       .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
       .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
       .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime.plusSeconds(20), "blah blah", Some(AutomaticallyIntegrated)))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime.plusSeconds(20), "blah blah2", Some(AutomaticallyIntegrated)))
+      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
 
     println(document)
 

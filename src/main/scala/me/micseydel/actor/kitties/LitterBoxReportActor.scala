@@ -385,7 +385,7 @@ object MarkdownWithoutJsonExperiment {
       val eventsList: String = distinctDatapoints.distinct.map {
         case DataPoint(zonedDateTime, siftedContents, noteId, maybeComments) =>
           MarkdownUtil.listLineWithTimestampAndRef(zonedDateTime, siftedContents.toEmojis, noteId) +
-            Some(maybeComments.reverse).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
+            Some(maybeComments).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
       }.mkString("\n")
       s"""# Events
          |

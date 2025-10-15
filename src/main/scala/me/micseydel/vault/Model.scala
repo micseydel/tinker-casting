@@ -45,7 +45,7 @@ object LinkIdJsonProtocol extends DefaultJsonProtocol {
 }
 
 case class HeadingId (heading: String, noteId: NoteId) extends LinkId {
-  override def asString: String = s"${noteId.id}#^$heading"
+  override def asString: String = s"${noteId.id}#$heading"
 }
 
 case class Note(
