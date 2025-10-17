@@ -34,7 +34,17 @@ object ChroniclerMOCDailyMarkdown {
           // FIXME: hacky
           val noteId = "Transcription for " + contents.dropRight("|ref]])".length).split(" ").last
           noteEntry.ref.id == noteId
-        case other => false
+        case ParseSuccessGenericTimedListItem(time, contents, prefix, comments) if contents.endsWith(".wav|ref]])~~") =>
+          // FIXME: HACKY HACKY HACKY
+          val noteId = "Transcription for " + contents.dropRight("|ref]])~~".length).split(" ").last
+          noteEntry.ref.id == noteId
+        case ParseSuccessGenericTimedListItem(time, contents, prefix, comments) if contents.endsWith(".wav|ref]])~~~~") =>
+          // FIXME: HACKY HACKY HACKY omg
+          val noteId = "Transcription for " + contents.dropRight("|ref]])~~~~".length).split(" ").last
+          noteEntry.ref.id == noteId
+        case other =>
+          log.warn("CANARY" + other.toString)
+          false
       }
       if (exists) {
         this
@@ -444,6 +454,7 @@ object ChroniclerMOCDailyMarkdown {
       .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
       .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime.plusSeconds(20), "blah blah2", Some(AutomaticallyIntegrated)))
       .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
+//      .addAcknowledgement(ListenerAcknowledgement(NoteId("Transcription for mobile_audio_capture_20251014-184751.wav"), ackTime, "blah blah", None))
 
     println(document)
 

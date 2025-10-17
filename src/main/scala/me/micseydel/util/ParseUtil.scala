@@ -55,7 +55,7 @@ object ParseUtil {
     case List("([[Transcription", "for", specificsAndStuff) =>
       // mobile_audio_capture_20240218-192922.wav|ref]]
       specificsAndStuff.split(raw"\|", 2).toList match {
-        case List(audioName, "ref]])" | "ref]])~~" | "ref]]") =>
+        case List(audioName, "ref]])" | "ref]])~~" | "ref]]" /* FIXME HACK REMOVE */ | "ref]])~~~~") =>
           Validated.Valid(NoteId(s"Transcription for $audioName"))
 
         case other =>
