@@ -21,6 +21,28 @@ def print_with_time(s, *args, **kwargs) -> None:
     print(f"[{time.ctime()}] {s}", *args, **kwargs)
 
 
+def gen_transcriber(model_choice):
+    print_with_time("Loading model")
+    start = time.perf_counter()
+    model = whisper.load_model(model_choice)
+    elapsed = time.perf_counter() - start
+    print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
+
+    def transcriber(filename):
+        try:
+            start = time.perf_counter()
+            # `fp16=False` seems to be necessary on my M1 Mac to suppress a warning
+            result = model.transcribe(filename, fp16=False, language='english')
+            elapsed = time.perf_counter() - start
+            return (elapsed, result)
+        except Exception:
+            print_with_time("Transcription failed unexpectedly for", filename)
+            traceback.print_exc()
+            return
+
+    return transcriber
+
+
 def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
@@ -36,11 +58,12 @@ def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
 
 
 def subscribe(model_choice, topic, client: mqtt_client):
-    print_with_time("Loading model")
-    start = time.perf_counter()
-    model = whisper.load_model(model_choice)
-    elapsed = time.perf_counter() - start
-    print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
+    # print_with_time("Loading model")
+    # start = time.perf_counter()
+    # model = whisper.load_model(model_choice)
+    # elapsed = time.perf_counter() - start
+    # print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
+    transcriber = gen_transcriber(model_choice)
 
     def on_message(client, userdata, msg):
         try:
@@ -54,16 +77,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
 
             print_with_time(f"📝 {vault_path}... ", end='', flush=True)
 
-            try:
-                start = time.perf_counter()
-                # `fp16=False` seems to be necessary on my M1 Mac to suppress a warning
-                result = model.transcribe(temp.file.name, fp16=False, language='english')
-                elapsed = time.perf_counter() - start
-            except Exception:
-                print_with_time("Transcription failed unexpectedly for", temp.file.name)
-                traceback.print_exc()
-                return
-
+            elapsed, result = transcriber(temp.file.name)
             print(f"completed in {elapsed:.1f}s")
 
             data = json.dumps({
@@ -81,15 +95,17 @@ def subscribe(model_choice, topic, client: mqtt_client):
             result = client.publish(response_topic, outgoing_message)
             # result: [0, 1]
             status = result[0]
+            temp_path = incoming_data.get("$tempPath")
             if status == 0:
                 if elapsed > 20:
-                    print_with_time(f"Result published successfully; deleting temp path now")
+                    print_with_time(f"Result published successfully; deleting temp path now: {temp.file.name}")
             else:
                 print_with_time(f"Failed to send message to topic {response_topic}")
 
-            temp_path = incoming_data.get("$tempPath")
             if temp_path:
                 os.remove(temp_path)
+                print_with_time(f"File deleted successfully: {temp.file.name}")
+            
         except:
             print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}")
 
@@ -113,8 +129,11 @@ def run():
     print_with_time(f"pid {os.getpid()}, subscribing to {topic}...")
 
     client = connect_mqtt(client_id, broker, port, username, password)
-    subscribe(model_choice, topic, client)
-    client.loop_forever()
+    subscribe(model_choice, topic, client) # "I had to move the subsription to the on_connect handler, so that it would re-subscribe after re-connecting, else I wouldn't be subscribed anymore, which makes sense.""
+    try:
+        client.loop_forever()
+    except KeyboardInterrupt:
+        print_with_time("(KeyboardInterrupt) Done")
 
 
 if __name__ == '__main__':

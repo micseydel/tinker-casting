@@ -35,6 +35,7 @@ object WhisperMqttActor {
         Tinker.steadily
 
       case ReceiveMqtt(MqttMessage(Topic, payload)) =>
+        context.actorContext.log.info(s"Forwarding to AudioNoteCapturer a payload of size ${payload.size}")
         replyTo ! AudioNoteCapturer.TranscriptionEvent(new String(payload))
         Tinker.steadily
 
