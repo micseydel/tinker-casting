@@ -31,22 +31,23 @@ def gen_transcriber(model_choice):
     def transcriber(filename):
         try:
             start = time.perf_counter()
-            # `fp16=False` seems to be necessary on my M1 Mac to suppress a warning
+            # `fp16=False` seems to be necessary on Apple Silicon to suppress a warning
             result = model.transcribe(filename, fp16=False, language='english')
             elapsed = time.perf_counter() - start
             return (elapsed, result)
         except Exception:
             print_with_time("Transcription failed unexpectedly for", filename)
             traceback.print_exc()
-            return
+            return None
 
     return transcriber
 
 
-def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
+def connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice) -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            print_with_time(f"Connected to MQTT Broker!")
+            print_with_time(f"Connected to MQTT Broker! Subscribing to {topic}")
+            subscribe(model_choice, transcriber, topic, client)
         else:
             print_with_time(f"Failed to connect, return code %d\n", rc)
 
@@ -57,14 +58,7 @@ def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
     return client
 
 
-def subscribe(model_choice, topic, client: mqtt_client):
-    # print_with_time("Loading model")
-    # start = time.perf_counter()
-    # model = whisper.load_model(model_choice)
-    # elapsed = time.perf_counter() - start
-    # print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
-    transcriber = gen_transcriber(model_choice)
-
+def subscribe(model_choice, transcriber, topic, client: mqtt_client):
     def on_message(client, userdata, msg):
         try:
             incoming_data = json.loads(msg.payload.decode())
@@ -77,7 +71,12 @@ def subscribe(model_choice, topic, client: mqtt_client):
 
             print_with_time(f"📝 {vault_path}... ", end='', flush=True)
 
-            elapsed, result = transcriber(temp.file.name)
+            transcription_result = transcriber(temp.file.name)
+            if transcription_result is None:
+                print_with_time("Transcription failed")
+                return
+
+            elapsed, result = transcription_result
             print(f"completed in {elapsed:.1f}s")
 
             data = json.dumps({
@@ -114,6 +113,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
 
 
 def run():
+    print_with_time("canary!")
     _, model_choice = sys.argv
 
     broker = os.environ.get("mqttBroker")
@@ -125,11 +125,12 @@ def run():
     client_id = f'subscribe-{random.randint(0, 100)}'
 
     topic = f"python/transcription/{model_choice}"
+
+    transcriber = gen_transcriber(model_choice)
     
     print_with_time(f"pid {os.getpid()}, subscribing to {topic}...")
 
-    client = connect_mqtt(client_id, broker, port, username, password)
-    subscribe(model_choice, topic, client) # "I had to move the subsription to the on_connect handler, so that it would re-subscribe after re-connecting, else I wouldn't be subscribed anymore, which makes sense.""
+    client = connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice)
     try:
         client.loop_forever()
     except KeyboardInterrupt:
