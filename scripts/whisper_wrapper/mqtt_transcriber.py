@@ -82,8 +82,8 @@ def subscribe(model_choice, topic, client: mqtt_client):
             # result: [0, 1]
             status = result[0]
             if status == 0:
-                # print_with_time(f"Send `{msg}` to topic `{out_topic}`")
-                pass
+                if elapsed > 20:
+                    print_with_time(f"Result published successfully; deleting temp path now")
             else:
                 print_with_time(f"Failed to send message to topic {response_topic}")
 
