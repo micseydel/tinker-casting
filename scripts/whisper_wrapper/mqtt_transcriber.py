@@ -96,7 +96,7 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
                 f.write(data)
 
             outgoing_message = data.encode()
-            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
+            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}; mqtt_client.is_connected() = {mqtt_client.is_connected()}")
             mqtt_publish_result = client.publish(response_topic, outgoing_message)
             # result: [0, 1]
             status = mqtt_publish_result[0]
