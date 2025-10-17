@@ -28,7 +28,6 @@ def connect_mqtt(client_id, broker, port, username, password) -> mqtt_client:
         else:
             print_with_time(f"Failed to connect, return code %d\n", rc)
 
-    print_with_time(f"Connecting to MQTT Broker...")
     client = mqtt_client.Client(client_id)
     client.username_pw_set(username, password)
     client.on_connect = on_connect
@@ -44,7 +43,6 @@ def subscribe(model_choice, topic, client: mqtt_client):
     print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
 
     def on_message(client, userdata, msg):
-        print_with_time(f"Received message with payload length {len(msg.payload)}", flush=True)
         try:
             incoming_data = json.loads(msg.payload.decode())
             vault_path = incoming_data["vaultPath"]
@@ -62,11 +60,11 @@ def subscribe(model_choice, topic, client: mqtt_client):
                 result = model.transcribe(temp.file.name, fp16=False, language='english')
                 elapsed = time.perf_counter() - start
             except Exception:
-                print_with_time("Transcription failed unexpectedly for", temp.file.name, flush=True)
+                print_with_time("Transcription failed unexpectedly for", temp.file.name)
                 traceback.print_exc()
                 return
 
-            print(f"completed in {elapsed:.1f}s, publishing result to mqtt now on {response_topic}", flush=True)
+            print(f"completed in {elapsed:.1f}s")
 
             data = json.dumps({
                     "whisperResultContent": result,
@@ -78,21 +76,22 @@ def subscribe(model_choice, topic, client: mqtt_client):
                     },
                 })
 
-            result = client.publish(response_topic, data)
+            outgoing_message = data.encode()
+            print(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
+            result = client.publish(response_topic, outgoing_message)
             # result: [0, 1]
             status = result[0]
             if status == 0:
                 # print_with_time(f"Send `{msg}` to topic `{out_topic}`")
                 pass
             else:
-                print_with_time(f"Failed to send message to topic {response_topic}", flush=True)
+                print_with_time(f"Failed to send message to topic {response_topic}")
 
             temp_path = incoming_data.get("$tempPath")
             if temp_path:
                 os.remove(temp_path)
         except:
-            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}", flush=True)
-            traceback.print_exc()
+            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}")
 
     client.subscribe(topic)
     client.on_message = on_message
@@ -115,7 +114,6 @@ def run():
 
     client = connect_mqtt(client_id, broker, port, username, password)
     subscribe(model_choice, topic, client)
-    print_with_time("Subscribed to topic, waiting for messages now...")
     client.loop_forever()
 
 
