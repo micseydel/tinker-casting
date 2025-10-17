@@ -70,7 +70,7 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
             response_topic = incoming_data["responseTopic"]
             contents = incoming_data["b64Encoded"]
 
-            temp = NamedTemporaryFile(delete=False, dir="queued_temp_files")
+            temp = NamedTemporaryFile()
             temp.write(base64.b64decode(contents))
 
             print_with_time(f"📝 {vault_path}... ", end='', flush=True)
@@ -80,11 +80,11 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
                 print_with_time("Transcription failed")
                 return
 
-            elapsed, result = transcription_result
+            elapsed, whisper_result = transcription_result
             print(f"completed in {elapsed:.1f}s")
 
             data = json.dumps({
-                    "whisperResultContent": result,
+                    "whisperResultContent": whisper_result,
                     "whisperResultMetadata": {
                         "model": model_choice,
                         "performedOn": socket.gethostname(),
@@ -96,21 +96,14 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
                 f.write(data)
 
             outgoing_message = data.encode()
-            print(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
-            result = client.publish(response_topic, outgoing_message)
+            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
+            mqtt_publish_result = client.publish(response_topic, outgoing_message)
             # result: [0, 1]
-            status = result[0]
-            temp_path = incoming_data.get("$tempPath")
+            status = mqtt_publish_result[0]
             if status == 0:
-                if elapsed > 20:
-                    print_with_time(f"Result published successfully; deleting temp path now: {temp.file.name}")
+                print_with_time(f"Result published successfully")
             else:
-                print_with_time(f"Failed to send message to topic {response_topic}")
-
-            if temp_path:
-                os.remove(temp_path)
-                print_with_time(f"File deleted successfully: {temp.file.name}")
-            
+                print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}")
         except:
             print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}")
 
