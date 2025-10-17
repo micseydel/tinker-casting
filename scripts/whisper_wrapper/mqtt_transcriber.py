@@ -64,7 +64,7 @@ def subscribe(model_choice, topic, client: mqtt_client):
                 traceback.print_exc()
                 return
 
-            print(f"completed in {elapsed:.1f}s, publishing result to mqtt now on {response_topic}")
+            print(f"completed in {elapsed:.1f}s")
 
             data = json.dumps({
                     "whisperResultContent": result,
@@ -76,7 +76,9 @@ def subscribe(model_choice, topic, client: mqtt_client):
                     },
                 })
 
-            result = client.publish(response_topic, data)
+            outgoing_message = data.encode()
+            print(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
+            result = client.publish(response_topic, outgoing_message)
             # result: [0, 1]
             status = result[0]
             if status == 0:
