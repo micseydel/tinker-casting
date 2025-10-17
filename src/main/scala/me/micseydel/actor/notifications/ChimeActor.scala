@@ -3,6 +3,7 @@ package me.micseydel.actor.notifications
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
+import me.micseydel.NoOp
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.ChimeActor.{Command, Error, Info, Success, Theme, Warning}
 import me.micseydel.dsl.Tinker.Ability
@@ -59,11 +60,14 @@ object ChimeActor {
   private def initializing(noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
 
     noteRef.resetMarkdown()
+    context.self !!!! ReceivePing(NoOp) // the above doesn't trigger a ping 100% of the time 🤷
 
     Tinker.receiveMessage {
       case ReceivePing(_) =>
         noteRef.readNote().flatMap(_.yamlFrontMatter) match {
-          case Failure(exception) => throw exception
+          case Failure(exception) =>
+            context.actorContext.log.warn(s"Broken frontmatter for ${noteRef.noteId}, ignoring", exception)
+            Tinker.steadily
 
           case util.Success(yaml: Map[String, Any]) =>
             yaml.get("host") match {
@@ -233,7 +237,7 @@ object ChimeActor {
     def resetMarkdown(): Unit = {
       noteRef.setMarkdown(DefaultMarkdown) match {
         case Failure(exception) => throw exception
-        case util.Success(_) =>
+        case util.Success(NoOp) =>
       }
     }
   }
