@@ -44,10 +44,14 @@ def gen_transcriber(model_choice):
 
 
 def connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice) -> mqtt_client:
+    subscribed = False
     def on_connect(client, userdata, flags, rc):
+        nonlocal subscribed
         if rc == 0:
-            print_with_time(f"Connected to MQTT Broker! Subscribing to {topic}")
+            re = 'RE-' if subscribed else ''
+            print_with_time(f"{re}Connected to MQTT Broker! {re}Subscribing to {topic}")
             subscribe(model_choice, transcriber, topic, client)
+            subscribed = True
         else:
             print_with_time(f"Failed to connect, return code %d\n", rc)
 
@@ -88,6 +92,8 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
                         "perfCounterElapsed": elapsed,
                     },
                 })
+            with open("last.json", "w") as f:
+                f.write(data)
 
             outgoing_message = data.encode()
             print(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
@@ -113,7 +119,6 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
 
 
 def run():
-    print_with_time("canary!")
     _, model_choice = sys.argv
 
     broker = os.environ.get("mqttBroker")
