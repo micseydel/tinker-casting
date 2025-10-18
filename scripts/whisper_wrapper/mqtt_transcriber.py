@@ -96,18 +96,15 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
                 f.write(data)
 
             outgoing_message = data.encode()
-            # from pprint import pprint
-            # pprint((vars(client)))
-            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
+            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}; client.is_connected() = {client.is_connected()}")
             mqtt_publish_result = client.publish(response_topic, outgoing_message)
-            # result: [0, 1]
-            status = mqtt_publish_result[0]
-            if status == 0:
-                print_with_time(f"Result published successfully")
+            # status
+            if mqtt_publish_result[0] == 0:
+                print_with_time(f"Result published successfully {mqtt_publish_result}; client.is_connected() = {client.is_connected()}")
             else:
-                print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}")
+                print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}; client.is_connected() = {client.is_connected()}")
         except:
-            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}")
+            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}; client.is_connected() = {client.is_connected()}")
 
     client.subscribe(topic)
     client.on_message = on_message
