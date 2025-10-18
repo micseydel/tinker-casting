@@ -129,7 +129,8 @@ def run():
 
     client = connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice)
     try:
-        client.loop_forever()
+        # FIXME: try client.wait_for_publish in on_message next if this doesn't work
+        client.loop_forever(300)
     except KeyboardInterrupt:
         print_with_time("(KeyboardInterrupt) Done")
 
