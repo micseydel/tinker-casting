@@ -45,9 +45,9 @@ def gen_transcriber(model_choice):
 
 def connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice) -> mqtt_client:
     subscribed = False
-    def on_connect(client, userdata, flags, rc):
+    def on_connect(client, userdata, flags, reason_code, properties):
         nonlocal subscribed
-        if rc == 0:
+        if reason_code == 0:
             re = 'RE-' if subscribed else ''
             print_with_time(f"{re}Connected to MQTT Broker! {re}Subscribing to {topic}")
             subscribe(model_choice, transcriber, topic, client)
@@ -55,7 +55,7 @@ def connect_mqtt(client_id, broker, port, username, password, transcriber, topic
         else:
             print_with_time(f"Failed to connect, return code %d\n", rc)
 
-    client = mqtt_client.Client(client_id)
+    client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id)
     client.username_pw_set(username, password)
     client.on_connect = on_connect
     client.connect(broker, port)
@@ -96,7 +96,9 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
                 f.write(data)
 
             outgoing_message = data.encode()
-            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}; mqtt_client.is_connected() = {mqtt_client.is_connected()}")
+            # from pprint import pprint
+            # pprint((vars(client)))
+            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}")
             mqtt_publish_result = client.publish(response_topic, outgoing_message)
             # result: [0, 1]
             status = mqtt_publish_result[0]

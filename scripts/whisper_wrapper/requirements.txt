@@ -1,6 +1,6 @@
-paho-mqtt<2.0.0
-flask
-flask[async]
+paho-mqtt
+
+# still needed?
 pyyaml>=5.4
 
 numpy
