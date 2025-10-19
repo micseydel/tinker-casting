@@ -8,31 +8,39 @@ import traceback
 import pathlib
 import random
 
+from multiprocessing import Process, Manager
 from tempfile import NamedTemporaryFile
 from urllib.error import URLError
-from typing import Optional
+from typing import Optional, Tuple
 from pprint import pprint
 
 import whisper
 from paho.mqtt import client as mqtt_client
+from paho.mqtt.enums import MQTTErrorCode
 
 
+VERBOSE = False
+
+
+# FIXME: this needs to use a proper logger, since stdout is potentially written to concurrenly
 def print_with_time(s, *args, **kwargs) -> None:
     print(f"[{time.ctime()}] {s}", *args, **kwargs)
 
 
-def gen_transcriber(model_choice):
-    print_with_time("Loading model")
-    start = time.perf_counter()
-    model = whisper.load_model(model_choice)
-    elapsed = time.perf_counter() - start
-    print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
+class Transcriber:
+    def __init__(self, model_choice: str) -> None:
+        self.model_choice = model_choice
+        print_with_time("Loading model")
+        start = time.perf_counter()
+        self.model = whisper.load_model(model_choice)
+        elapsed = time.perf_counter() - start
+        print_with_time(f"Model {model_choice} loaded in {elapsed:.1f}s")
 
-    def transcriber(filename):
+    def __call__(self, filename) -> Optional[Tuple[float, dict]]:
         try:
             start = time.perf_counter()
             # `fp16=False` seems to be necessary on Apple Silicon to suppress a warning
-            result = model.transcribe(filename, fp16=False, language='english')
+            result = self.model.transcribe(filename, fp16=False, language='english')
             elapsed = time.perf_counter() - start
             return (elapsed, result)
         except Exception:
@@ -40,32 +48,81 @@ def gen_transcriber(model_choice):
             traceback.print_exc()
             return None
 
-    return transcriber
+
+class MqttManager:
+    def __init__(self, q, client_id, broker, port, username, password, subscription_topic = None) -> None:
+        self.client = self.connect_mqtt(client_id, broker, port, username, password, subscription_topic, q)
+
+    def connect_mqtt(self, client_id, broker, port, username, password, topic, q) -> mqtt_client:
+        print_with_time(f"connect_mqtt called for client_id {client_id}; subscribed topic = {topic}")
+        subscribed = False
+        def on_connect(client, userdata, flags, reason_code, properties):
+            # FIXME: on_connect should publish a message for tracking
+            print_with_time(f"on_connect called for client_id {client_id}; subscribed topic = {topic}")
+            if topic is not None:
+                nonlocal subscribed
+                if reason_code == 0:
+                    re = 'RE-' if subscribed else ''
+                    print_with_time(f"{re}Connected to MQTT Broker! {re}Subscribing to {topic}")
+                    self.subscribe(q, topic, client)
+                    subscribed = True
+                else:
+                    print_with_time(f"Failed to connect, return code {reason_code} and properties {properties}")
+
+        client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id)
+        client.username_pw_set(username, password)
+        client.on_connect = on_connect
+        client.connect(broker, port)
+        return client
 
 
-def connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice) -> mqtt_client:
-    subscribed = False
-    def on_connect(client, userdata, flags, reason_code, properties):
-        nonlocal subscribed
-        if reason_code == 0:
-            re = 'RE-' if subscribed else ''
-            print_with_time(f"{re}Connected to MQTT Broker! {re}Subscribing to {topic}")
-            subscribe(model_choice, transcriber, topic, client)
-            subscribed = True
-        else:
-            print_with_time(f"Failed to connect, return code %d\n", rc)
+    def subscribe(self, q, topic, client: mqtt_client):
+        print_with_time(f"subscribe called for subscribed topic = {topic}")
+        def on_message(client, userdata, msg):
+            if VERBOSE: print_with_time(f"on_message called")
+            try:
+                incoming_data = json.loads(msg.payload.decode())
+            except Exception:
+                print_with_time(f"Something went wrong (are these stack traces the same?) {traceback.format_exc()}")
+                traceback.print_exc()
+                return
 
-    client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id)
-    client.username_pw_set(username, password)
-    client.on_connect = on_connect
-    client.connect(broker, port)
-    return client
+            vaultPath = incoming_data.get("vaultPath")
+            missing_keys = {"vaultPath", "responseTopic", "b64Encoded"} - incoming_data.keys()
+            if missing_keys:
+                if vaultPath is not None:
+                    print_with_time(f"Ignoring request for {vaultPath}, had missing keys: {missing_keys}")
+                else:
+                    print_with_time(f"Ignoring request, had missing keys: {missing_keys}")
+                return
+
+            print_with_time(f"Enqueuing {vaultPath}")
+            q.put(incoming_data)
+
+        client.subscribe(topic)
+        client.on_message = on_message
+
+    def loop_forever(self): self.client.loop_forever()
+
+    def publish(self, topic, msg): return self.client.publish(topic, msg)
+
+    def is_connected(self): return self.client.is_connected()
 
 
-def subscribe(model_choice, transcriber, topic, client: mqtt_client):
-    def on_message(client, userdata, msg):
+def long_running(q, model_choice, broker, port, username, password) -> None:
+    client_id = f'publisher-{random.randint(0, 100)}'
+    print_with_time(f"Starting long-runnning process with pid {os.getpid()} and client id {client_id}")
+    try:
+        transcriber = Transcriber(model_choice)
+        mqtt_manager = MqttManager(q, client_id, broker, port, username, password)
+    except Exception:
+        print_with_time(f"Something went wrong starting the transcriber: {traceback.format_exc()}")
+        return
+
+    while True:
         try:
-            incoming_data = json.loads(msg.payload.decode())
+            incoming_data = q.get()
+            if VERBOSE: print_with_time(f"Processing incoming data")
             vault_path = incoming_data["vaultPath"]
             response_topic = incoming_data["responseTopic"]
             contents = incoming_data["b64Encoded"]
@@ -86,28 +143,29 @@ def subscribe(model_choice, transcriber, topic, client: mqtt_client):
             data = json.dumps({
                     "whisperResultContent": whisper_result,
                     "whisperResultMetadata": {
-                        "model": model_choice,
+                        "model": transcriber.model_choice,
                         "performedOn": socket.gethostname(),
                         "vaultPath": vault_path,
                         "perfCounterElapsed": elapsed,
                     },
                 })
-            with open("last.json", "w") as f:
-                f.write(data)
 
             outgoing_message = data.encode()
-            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}; client.is_connected() = {client.is_connected()}")
-            mqtt_publish_result = client.publish(response_topic, outgoing_message)
-            # status
-            if mqtt_publish_result[0] == 0:
-                print_with_time(f"Result published successfully {mqtt_publish_result}; client.is_connected() = {client.is_connected()}")
+            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
+            mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
+            status_code, message_n = mqtt_publish_result
+            if status_code == 0:
+                if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
             else:
-                print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}; client.is_connected() = {client.is_connected()}")
+                if status_code == MQTTErrorCode.MQTT_ERR_NO_CONN:
+                    # FIXME this needs to try to reconnect...
+                    print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
+                else:
+                    print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
         except:
-            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}; client.is_connected() = {client.is_connected()}")
+            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
 
-    client.subscribe(topic)
-    client.on_message = on_message
+
 
 
 def run():
@@ -118,21 +176,24 @@ def run():
     username = os.environ.get("mqttUsername")
     password = os.environ.get("mqttPassword")
 
-    # Generate a Client ID with the subscribe prefix.
-    client_id = f'subscribe-{random.randint(0, 100)}'
-
+    client_id = f'subscriber-{random.randint(0, 100)}'
     topic = f"python/transcription/{model_choice}"
-
-    transcriber = gen_transcriber(model_choice)
     
-    print_with_time(f"pid {os.getpid()}, subscribing to {topic}...")
+    print_with_time(f"pid {os.getpid()}, subscribing client {client_id} to {topic}...")
 
-    client = connect_mqtt(client_id, broker, port, username, password, transcriber, topic, model_choice)
+    manager = Manager()
+    q = manager.Queue()
+    mqtt_manager = MqttManager(q, client_id, broker, port, username, password, topic)
+    
+    worker = Process(target=long_running, args=(q, model_choice, broker, port, username, password))
+    worker.start()
+    
     try:
-        # FIXME: try client.wait_for_publish in on_message next if this doesn't work
-        client.loop_forever(300)
+        mqtt_manager.loop_forever()
     except KeyboardInterrupt:
-        print_with_time("(KeyboardInterrupt) Done")
+        print_with_time("(KeyboardInterrupt) Done; any output like 'There appear to be 1 leaked semaphore objects to clean up at shutdown' can be ignored")
+
+    worker.terminate()
 
 
 if __name__ == '__main__':
