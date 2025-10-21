@@ -17,12 +17,13 @@ from pprint import pprint
 import whisper
 from paho.mqtt import client as mqtt_client
 from paho.mqtt.enums import MQTTErrorCode
+import setproctitle
 
 
 VERBOSE = False
 
 
-# FIXME: this needs to use a proper logger, since stdout is potentially written to concurrenly
+# FIXME: this needs to use a proper logger, since stdout is potentially written to concurrently
 def print_with_time(s, *args, **kwargs) -> None:
     print(f"[{time.ctime()}] {s}", *args, **kwargs)
 
@@ -108,6 +109,8 @@ class MqttManager:
 
     def is_connected(self): return self.client.is_connected()
 
+    def reconnect(self): return self.client.reconnect()
+
 
 def long_running(q, model_choice, broker, port, username, password) -> None:
     client_id = f'publisher-{random.randint(0, 100)}'
@@ -157,11 +160,11 @@ def long_running(q, model_choice, broker, port, username, password) -> None:
             if status_code == 0:
                 if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
             else:
-                if status_code == MQTTErrorCode.MQTT_ERR_NO_CONN:
-                    # FIXME this needs to try to reconnect...
-                    print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
-                else:
-                    print_with_time(f"Failed to send message to topic {response_topic}: {mqtt_publish_result}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
+                print_with_time(f"Result #{message_n} failed publishing (mqtt_manager.is_connected={mqtt_manager.is_connected()}), trying to reconnect now...")
+                mqtt_manager.reconnect()
+                print_with_time("Trying to re-publish now...")
+                mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
+                print_with_time("FYI, the result was:", mqtt_publish_result)
         except:
             print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
 
@@ -169,6 +172,7 @@ def long_running(q, model_choice, broker, port, username, password) -> None:
 
 
 def run():
+    setproctitle.setproctitle(sys.argv[0])
     _, model_choice = sys.argv
 
     broker = os.environ.get("mqttBroker")
