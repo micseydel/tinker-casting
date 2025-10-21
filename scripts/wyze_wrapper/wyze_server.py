@@ -8,6 +8,7 @@ from wyze_sdk.api.devices import PlugsClient
 from wyze_sdk.errors import WyzeApiError
 from flask import Flask, request, jsonify
 from wyze_sdk.models.devices import Plug, Device
+import setproctitle
 
 app = Flask(__name__)
 
@@ -134,6 +135,7 @@ class ClientWrapper:
 
 
 if __name__ == "__main__":
+    setproctitle.setproctitle(sys.argv[0])
     _, port = sys.argv
     port = int(port)
 

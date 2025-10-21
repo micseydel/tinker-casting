@@ -5,6 +5,7 @@ from bleak import BleakScanner
 from flask import Flask, request, jsonify
 import time
 from claranet4.lib import discover, Device, DeviceError, request_measurements, Reading
+import setproctitle
 
 app = Flask(__name__)
 
@@ -91,6 +92,7 @@ async def claranet_find_device_async(address) -> Device:
 
 
 if __name__ == '__main__':
+    setproctitle.setproctitle(sys.argv[0])
     try:
         _, port = sys.argv
         port = int(port)
