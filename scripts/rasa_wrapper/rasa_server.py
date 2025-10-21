@@ -1,7 +1,9 @@
+import os
 import sys
+import time
 
 from flask import Flask, request, jsonify
-import time
+import setproctitle
 
 app = Flask(__name__)
 
@@ -16,10 +18,10 @@ def entity_extraction(model: str):
         rasa_model = cats_rasa_model
     elif model == "lights":
         rasa_model = lights_rasa_model
-    elif model == "cats_test":
-        rasa_model = cats_rasa_model_to_test
-    elif model == "lights_test":
-        rasa_model = lights_rasa_model_to_test
+    # elif model == "cats_test":
+    #     rasa_model = cats_rasa_model_to_test
+    # elif model == "lights_test":
+    #     rasa_model = lights_rasa_model_to_test
     else:
         return jsonify({'message': f"unknown model {model}"}), 404
 
@@ -41,20 +43,21 @@ def entity_extraction(model: str):
 
 
 if __name__ == '__main__':
+    setproctitle.setproctitle(sys.argv[0])
     try:
         _, port = sys.argv
     except ValueError as e:
         print("Something went wrong starting up the server")
         raise e
     else:
-        print("Using port", port, "; loading Rasa now...")
+        print("Loading Rasa now...")
 
         cats_rasa_model = ModelWrapper("models/cats")
-        cats_rasa_model_to_test = ModelWrapper("models/testing/cats")
+        # cats_rasa_model_to_test = ModelWrapper("models/testing/cats")
         lights_rasa_model = ModelWrapper("models/lights")
-        lights_rasa_model_to_test = ModelWrapper("models/testing/lights")
+        # lights_rasa_model_to_test = ModelWrapper("models/testing/lights")
 
-        print("Starting Flask...")
+        print(f"Starting Flask on port {port} with pid {os.getpid()}")
         app.run(
             host='0.0.0.0',  # listen on the network, not just localhost
             port=int(port),
