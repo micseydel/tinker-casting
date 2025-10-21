@@ -52,7 +52,7 @@ object RasaAnnotatingListener {
   sealed trait Message
   private case class TranscriptionEvent(notedTranscription: NotedTranscription) extends Message
 
-  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription], replacementCandidate: Option[String] = None)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
+  def apply(model: String, subscription: SpiritRef[NotedTranscription] => Gossiper.Subscription, listener: SpiritRef[RasaAnnotatedNotedTranscription]/*, replacementCandidate: Option[String] = None*/)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val c: TinkerContext[_] = context
     Tinker.userExtension.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
