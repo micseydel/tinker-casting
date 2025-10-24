@@ -121,7 +121,7 @@ object AudioNoteCapturer {
           case Failure(exception) => context.actorContext.log.error(s"Failed to add $transcriptionNoteName", exception)
           case Success(result) =>
             if (result) {
-              context.actorContext.log.info(s"Added $transcriptionNoteName to the list")
+              context.actorContext.log.info(s"Added $transcriptionNoteName to the list (or it was already there)")
             } else {
               context.actorContext.log.warn(s"Failed to add $transcriptionNoteName to the list")
             }
@@ -233,7 +233,7 @@ object AudioNoteCapturerHelpers {
         case Right(entries) =>
           val alreadyPresent = entries.contains(entry)
           if (alreadyPresent) {
-            Success(false)
+            Success(true)
           } else {
             noteRef
               .setMarkdown((entry :: entries).map(_.line).mkString("\n"))
