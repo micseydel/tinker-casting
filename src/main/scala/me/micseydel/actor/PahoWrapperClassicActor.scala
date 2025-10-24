@@ -50,6 +50,12 @@ class PahoWrapperClassicActor(typedMqtt: typed.ActorRef[Nothing], mqttConfig: Mq
       })
       mqtt ! Subscribe(topic, self)
 
+    case ack: SubscribeAck =>
+      ack.fail match {
+        case Some(value) => this.context.system.log.warning(value, s"Ack failed for ${ack.subscribe}")
+        case None => this.context.system.log.info(s"Sub'd to ${ack.subscribe.topic}")
+      }
+
     case msg =>
       this.context.system.log.info(s"unexpected ?? $msg")
   }
