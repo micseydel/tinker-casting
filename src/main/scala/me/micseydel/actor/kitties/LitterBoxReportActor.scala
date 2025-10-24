@@ -99,7 +99,8 @@ private[kitties] object DailyAbility {
             val latestMarkdown = document.toMarkdown
             if (latestMarkdown != existingMarkdown) {
               val noteId = noteRef.noteId
-              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"""added to ${noteId.heading("Inbox")}""", Some(NeedsAttention))
+              // FIXME: delete after confirming LitterBoxesHelper does this just fine
+//              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"""added to ${noteId.heading("Inbox")}""", Some(NeedsAttention))
               noteRef.setMarkdown(document.toMarkdown) match {
                 case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
                 case Success(NoOp) =>

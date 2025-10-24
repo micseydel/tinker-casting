@@ -29,8 +29,6 @@ object AudioNoteCapturer {
 
   case class TranscriptionEvent(payload: String) extends Message
 
-  private case class MqttTranscriptionEvent(mqttMessage: MqttMessage) extends Message
-
   private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
@@ -165,11 +163,6 @@ object AudioNoteCapturer {
             context.actorContext.log.info(s"Transcription completed for ${whisperResultEvent.whisperResultMetadata.vaultPath}")
             chronicler ! Chronicler.TranscriptionCompletedEvent(AudioNoteCapturerHelpers.fixWhisper(whisperResultEvent))
         }
-
-        Tinker.steadily
-
-      case MqttTranscriptionEvent(MqttMessage(topic, payload)) =>
-        context.self !!!! TranscriptionEvent(new String(payload))
 
         Tinker.steadily
 

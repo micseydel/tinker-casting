@@ -112,9 +112,12 @@ class MqttManager:
     def reconnect(self): return self.client.reconnect()
 
 
-def long_running(q, model_choice, broker, port, username, password) -> None:
-    client_id = f'publisher-{random.randint(0, 100)}'
-    print_with_time(f"Starting long-runnning process with pid {os.getpid()} and client id {client_id}")
+def long_running(q, model_choice, broker, port, username, password, client_num) -> None:
+    pid = os.getpid()
+    proc_title = f"transcriber_for_{pid}"
+    setproctitle.setproctitle(proc_title)
+    client_id = f'publisher-{model_choice}-{client_num}'
+    print_with_time(f"Starting long-runnning process with pid {pid}, mqtt client id {client_id} and process title {proc_title}")
     try:
         transcriber = Transcriber(model_choice)
         mqtt_manager = MqttManager(q, client_id, broker, port, username, password)
@@ -154,7 +157,7 @@ def long_running(q, model_choice, broker, port, username, password) -> None:
                 })
 
             outgoing_message = data.encode()
-            print_with_time(f"Publishing {len(outgoing_message)} bytes now to mqtt now on {response_topic}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
+            print_with_time(f"Publishing {len(outgoing_message)} bytes to mqtt now on {response_topic}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
             mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
             status_code, message_n = mqtt_publish_result
             if status_code == 0:
@@ -181,7 +184,8 @@ def run():
     password = os.environ.get("mqttPassword")
 
     # FIXME: investigate what randomness means here
-    client_id = f'subscriber-{model_choice}-{random.randint(0, 100)}'
+    client_num = random.randint(0, 100)
+    client_id = f'subscriber-{model_choice}-{client_num}'
     topic = f"python/transcription/{model_choice}"
     
     print_with_time(f"pid {os.getpid()}, subscribing client {client_id} to {topic}...")
@@ -190,7 +194,7 @@ def run():
     q = manager.Queue()
     mqtt_manager = MqttManager(q, client_id, broker, port, username, password, topic)
     
-    worker = Process(target=long_running, args=(q, model_choice, broker, port, username, password))
+    worker = Process(target=long_running, args=(q, model_choice, broker, port, username, password, client_num))
     worker.start()
     
     try:
