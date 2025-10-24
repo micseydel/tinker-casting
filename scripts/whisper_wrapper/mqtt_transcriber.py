@@ -180,7 +180,8 @@ def run():
     username = os.environ.get("mqttUsername")
     password = os.environ.get("mqttPassword")
 
-    client_id = f'subscriber-{random.randint(0, 100)}'
+    # FIXME: investigate what randomness means here
+    client_id = f'subscriber-{model_choice}-{random.randint(0, 100)}'
     topic = f"python/transcription/{model_choice}"
     
     print_with_time(f"pid {os.getpid()}, subscribing client {client_id} to {topic}...")
