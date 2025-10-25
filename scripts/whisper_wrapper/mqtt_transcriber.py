@@ -55,10 +55,10 @@ class Transcriber:
 
 
 class MqttManager:
-    def __init__(self, q, client_id, broker, port, username, password, subscription_topic = None) -> None:
-        self.client = self.connect_mqtt(client_id, broker, port, username, password, subscription_topic, q)
+    def __init__(self, queue, client_id, broker, port, username, password, subscription_topic = None) -> None:
+        self.client = self.connect_mqtt(client_id, broker, port, username, password, subscription_topic, queue)
 
-    def connect_mqtt(self, client_id, broker, port, username, password, topic, q) -> mqtt_client:
+    def connect_mqtt(self, client_id, broker, port, username, password, topic, queue) -> mqtt_client:
         print_with_time(f"connect_mqtt called for client_id {client_id}; subscribed topic = {topic}")
         subscribed = False
         def on_connect(client, userdata, flags, reason_code, properties):
@@ -69,7 +69,7 @@ class MqttManager:
                 if reason_code == 0:
                     re = 'RE-' if subscribed else ''
                     print_with_time(f"{re}Connected to MQTT Broker! {re}Subscribing to {topic}")
-                    self.subscribe(q, topic, client)
+                    self.subscribe(queue, topic, client)
                     subscribed = True
                 else:
                     print_with_time(f"Failed to connect, return code {reason_code} and properties {properties}")
@@ -81,7 +81,7 @@ class MqttManager:
         return client
 
 
-    def subscribe(self, q, topic, client: mqtt_client):
+    def subscribe(self, queue, topic, client: mqtt_client):
         print_with_time(f"subscribe called for subscribed topic = {topic}")
         def on_message(client, userdata, msg):
             if VERBOSE: print_with_time(f"on_message called")
@@ -101,8 +101,8 @@ class MqttManager:
                     print_with_time(f"Ignoring request, had missing keys: {missing_keys}")
                 return
 
-            print_with_time(f"Enqueuing {vaultPath} into queue with approximate size {q.nsize()}")
-            q.put(incoming_data)
+            print_with_time(f"Enqueuing {vaultPath} into queue with approximate size {queue.qsize()}")
+            queue.put(incoming_data)
 
         client.subscribe(topic)
         client.on_message = on_message
@@ -111,6 +111,7 @@ class MqttManager:
 
     def publish(self, topic, msg): return self.client.publish(topic, msg)
 
+    # FIXME why does this always seem to be False?
     def is_connected(self): return self.client.is_connected()
 
     def reconnect(self): return self.client.reconnect()
@@ -132,7 +133,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
     while True:
         try:
             incoming_data = q.get()
-            if VERBOSE: print_with_time(f"Processing incoming data; there are approximately {q.nsize()} items waiting")
+            if VERBOSE: print_with_time(f"Processing incoming data; there are approximately {q.qsize()} items waiting")
             vault_path = incoming_data["vaultPath"]
             response_topic = incoming_data["responseTopic"]
             contents = incoming_data["b64Encoded"]
