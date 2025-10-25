@@ -48,6 +48,10 @@ class Transcriber:
             print_with_time("Transcription failed unexpectedly for", filename)
             traceback.print_exc()
             return None
+        except RuntimeError:
+            print_with_time("Transcription failed WEIRDLY for", filename)
+            traceback.print_exc()
+            return None
 
 
 class MqttManager:
@@ -97,7 +101,7 @@ class MqttManager:
                     print_with_time(f"Ignoring request, had missing keys: {missing_keys}")
                 return
 
-            print_with_time(f"Enqueuing {vaultPath}")
+            print_with_time(f"Enqueuing {vaultPath} into queue with approximate size {q.nsize()}")
             q.put(incoming_data)
 
         client.subscribe(topic)
@@ -128,7 +132,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
     while True:
         try:
             incoming_data = q.get()
-            if VERBOSE: print_with_time(f"Processing incoming data")
+            if VERBOSE: print_with_time(f"Processing incoming data; there are approximately {q.nsize()} items waiting")
             vault_path = incoming_data["vaultPath"]
             response_topic = incoming_data["responseTopic"]
             contents = incoming_data["b64Encoded"]
@@ -163,7 +167,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
             if status_code == 0:
                 if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
             else:
-                print_with_time(f"Result #{message_n} failed publishing (mqtt_manager.is_connected={mqtt_manager.is_connected()}), trying to reconnect now...")
+                print_with_time(f"Result #{message_n} failed publishing ({status_code}) (mqtt_manager.is_connected={mqtt_manager.is_connected()}), trying to reconnect now...")
                 mqtt_manager.reconnect()
                 print_with_time("Trying to re-publish now...")
                 mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
