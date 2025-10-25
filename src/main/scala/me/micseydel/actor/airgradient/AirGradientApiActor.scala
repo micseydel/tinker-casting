@@ -18,7 +18,7 @@ private object AirGradientApiActor {
 
   private case class ReceiveHttpResponse(httpResponse: HttpResponse, replyTo: SpiritRef[AirGradientSensorData]) extends Message
 
-  private case class ReceiveFailedHttpResponse(exception: Throwable) extends Message
+  private case class ReceiveFailedHttpResponse(exception: Throwable, replyTo: SpiritRef[AirGradientSensorData], remainingRetries: Int) extends Message
 
   private case class ReceiveUnmarshalling(sensorData: AirGradientSensorData, replyTo: SpiritRef[AirGradientSensorData]) extends Message
 
@@ -28,7 +28,7 @@ private object AirGradientApiActor {
 
     Tinker.receiveMessage {
       case Request(replyTo) =>
-        makeRequest(host, replyTo)
+        makeRequest(host, replyTo, remainingRetries = 3)
         Tinker.steadily
 
       case ReceiveHttpResponse(httpResponse, replyTo) =>
@@ -38,22 +38,34 @@ private object AirGradientApiActor {
         val umarshal: Unmarshal[ResponseEntity] = Unmarshal(httpResponse.entity)
         val fut: Future[String] = umarshal.to[String]
         context.pipeToSelf(fut) {
-          case Failure(exception) => ReceiveFailedHttpResponse(exception)
+          case Failure(exception) => ReceiveFailedHttpResponse(exception, replyTo, 0)
           case Success(models) =>
             try {
               ReceiveUnmarshalling(models.parseJson.convertTo[AirGradientSensorData], replyTo)
             } catch {
               case e: DeserializationException =>
-                ReceiveFailedHttpResponse(new RuntimeException(s"failed to parse: $models", e))
+                ReceiveFailedHttpResponse(new RuntimeException(s"failed to parse: $models", e), replyTo, 0)
               case e: Throwable =>
-                ReceiveFailedHttpResponse(new RuntimeException(s"something unexpected went wrong", e))
+                ReceiveFailedHttpResponse(new RuntimeException(s"something unexpected went wrong", e), replyTo, 0)
             }
         }
 
         Tinker.steadily
 
-      case ReceiveFailedHttpResponse(exception) =>
-        context.actorContext.log.warn(s"Failed to connect to local Air Gradient", exception)
+      case ReceiveFailedHttpResponse(exception, replyTo, remainingRetries) =>
+        if (remainingRetries > 0) {
+          exception match {
+            case _: java.net.UnknownHostException =>
+              context.actorContext.log.info(s"A common transient error has occurred, retrying (remainingRetries = ${remainingRetries - 1})", exception)
+              makeRequest(host, replyTo, remainingRetries = remainingRetries - 1)
+
+            case _ =>
+              context.actorContext.log.warn(s"Failed to connect to local Air Gradient; there are $remainingRetries remaining retries but this exception is unknown so dropping this request, $replyTo will not receive a reply", exception)
+          }
+        } else {
+          context.actorContext.log.warn(s"Failed to connect to local Air Gradient; no remaining retries so stopping for $replyTo", exception)
+        }
+
         Tinker.steadily
 
       case ReceiveUnmarshalling(models, replyTo) =>
@@ -65,10 +77,10 @@ private object AirGradientApiActor {
 
   // util
 
-  private def makeRequest(host: String, replyTo: SpiritRef[AirGradientSensorData])(implicit context: TinkerContext[Message], actorSystem: ActorSystem[?]): Unit = {
+  private def makeRequest(host: String, replyTo: SpiritRef[AirGradientSensorData], remainingRetries: Int)(implicit context: TinkerContext[Message], actorSystem: ActorSystem[?]): Unit = {
     val uri = s"http://$host/measures/current"
     context.pipeToSelf(request(uri)) {
-      case Failure(exception) => ReceiveFailedHttpResponse(exception)
+      case Failure(exception) => ReceiveFailedHttpResponse(exception, replyTo, remainingRetries)
       case Success(httpResponse) => ReceiveHttpResponse(httpResponse, replyTo)
     }
   }
