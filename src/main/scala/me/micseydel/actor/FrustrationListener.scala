@@ -74,11 +74,12 @@ object FrustrationListener {
 
           if (containsFrustration(transcription)) {
             context.actorContext.log.info(s"Detected frustration in $vaultPath")
+            val forDay = captureTime.toLocalDate
             model match {
               case BaseModel =>
-                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(fast) Detected frustration", Some(NeedsAttention))
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, forDay, context.system.clock.now(), "(fast) Detected frustration", Some(NeedsAttention))
               case LargeModel =>
-                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "(accurate) Detected frustration", Some(NeedsAttention))
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, forDay, context.system.clock.now(), "(accurate) Detected frustration", Some(NeedsAttention))
               case TurboModel => ???
             }
 

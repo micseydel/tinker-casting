@@ -19,7 +19,7 @@ import me.micseydel.{Common, NoOp}
 
 import java.nio.file.Path
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDateTime, ZoneId, ZonedDateTime}
+import java.time.{LocalDate, LocalDateTime, ZoneId, ZonedDateTime}
 import scala.annotation.unused
 import scala.util.{Failure, Success, Try}
 
@@ -33,7 +33,7 @@ object Chronicler {
 
   case class ReceiveNotedTranscription(notedTranscription: NotedTranscription) extends Message
 
-  case class ListenerAcknowledgement(noteId: NoteId, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends Message
+  case class ListenerAcknowledgement(noteId: NoteId, noteCreationDate: LocalDate, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends Message
 
 //  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
 
@@ -144,8 +144,8 @@ object Chronicler {
           // and done
           Tinker.steadily
 
-        case ListenerAcknowledgement(noteRef, timeOfAck, details, setNoteState) =>
-          moc ! ChroniclerMOC.ListenerAcknowledgement(noteRef, timeOfAck, details, setNoteState)
+        case ListenerAcknowledgement(noteRef, forDay, timeOfAck, details, setNoteState) =>
+          moc ! ChroniclerMOC.ListenerAcknowledgement(noteRef, forDay, timeOfAck, details, setNoteState)
           Tinker.steadily
 
         case ReceiveNotePing(_) =>
@@ -197,8 +197,8 @@ object Chronicler {
   }
 
   object ListenerAcknowledgement {
-    def justIntegrated(noteId: NoteId, details: String)(implicit tinkerContext: TinkerContext[_]): ListenerAcknowledgement = {
-      ListenerAcknowledgement(noteId, tinkerContext.system.clock.now(), details, Some(AutomaticallyIntegrated))
+    def justIntegrated(noteId: NoteId, forDay: LocalDate, details: String)(implicit tinkerContext: TinkerContext[_]): ListenerAcknowledgement = {
+      ListenerAcknowledgement(noteId, forDay, tinkerContext.system.clock.now(), details, Some(AutomaticallyIntegrated))
     }
   }
 

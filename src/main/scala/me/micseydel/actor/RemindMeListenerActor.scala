@@ -69,7 +69,7 @@ object RemindMeListenerActor {
 
             val (thereWasAnUpdate, latestState) = state.integrate(reminder)
             if (thereWasAnUpdate) {
-              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), "reminder", Some(AutomaticallyIntegrated))
+              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, context.system.clock.now(), "reminder", Some(AutomaticallyIntegrated))
 
               context.actorContext.log.info(s"State updated! Writing to JSON and note")
               jsonRef.setState(latestState)

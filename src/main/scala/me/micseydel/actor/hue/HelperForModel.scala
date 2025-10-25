@@ -11,6 +11,7 @@ import me.micseydel.model.{LightState, WhisperModel}
 import me.micseydel.vault.NoteId
 import org.slf4j.Logger
 
+import java.time.LocalDate
 import scala.concurrent.duration.FiniteDuration
 
 
@@ -66,7 +67,7 @@ private[hue] object HelperForModel {
 
   //
 
-  def apply(noteId: NoteId, confidence: Double, deferred: LightState, supervisor: SpiritRef[HueListerHelperForNote.GoNoGo], timeout: FiniteDuration, whisperModel: WhisperModel)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
+  def apply(noteId: NoteId, confidence: Double, deferred: LightState, supervisor: SpiritRef[HueListerHelperForNote.GoNoGo], timeout: FiniteDuration, whisperModel: WhisperModel, forDay: LocalDate)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     implicit val c: TinkerClock = context.system.clock
 
@@ -102,7 +103,7 @@ private[hue] object HelperForModel {
     case class StateForModel(maybeReminder: Option[Vote], maybeKibble: Option[Vote]) extends State(maybeReminder, maybeKibble, whisperModel, updated)
 
     // !!! ideally would wait a bit, log then stop (to avoid dead letters)...
-    def behavior(state: State): Ability[Message] = Tinker.receiveMessage {
+    def behavior(state: State)(implicit forDay: LocalDate): Ability[Message] = Tinker.receiveMessage {
       case ReceiveVotes(votes) =>
         implicit val log: Logger = context.actorContext.log
         log.debug("Received {} votes", votes.size)
@@ -114,16 +115,16 @@ private[hue] object HelperForModel {
 
               case Some(decision) =>
                 timeKeeper !! TimeKeeper.Cancel(Timer)
-                supervisor !! HueListerHelperForNote.GoNoGo(noteId, whisperModel, decision, deferred)
+                supervisor !! HueListerHelperForNote.GoNoGo(noteId, forDay, whisperModel, decision, deferred)
                 Tinker.done
             }
         }
 
       case Timer =>
-        supervisor !! HueListerHelperForNote.GoNoGo(noteId, whisperModel, Right("timer ran out"), deferred)
+        supervisor !! HueListerHelperForNote.GoNoGo(noteId, forDay, whisperModel, Right("timer ran out"), deferred)
         Tinker.done
     }
 
-    behavior(StateForModel(None, None))
+    behavior(StateForModel(None, None))(forDay)
   }
 }

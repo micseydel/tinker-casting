@@ -20,7 +20,7 @@ object ChroniclerMOCDailyMarkdown {
     (message match {
       case AddNote(noteEntry) =>
         document.addEntry(noteEntry)
-      case ack@ListenerAcknowledgement(_, _, _, _) =>
+      case ack@ListenerAcknowledgement(_, _, _, _, _) =>
         document.addAcknowledgement(ack)
     }).toMarkdown
   }
@@ -276,188 +276,188 @@ object ChroniclerMOCDailyMarkdown {
   }
 
   // FIXME use?
-  private def addNote2String(an: AddNote, acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
-    an match {
-      case AddNote(TranscribedMobileNoteEntry(time, noteId, wordCount)) =>
-        val segments = noteId.heading(s"$LargeModel Segments")
-
-        // FIXME: this is closer to right!
-        val timeWithoutDate = TimeUtil.zonedDateTimeToTimeWithinDay24Hour(time)
-
-        val formattedWordCount = Some(wordCount)
-          .filter(_ > 0)
-          .map(c => s" ($c words)")
-          .getOrElse("")
-
-        val acknowledgements: List[ListenerAcknowledgement] = acksMap.getOrElse(noteId, Seq.empty).toList
-
-        // FIXME: revisit
-        val listItem = s"${segments.wikiLinkWithAlias(timeWithoutDate)}" + formattedWordCount
-
-        val allDetails: Seq[String] = acknowledgements.map {
-          case ListenerAcknowledgement(_, timeOfAck, details, setState) =>
-            MarkdownUtil.listLineWithTimestamp(timeOfAck, details)
-        }
-
-        // FIXME actionPrefix would be useful
-        MarkdownUtil.listLineWithTimestampAndRef(time, listItem, noteId, beforeTimestamp = actionPrefix(acknowledgements)) + (if (allDetails.nonEmpty) {
-          allDetails.mkString("\n    ", "\n    ", "")
-        } else {
-          ""
-        })
-    }
-  }
+//  private def addNote2String(an: AddNote, acksMap: Map[NoteId, Seq[ListenerAcknowledgement]]): String = {
+//    an match {
+//      case AddNote(TranscribedMobileNoteEntry(time, noteId, wordCount)) =>
+//        val segments = noteId.heading(s"$LargeModel Segments")
+//
+//        // FIXME: this is closer to right!
+//        val timeWithoutDate = TimeUtil.zonedDateTimeToTimeWithinDay24Hour(time)
+//
+//        val formattedWordCount = Some(wordCount)
+//          .filter(_ > 0)
+//          .map(c => s" ($c words)")
+//          .getOrElse("")
+//
+//        val acknowledgements: List[ListenerAcknowledgement] = acksMap.getOrElse(noteId, Seq.empty).toList
+//
+//        // FIXME: revisit
+//        val listItem = s"${segments.wikiLinkWithAlias(timeWithoutDate)}" + formattedWordCount
+//
+//        val allDetails: Seq[String] = acknowledgements.map {
+//          case ListenerAcknowledgement(_, timeOfAck, details, setState) =>
+//            MarkdownUtil.listLineWithTimestamp(timeOfAck, details)
+//        }
+//
+//        // FIXME actionPrefix would be useful
+//        MarkdownUtil.listLineWithTimestampAndRef(time, listItem, noteId, beforeTimestamp = actionPrefix(acknowledgements)) + (if (allDetails.nonEmpty) {
+//          allDetails.mkString("\n    ", "\n    ", "")
+//        } else {
+//          ""
+//        })
+//    }
+//  }
 
   private case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
 
   //
 
-  def main(args: Array[String]): Unit = {
-    val forDate = LocalDate.now()
-
-    val path = s"/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes ($forDate).md"
-    val markdown = FileSystemUtil.getPathContents(Path.of(path))
-
-    val originalDocument = parse(markdown, forDate)
-
-    implicit val l: Logger = new Logger {
-
-      override def getName: String = ???
-
-      override def isTraceEnabled: Boolean = ???
-
-      override def trace(msg: String): Unit = ???
-
-      override def trace(format: String, arg: Any): Unit = ???
-
-      override def trace(format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def trace(format: String, arguments: Any*): Unit = ???
-
-      override def trace(msg: String, t: Throwable): Unit = ???
-
-      override def isTraceEnabled(marker: Marker): Boolean = ???
-
-      override def trace(marker: Marker, msg: String): Unit = ???
-
-      override def trace(marker: Marker, format: String, arg: Any): Unit = ???
-
-      override def trace(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def trace(marker: Marker, format: String, argArray: Any*): Unit = ???
-
-      override def trace(marker: Marker, msg: String, t: Throwable): Unit = ???
-
-      override def isDebugEnabled: Boolean = ???
-
-      override def debug(msg: String): Unit = ???
-
-      override def debug(format: String, arg: Any): Unit = ???
-
-      override def debug(format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def debug(format: String, arguments: Any*): Unit = ???
-
-      override def debug(msg: String, t: Throwable): Unit = ???
-
-      override def isDebugEnabled(marker: Marker): Boolean = ???
-
-      override def debug(marker: Marker, msg: String): Unit = ???
-
-      override def debug(marker: Marker, format: String, arg: Any): Unit = ???
-
-      override def debug(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def debug(marker: Marker, format: String, arguments: Any*): Unit = ???
-
-      override def debug(marker: Marker, msg: String, t: Throwable): Unit = ???
-
-      override def isInfoEnabled: Boolean = ???
-
-      override def info(msg: String): Unit = ???
-
-      override def info(format: String, arg: Any): Unit = ???
-
-      override def info(format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def info(format: String, arguments: Any*): Unit = ???
-
-      override def info(msg: String, t: Throwable): Unit = ???
-
-      override def isInfoEnabled(marker: Marker): Boolean = ???
-
-      override def info(marker: Marker, msg: String): Unit = ???
-
-      override def info(marker: Marker, format: String, arg: Any): Unit = ???
-
-      override def info(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def info(marker: Marker, format: String, arguments: Any*): Unit = ???
-
-      override def info(marker: Marker, msg: String, t: Throwable): Unit = ???
-
-      override def isWarnEnabled: Boolean = ???
-
-      override def warn(msg: String): Unit = println(s"!!! $msg !!!")
-
-      override def warn(format: String, arg: Any): Unit = ???
-
-      override def warn(format: String, arguments: Any*): Unit = ???
-
-      override def warn(format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def warn(msg: String, t: Throwable): Unit = ???
-
-      override def isWarnEnabled(marker: Marker): Boolean = ???
-
-      override def warn(marker: Marker, msg: String): Unit = ???
-
-      override def warn(marker: Marker, format: String, arg: Any): Unit = ???
-
-      override def warn(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def warn(marker: Marker, format: String, arguments: Any*): Unit = ???
-
-      override def warn(marker: Marker, msg: String, t: Throwable): Unit = ???
-
-      override def isErrorEnabled: Boolean = ???
-
-      override def error(msg: String): Unit = ???
-
-      override def error(format: String, arg: Any): Unit = ???
-
-      override def error(format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def error(format: String, arguments: Any*): Unit = ???
-
-      override def error(msg: String, t: Throwable): Unit = ???
-
-      override def isErrorEnabled(marker: Marker): Boolean = ???
-
-      override def error(marker: Marker, msg: String): Unit = ???
-
-      override def error(marker: Marker, format: String, arg: Any): Unit = ???
-
-      override def error(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
-
-      override def error(marker: Marker, format: String, arguments: Any*): Unit = ???
-
-      override def error(marker: Marker, msg: String, t: Throwable): Unit = ???
-    }
-    val noteId = NoteId("Transcription for mobile_audio_capture_20251010-162620.wav")
-    val t = ZonedDateTime.of(forDate, LocalTime.of(23, 0, 0), ZoneId.systemDefault())
-    val ackTime = t.plusSeconds(20)
-    val document = originalDocument
-      .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
-      .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime.plusSeconds(20), "blah blah2", Some(AutomaticallyIntegrated)))
-      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
-//      .addAcknowledgement(ListenerAcknowledgement(NoteId("Transcription for mobile_audio_capture_20251014-184751.wav"), ackTime, "blah blah", None))
-
-    println(document)
-
-    println(document.toMarkdown)
-  }
+//  def main(args: Array[String]): Unit = {
+//    val forDate = LocalDate.now()
+//
+//    val path = s"/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/Transcribed mobile notes ($forDate).md"
+//    val markdown = FileSystemUtil.getPathContents(Path.of(path))
+//
+//    val originalDocument = parse(markdown, forDate)
+//
+//    implicit val l: Logger = new Logger {
+//
+//      override def getName: String = ???
+//
+//      override def isTraceEnabled: Boolean = ???
+//
+//      override def trace(msg: String): Unit = ???
+//
+//      override def trace(format: String, arg: Any): Unit = ???
+//
+//      override def trace(format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def trace(format: String, arguments: Any*): Unit = ???
+//
+//      override def trace(msg: String, t: Throwable): Unit = ???
+//
+//      override def isTraceEnabled(marker: Marker): Boolean = ???
+//
+//      override def trace(marker: Marker, msg: String): Unit = ???
+//
+//      override def trace(marker: Marker, format: String, arg: Any): Unit = ???
+//
+//      override def trace(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def trace(marker: Marker, format: String, argArray: Any*): Unit = ???
+//
+//      override def trace(marker: Marker, msg: String, t: Throwable): Unit = ???
+//
+//      override def isDebugEnabled: Boolean = ???
+//
+//      override def debug(msg: String): Unit = ???
+//
+//      override def debug(format: String, arg: Any): Unit = ???
+//
+//      override def debug(format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def debug(format: String, arguments: Any*): Unit = ???
+//
+//      override def debug(msg: String, t: Throwable): Unit = ???
+//
+//      override def isDebugEnabled(marker: Marker): Boolean = ???
+//
+//      override def debug(marker: Marker, msg: String): Unit = ???
+//
+//      override def debug(marker: Marker, format: String, arg: Any): Unit = ???
+//
+//      override def debug(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def debug(marker: Marker, format: String, arguments: Any*): Unit = ???
+//
+//      override def debug(marker: Marker, msg: String, t: Throwable): Unit = ???
+//
+//      override def isInfoEnabled: Boolean = ???
+//
+//      override def info(msg: String): Unit = ???
+//
+//      override def info(format: String, arg: Any): Unit = ???
+//
+//      override def info(format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def info(format: String, arguments: Any*): Unit = ???
+//
+//      override def info(msg: String, t: Throwable): Unit = ???
+//
+//      override def isInfoEnabled(marker: Marker): Boolean = ???
+//
+//      override def info(marker: Marker, msg: String): Unit = ???
+//
+//      override def info(marker: Marker, format: String, arg: Any): Unit = ???
+//
+//      override def info(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def info(marker: Marker, format: String, arguments: Any*): Unit = ???
+//
+//      override def info(marker: Marker, msg: String, t: Throwable): Unit = ???
+//
+//      override def isWarnEnabled: Boolean = ???
+//
+//      override def warn(msg: String): Unit = println(s"!!! $msg !!!")
+//
+//      override def warn(format: String, arg: Any): Unit = ???
+//
+//      override def warn(format: String, arguments: Any*): Unit = ???
+//
+//      override def warn(format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def warn(msg: String, t: Throwable): Unit = ???
+//
+//      override def isWarnEnabled(marker: Marker): Boolean = ???
+//
+//      override def warn(marker: Marker, msg: String): Unit = ???
+//
+//      override def warn(marker: Marker, format: String, arg: Any): Unit = ???
+//
+//      override def warn(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def warn(marker: Marker, format: String, arguments: Any*): Unit = ???
+//
+//      override def warn(marker: Marker, msg: String, t: Throwable): Unit = ???
+//
+//      override def isErrorEnabled: Boolean = ???
+//
+//      override def error(msg: String): Unit = ???
+//
+//      override def error(format: String, arg: Any): Unit = ???
+//
+//      override def error(format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def error(format: String, arguments: Any*): Unit = ???
+//
+//      override def error(msg: String, t: Throwable): Unit = ???
+//
+//      override def isErrorEnabled(marker: Marker): Boolean = ???
+//
+//      override def error(marker: Marker, msg: String): Unit = ???
+//
+//      override def error(marker: Marker, format: String, arg: Any): Unit = ???
+//
+//      override def error(marker: Marker, format: String, arg1: Any, arg2: Any): Unit = ???
+//
+//      override def error(marker: Marker, format: String, arguments: Any*): Unit = ???
+//
+//      override def error(marker: Marker, msg: String, t: Throwable): Unit = ???
+//    }
+//    val noteId = NoteId("Transcription for mobile_audio_capture_20251010-162620.wav")
+//    val t = ZonedDateTime.of(forDate, LocalTime.of(23, 0, 0), ZoneId.systemDefault())
+//    val ackTime = t.plusSeconds(20)
+//    val document = originalDocument
+//      .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
+//      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
+//      .addEntry(TranscribedMobileNoteEntry(t, noteId, -1))
+//      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", Some(AutomaticallyIntegrated)))
+//      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime.plusSeconds(20), "blah blah2", Some(AutomaticallyIntegrated)))
+//      .addAcknowledgement(ListenerAcknowledgement(noteId, ackTime, "blah blah", None))
+////      .addAcknowledgement(ListenerAcknowledgement(NoteId("Transcription for mobile_audio_capture_20251014-184751.wav"), ackTime, "blah blah", None))
+//
+//    println(document)
+//
+//    println(document.toMarkdown)
+//  }
 }

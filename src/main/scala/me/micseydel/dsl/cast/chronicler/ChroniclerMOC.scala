@@ -24,7 +24,7 @@ object ChroniclerMOC {
     //    override def key: String = time.toString // Common.zonedDateTimeToISO8601Date(time)
   }
 
-  case class ListenerAcknowledgement(noteRef: NoteId, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends Message {
+  case class ListenerAcknowledgement(noteRef: NoteId, forDay: LocalDate, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends Message {
     override def time: ZonedDateTime = timeOfAck
 
     //    override def key: String = s"${Common.zonedDateTimeToISO8601Date(time)}"
@@ -53,9 +53,9 @@ object ChroniclerMOC {
         case AddNote(noteEntry) =>
           context.actorContext.log.info(s"Forwarding AddNote ${noteEntry.ref}")
           ChroniclerMOCDailyNote.AddNote(noteEntry)
-        case ListenerAcknowledgement(noteRef, timeOfAck, details, setState) =>
+        case ListenerAcknowledgement(noteRef, forDay, timeOfAck, details, setState) =>
           context.actorContext.log.info(s"Forwarding ListenerAcknowledgement $noteRef")
-          ChroniclerMOCDailyNote.ListenerAcknowledgement(noteRef, timeOfAck, details, setState)
+          ChroniclerMOCDailyNote.ListenerAcknowledgement(noteRef, forDay, timeOfAck, details, setState)
       }
 
       implicit val c: TinkerContext[_] = context

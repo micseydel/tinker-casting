@@ -81,7 +81,7 @@ object CatTranscriptionListener {
         }
 
         if (!alreadyAcked.contains(noteId)) {
-          Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"Extracted cat message $pretty", Some(AutomaticallyIntegrated))
+          Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, context.system.clock.now(), s"Extracted cat message $pretty", Some(AutomaticallyIntegrated))
           behavior(catsHelper, dailyNotesAssistant, alreadyAcked + noteId)
         } else {
           event match {
@@ -149,7 +149,7 @@ object CatTranscriptionListener {
     }
 
     val allNoteFormatted: String = messages.distinctBy(_.rasaAnnotatedNotedTranscription.notedTranscription.noteId).flatMap {
-      case message@TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(_, captureTime), ref@NoteId(_)), _)) =>
+      case message@TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(_, captureTime), ref: NoteId), _)) =>
         messageToUnfilteredListLine(message) match {
           case Right(line) =>
             Some(MarkdownUtil.listLineWithTimestampAndRef(captureTime, line, ref))

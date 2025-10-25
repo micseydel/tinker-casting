@@ -40,7 +40,7 @@ object KibbleManagerListenerActor {
                     manager !! KibbleDiscarded(mass, captureTime, noteId, meta.model)
                     // FIXME: why does this get duplicated? with different times
                     if (meta.model == LargeModel) {
-                      Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble discarded"))
+                      Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, captureTime.toLocalDate, "kibble discarded"))
                     } else {
                       Ignored
                     }
@@ -55,7 +55,7 @@ object KibbleManagerListenerActor {
                           context.actorContext.log.info(s"Detected refill for $container of ${mass}g")
                           manager !! KibbleRefill(container, mass, captureTime, noteId, meta.model)
                           if (meta.model == LargeModel) {
-                            Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble refilled"))
+                            Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, captureTime.toLocalDate, "kibble refilled"))
                           } else {
                             Ignored
                           }
@@ -63,7 +63,7 @@ object KibbleManagerListenerActor {
                           context.actorContext.log.info(s"Detected measure for $container of ${mass}g")
                           manager !! RemainingKibbleMeasure(container, mass, captureTime, noteId, meta.model)
                           if (meta.model == LargeModel) {
-                            Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, "kibble measured"))
+                            Acknowledged(Chronicler.ListenerAcknowledgement.justIntegrated(noteId, captureTime.toLocalDate, "kibble measured"))
                           } else {
                             Ignored
                           }

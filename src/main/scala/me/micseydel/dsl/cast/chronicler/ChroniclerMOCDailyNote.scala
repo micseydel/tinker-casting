@@ -25,7 +25,7 @@ object ChroniclerMOCDailyNote {
     override def time: ZonedDateTime = noteEntry.time
   }
 
-  case class ListenerAcknowledgement(noteRef: NoteId, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends PostInitMessage {
+  case class ListenerAcknowledgement(noteRef: NoteId, forDay: LocalDate, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends PostInitMessage {
     override def time: ZonedDateTime = timeOfAck
   }
 

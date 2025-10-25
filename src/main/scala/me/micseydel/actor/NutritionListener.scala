@@ -48,7 +48,7 @@ object NutritionListener {
             Tinker.steadily
           case Some(when) =>
             context.actorContext.log.info(s"Setting [[last_ate]] to $when, notifying foodReminder and subscriber ${subscriber.path}")
-            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(m.noteId, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
+            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(m.noteId, m.capture.captureTime.toLocalDate, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
             subscriber !! LastAte(when)
             behavior(subscriber)(when)
         }
@@ -70,7 +70,7 @@ object NutritionListener {
           case Some(when) =>
             context.actorContext.log.info(s"Setting [[last_ate]] to $when (was $lastAte), notifying subscriber ${subscriber.path}")
             subscriber !! LastAte(when)
-            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(notedTranscription.noteId, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
+            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(notedTranscription.noteId, notedTranscription.capture.captureTime.toLocalDate, context.system.clock.now(), s"Marked $when as [[last_ate]]", Some(AutomaticallyIntegrated))
             behavior(subscriber)(when)
         }
 
