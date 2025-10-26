@@ -6,10 +6,9 @@ import me.micseydel.Common
 import me.micseydel.actor.AudioNoteCapturerHelpers.*
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent, Ping}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TypedMqtt}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor}
 import me.micseydel.model.WhisperResultJsonProtocol.*
 import me.micseydel.model.{BaseModel, LargeModel, TurboModel, WhisperResult}
 import me.micseydel.vault.VaultPath
@@ -185,7 +184,7 @@ object AudioNoteCapturer {
 }
 
 object AudioNoteCapturerHelpers {
-  case class AudioNoteCaptureProperties(audioWatchPath: Path, whisperLarge: Option[String], whisperBase: Option[String], whisperTurbo: Option[String])
+  case class AudioNoteCaptureProperties(audioWatchPath: Path)
 
   def fixWhisper(whisperResultEvent: WhisperResult): WhisperResult = {
     whisperResultEvent
@@ -200,10 +199,7 @@ object AudioNoteCapturerHelpers {
       noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
         for {
           audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
-          whisperLarge = properties.get("whisperLarge").map(_.asInstanceOf[String])
-          whisperBase = properties.get("whisperBase").map(_.asInstanceOf[String])
-          whisperTurbo = properties.get("whisperTurbo").map(_.asInstanceOf[String])
-        } yield AudioNoteCaptureProperties(audioWatchPath, whisperLarge, whisperBase, whisperTurbo)
+        } yield AudioNoteCaptureProperties(audioWatchPath)
       }
     }
 

@@ -31,6 +31,7 @@ object WhisperMqttActor {
 
     Tinker.receiveMessage {
       case Enqueue(vaultPath) =>
+        // FIXME: replace this with a lease for accessing the folder directly
         context.system.vaultKeeper !! VaultKeeper.RequestAttachmentContents(vaultPath, context.messageAdapter(ReceiveAttachment).underlying)
         Tinker.steadily
 
