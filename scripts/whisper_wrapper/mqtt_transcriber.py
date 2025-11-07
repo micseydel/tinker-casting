@@ -164,6 +164,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
             outgoing_message = data.encode()
             print_with_time(f"Publishing {len(outgoing_message)} bytes to mqtt now on {response_topic}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
             mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
+            # FIXME: retain the prior recipient, and say "hey I just finished the next thing so if you didn't get your thing you should have gotten it by now so ask me to resend it" (and store some prior JSON)
             status_code, message_n = mqtt_publish_result
             if status_code == 0:
                 if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
