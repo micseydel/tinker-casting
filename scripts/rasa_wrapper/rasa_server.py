@@ -36,9 +36,8 @@ def entity_extraction(model: str):
     elapsed = time.perf_counter() - start
     print(f"Rasa parsing took {elapsed:.1f}s")
 
-    # return jsonify({'rasa_result': result}), 200
-    print("Returning result:")
-    pprint(result)
+    # print("Returning result:")
+    # pprint(result)
     return jsonify(result), 200
 
 
@@ -52,10 +51,13 @@ if __name__ == '__main__':
     else:
         print("Loading Rasa now...")
 
-        cats_rasa_model = ModelWrapper("models/cats")
-        # cats_rasa_model_to_test = ModelWrapper("models/testing/cats")
-        lights_rasa_model = ModelWrapper("models/lights")
-        # lights_rasa_model_to_test = ModelWrapper("models/testing/lights")
+        #FIXME lazy quick hack to use one combined model (to save hundreds of megs of memory)
+        cats_rasa_model = lights_rasa_model = ModelWrapper("models")
+
+        # cats_rasa_model = ModelWrapper("models/cats")
+        # # cats_rasa_model_to_test = ModelWrapper("models/testing/cats")
+        # lights_rasa_model = ModelWrapper("models/lights")
+        # # lights_rasa_model_to_test = ModelWrapper("models/testing/lights")
 
         print(f"Starting Flask on port {port} with pid {os.getpid()}")
         app.run(
