@@ -11,6 +11,7 @@ object AppConfiguration {
     vaultRoot: VaultPath,
     mqttConfig: Option[MqttConfig],
     purpleAirReadAPIKey: Option[String],
+    tinkerbrainPort: Option[Int],
   )
 
   /**
@@ -39,7 +40,8 @@ object AppConfiguration {
         Validated.Valid(AppConfig(
           vaultRoot,
           maybeMqttConfig,
-          getOptionalString(config, "purpleAir.readAPIKey")
+          getOptionalString(config, "purpleAir.readAPIKey"),
+          getOptionalInt(config, "vault.tinkerbrainPort")
         ))
     }
   }
@@ -47,6 +49,15 @@ object AppConfiguration {
   private def getOptionalString(config: Config, key: String): Option[String] = {
     try {
       Some(config.getString(key))
+    } catch {
+      case _: ConfigException.Missing =>
+        None
+    }
+  }
+
+  private def getOptionalInt(config: Config, key: String): Option[Int] = {
+    try {
+      Some(config.getString(key).toInt)
     } catch {
       case _: ConfigException.Missing =>
         None

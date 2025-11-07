@@ -87,7 +87,7 @@ object TinkerBrain {
 
   // behaviors
 
-  def apply(jsonPath: Path, tinkerers: Map[ActorPath, Tinkerer[_]]): Behavior[Message] = Behaviors.setup { context =>
+  def apply(jsonPath: Path, tinkerers: Map[ActorPath, Tinkerer[_]], tinkerbrainPort: Option[Int]): Behavior[Message] = Behaviors.setup { context =>
     context.log.info(s"Starting persistence for message tracking")
 
     import TinkerBrainJsonProtocol.PersistedMessageJsonFormat
@@ -112,12 +112,12 @@ object TinkerBrain {
 
     val webSocketMessageActor: ActorRef[WebSocketMessageActor.Command] = context.spawn(WebSocketMessageActor(), "WebSocketMessageActor")
 
-    systemStarting(appendToJsonl, readJsonl, webSocketMessageActor, tinkerers)
+    systemStarting(appendToJsonl, readJsonl, webSocketMessageActor, tinkerers, tinkerbrainPort)
   }
 
   // states: starting / started
 
-  private def systemStarting(appendToJsonl: PersistedMessage => Unit, readJson: LocalDate => List[PersistedMessage], webSocketMessageActor: ActorRef[WebSocketMessageActor.Command], tinkerers: Map[ActorPath, Tinkerer[_]]): Behavior[Message] = Behaviors.receive { (context, message) =>
+  private def systemStarting(appendToJsonl: PersistedMessage => Unit, readJson: LocalDate => List[PersistedMessage], webSocketMessageActor: ActorRef[WebSocketMessageActor.Command], tinkerers: Map[ActorPath, Tinkerer[_]], tinkerbrainPort: Option[Int]): Behavior[Message] = Behaviors.receive { (context, message) =>
     context.log.debug(s"Received TinkerBrain message $message in systemStarting state")
 
     message match {
@@ -147,7 +147,8 @@ object TinkerBrain {
         val route = concat(
           WebSocketRouting.websocketRoute(context.self)
         )
-        startHttpServer(route, 5003)(context.system) // FIXME this port should NOT be hard-coded 😬
+        // FIXME
+        tinkerbrainPort.foreach(port => startHttpServer(route, 5003)(context.system))
 
         systemStarted(appendToJsonl, readJson, webSocketMessageActor, batcher, tinkerers)
 
@@ -168,7 +169,8 @@ object TinkerBrain {
       case RegisterTinkerer(actorPath, tinkerer) =>
         systemStarting(
           appendToJsonl, readJson, webSocketMessageActor,
-          tinkerers.updated(actorPath, tinkerer)
+          tinkerers.updated(actorPath, tinkerer),
+          tinkerbrainPort
         )
 
       case WriteNote(tinker) =>

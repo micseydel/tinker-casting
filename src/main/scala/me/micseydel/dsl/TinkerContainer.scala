@@ -25,7 +25,7 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 case class TinkerContainer(actorSystem: ActorSystem, tinkerCast: typed.ActorRef[RootTinkerBehavior.Message])
 
 object TinkerContainer {
-  def apply[CentralCast](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[NoOp.type]): TinkerContainer = {
+  def apply[CentralCast, M](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[M]): TinkerContainer = {
     implicit val httpExecutionContext: ExecutionContextExecutorService =
       ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(20))
 
@@ -66,7 +66,7 @@ object RootTinkerBehavior {
     val jsonPath = config.vaultRoot.resolve("json")
 
     // generally hidden, internal use only
-    val tinkerBrain: typed.ActorRef[TinkerBrain.Message] = context.spawn(TinkerBrain(jsonPath, Map.empty), "TinkerBrain")
+    val tinkerBrain: typed.ActorRef[TinkerBrain.Message] = context.spawn(TinkerBrain(jsonPath, Map.empty, config.tinkerbrainPort), "TinkerBrain")
 
     val vaultKeeper: typed.ActorRef[VaultKeeper.Message] = context.spawn(
       VaultKeeper(config.vaultRoot), "VaultKeeper",
@@ -173,7 +173,7 @@ object TypedMqtt {
 
 
 object TinkerOrchestrator {
-  def apply[CentralCast](centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[NoOp.type])(implicit Tinker: Tinker): Ability[NoOp.type] = Tinker.setup[NoOp.type] { context =>
+  def apply[CentralCast, M](centralCastFactory: (Tinker, TinkerContext[?]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[M])(implicit Tinker: Tinker): Ability[M] = Tinker.setup[M] { context =>
     val enhancedTinker: EnhancedTinker[CentralCast] = new EnhancedTinker[CentralCast](context.system, centralCastFactory(Tinker, context))
     userCast(enhancedTinker)
   }
