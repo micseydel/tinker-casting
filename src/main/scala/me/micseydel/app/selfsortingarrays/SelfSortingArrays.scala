@@ -6,8 +6,9 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
-import me.micseydel.app.selfsortingarrays.Cell.CellWrapper
+import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
+import me.micseydel.app.selfsortingarrays.cell.{CellWrapper, InsertionSortCell}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
@@ -63,7 +64,7 @@ object SelfSortingArrays {
 object Environment {
   sealed trait Message
 
-  private final case class ReceiveListContents(contents: NonEmptyList[Cell.CellWrapper]) extends Message
+  private final case class ReceiveListContents(contents: NonEmptyList[InsertionSortCellWrapper]) extends Message
 
   private final case class NotePing(ping: Ping) extends Message
 
@@ -83,17 +84,17 @@ object Environment {
     // this acts like the head of a linked list
     val cellWrapper = zipped.head match {
       case (cell_starting_index, filename, value) =>
-        CellWrapper(cell_starting_index, value, filename, context.cast(Cell(cell_starting_index, 0, filename, value, zipped.tail), filename.replace(" ", "_").replace("(", "").replace(")", "")))
+        CellWrapper(cell_starting_index, value, filename, context.cast(InsertionSortCell(cell_starting_index, 0, filename, value, zipped.tail), filename.replace(" ", "_").replace("(", "").replace(")", "")))
     }
 
     println("Requesting list contents")
-    cellWrapper !! Cell.GetDownstreamListContents(context.messageAdapter(ReceiveListContents))
+    cellWrapper !! InsertionSortCell.GetDownstreamListContents(context.messageAdapter(ReceiveListContents))
 
     implicit val nr: NoteRef = noteRef
     waitingForOriginalList(cellWrapper)
   }
 
-  private def waitingForOriginalList(listHead: CellWrapper)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def waitingForOriginalList(listHead: InsertionSortCellWrapper)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
       case ReceiveListContents(listContents) =>
@@ -115,7 +116,7 @@ object Environment {
     }
   }
 
-  private def waiting(listHead: CellWrapper)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def waiting(listHead: InsertionSortCellWrapper)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
       case ReceiveListContents(listContents) =>
@@ -131,7 +132,7 @@ object Environment {
       case NotePing(_) =>
         if (noteRef.checkBoxIsChecked()) {
           println("Starting sort request!")
-          listHead !! Cell.RequestSortedContents(context.messageAdapter(ReceiveListContents))
+          listHead !! InsertionSortCell.RequestSortedContents(context.messageAdapter(ReceiveListContents))
         }
         Tinker.steadily
     }
