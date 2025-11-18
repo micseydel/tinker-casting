@@ -44,14 +44,15 @@ class Transcriber:
             result = self.model.transcribe(filename, fp16=False, language='english')
             elapsed = time.perf_counter() - start
             return (elapsed, result)
+        except RuntimeError:
+            print_with_time("Transcription failed WEIRDLY for", filename, "did it exist?", os.path.isfile(filename))
+            traceback.print_exc()
+            return None
         except Exception:
             print_with_time("Transcription failed unexpectedly for", filename)
             traceback.print_exc()
             return None
-        except RuntimeError:
-            print_with_time("Transcription failed WEIRDLY for", filename)
-            traceback.print_exc()
-            return None
+
 
 
 class MqttManager:
