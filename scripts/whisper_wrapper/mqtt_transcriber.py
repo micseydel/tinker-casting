@@ -49,7 +49,7 @@ class Transcriber:
             traceback.print_exc()
             return None
         except Exception:
-            print_with_time("Transcription failed unexpectedly for", filename)
+            print_with_time("Transcription failed unexpectedly for", filename, os.path.isfile(filename))
             traceback.print_exc()
             return None
 
@@ -112,7 +112,7 @@ class MqttManager:
 
     def publish(self, topic, msg): return self.client.publish(topic, msg)
 
-    # FIXME why does this always seem to be False?
+    # FIXME why does this ALWAYS seem to be False?
     def is_connected(self): return self.client.is_connected()
 
     def reconnect(self): return self.client.reconnect()
@@ -131,6 +131,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
         print_with_time(f"Something went wrong starting the transcriber: {traceback.format_exc()}")
         return
 
+    prior_message = None
     while True:
         try:
             incoming_data = q.get()
@@ -169,10 +170,25 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
             status_code, message_n = mqtt_publish_result
             if status_code == 0:
                 if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
+                prior_message = (message_n, response_topic, outgoing_message)
             else:
-                print_with_time(f"Result #{message_n} failed publishing ({status_code}) (mqtt_manager.is_connected={mqtt_manager.is_connected()}), trying to reconnect now...")
+                if status_code == 7:
+                    if prior_message is None:
+                        print_with_time("Status code 7, but no prior message!")
+                    else:
+                        print_with_time(f"Result #{message_n} failed publishing to {response_topic} with status_code=7, will reconnect, then retry the PRIOR message then the current one")
+                else:
+                    print_with_time(f"Result #{message_n} failed publishing ({status_code}) (mqtt_manager.is_connected={mqtt_manager.is_connected()}), trying to reconnect now...")
+
                 mqtt_manager.reconnect()
-                print_with_time("Trying to re-publish now...")
+
+                if status_code == 7 and prior_message is not None:
+                    (prior_message_n, prior_response_topic, prior_outgoing_message) = prior_message
+                    print_with_time(f"Retrying prior message {prior_message_n} now, sending {len(prior_outgoing_message)} bytes to {prior_response_topic}")
+                    mqtt_publish_result = mqtt_manager.publish(prior_response_topic, prior_outgoing_message)
+                    print_with_time("FYI, the result was:", mqtt_publish_result)
+
+                print_with_time(f"Trying #{message_n} now...")
                 mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
                 print_with_time("FYI, the result was:", mqtt_publish_result)
         except:
