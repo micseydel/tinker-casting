@@ -44,7 +44,7 @@ object RecurringResponsibilityActor {
       l.debug("setting up")
 
       noteRef.getDocument() match {
-        case Success(d@Document(intervalDays, markedAsDone, _, maybeVoiceCompletion)) =>
+        case Success(d@Document(intervalDays, markedAsDone, _, maybeVoiceCompletion, nagDaily)) =>
           if (maybeVoiceCompletion.nonEmpty) {
             context.actorContext.log.info("Subscribing to Gossiper")
             Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(ReceiveTranscription))
@@ -68,7 +68,7 @@ object RecurringResponsibilityActor {
             }
           }
 
-          behavior(intervalDays, maybeVoiceCompletion)(Tinker, noteRef, timeKeeper, manager)
+          behavior(intervalDays, maybeVoiceCompletion, nagDaily)(Tinker, noteRef, timeKeeper, manager)
 
         case Failure(exception) =>
           context.actorContext.log.error("Something went wrong", exception)
@@ -76,7 +76,7 @@ object RecurringResponsibilityActor {
       }
     }
 
-  private def behavior(intervalDays: Int, maybeVoiceCompletion: Option[VoiceCompletion])(implicit Tinker: EnhancedTinker[MyCentralCast], noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(intervalDays: Int, maybeVoiceCompletion: Option[VoiceCompletion], nagDaily: Boolean)(implicit Tinker: EnhancedTinker[MyCentralCast], noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     implicit val c: TinkerClock = context.system.clock
     implicit val l: Logger = context.actorContext.log
@@ -89,7 +89,7 @@ object RecurringResponsibilityActor {
             Tinker.ignore
           case Failure(exception) => throw exception // FIXME
 
-          case Success(doc@Document(intervalDays, markedAsDone, _, _)) =>
+          case Success(doc@Document(intervalDays, markedAsDone, _, _, _)) =>
             val Today = context.system.clock.today()
             val result: Try[NoOp.type] = (markedAsDone, doc.latestEntry) match {
               case (false, None) =>
@@ -180,6 +180,7 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case TimerUp =>
+
         val notificationId: String = notificationIdForNoteId(noteRef.noteId)
         context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
 
@@ -192,7 +193,11 @@ object RecurringResponsibilityActor {
           None
         ))
 
-        // FIXME: reschedule to badger once a day? configure?
+        if (nagDaily) {
+          context.actorContext.log.info("Daily nagging configured, resetting timer for one day")
+          // FIXME: although probably not a bug here, I need better MIDNIGHT management (here, it'll just be a duplicate message)
+          timeKeeper !! TimeKeeper.RemindMeAt(context.system.clock.today().plusDays(1), context.self, TimerUp, Some(TimerUp))
+        }
 
         Tinker.steadily
     }
@@ -205,7 +210,7 @@ object RecurringResponsibilityActor {
       config.exists(sublist => sublist.forall(s => loweredText.contains(s)))
   }
 
-  case class Document(intervalDays: Int, markedAsDone: Boolean, itemsAfterDone: List[String], maybeVoiceCompletion: Option[VoiceCompletion]) {
+  case class Document(intervalDays: Int, markedAsDone: Boolean, itemsAfterDone: List[String], maybeVoiceCompletion: Option[VoiceCompletion], nagDaily: Boolean) {
     def latestEntry: Option[LocalDate] = {
       itemsAfterDone.headOption.flatMap(latest =>
         if (latest.contains(")]] ")) {
@@ -276,6 +281,7 @@ object RecurringResponsibilityActor {
         }
 
         val intervalDays = frontmatter("interval_days").asInstanceOf[Int]
+        val nag = frontmatter.get("nag_daily").map(_.asInstanceOf[Boolean])
 
         // ignore any lines that are indented (comments
         val lines = markdown.split("\n").filterNot(_.startsWith(" "))
@@ -287,7 +293,8 @@ object RecurringResponsibilityActor {
           intervalDays,
           markdown.startsWith("- [x]"),
           linesAfterDone.map(_.drop(2)), // drop the Markdown list characters
-          maybeVoiceCompletion
+          maybeVoiceCompletion,
+          nag.getOrElse(false)
         )
       }
     }
