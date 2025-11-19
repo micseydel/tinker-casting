@@ -55,7 +55,7 @@ private object AirGradientApiActor {
       case ReceiveFailedHttpResponse(exception, replyTo, remainingRetries) =>
         if (remainingRetries > 0) {
           exception match {
-            case _: java.net.UnknownHostException =>
+            case _: java.net.UnknownHostException | _: akka.stream.StreamTcpException =>
               context.actorContext.log.info(s"A common transient error has occurred, retrying (remainingRetries = ${remainingRetries - 1})", exception)
               makeRequest(host, replyTo, remainingRetries = remainingRetries - 1)
 
