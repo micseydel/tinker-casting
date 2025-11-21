@@ -324,6 +324,10 @@ object AirQualityDashboardActor {
       val updatedState = message match {
         case ReceiveAranetResults(results) =>
           results match {
+            case AranetActor.AranetFailure(throwable: akka.stream.StreamTcpException) =>
+              context.actorContext.log.warn(s"Something went wrong fetching aranet ($state); the exception was logged at DEBUG level")
+              context.actorContext.log.debug(s"Something went wrong fetching aranet ($state)", throwable)
+              state
             case AranetActor.AranetFailure(throwable) =>
               context.actorContext.log.warn(s"Something went wrong fetching aranet ($state)", throwable)
               state
