@@ -6,12 +6,18 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.DateTime
 import com.google.api.services.calendar.Calendar
 import com.google.api.services.calendar.model.Event
+import me.micseydel.NoOp
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.{Operator, Tinker, TinkerContext}
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.{Operator, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.vault.persistence.NoteRef
 
-import java.time.ZonedDateTime
+import java.time.{LocalDate, ZonedDateTime}
+import scala.concurrent.{ExecutionContextExecutorService, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.util.{Failure, Success, Try}
 
 object GoogleCalendarActor {
   sealed trait Message
@@ -19,23 +25,61 @@ object GoogleCalendarActor {
 
   private case class ItsMidnight(midnight: ZonedDateTime) extends Message
 
-  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  private case class ReceiveEventsResult(result: Try[List[Event]]) extends Message
+
+  private case class ReceivePing(ping: Ping) extends Message
+
+  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Google Calendar Tinkering", TinkerColor.random(), "🗓️", ReceivePing) { (context, noteRef) =>
     implicit val tc: TinkerContext[?] = context
+    implicit val ex: ExecutionContextExecutorService = context.system.httpExecutionContext
 
     val service: Calendar = TinkerGoogleCalendarService.createCalendarService(credential)
 
     context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
 
+    noteRef.setMarkdown("- [ ] Click to fetch today's calendar events\n") match {
+      case Failure(ex) => context.actorContext.log.error("failed to set markdown", ex)
+      case Success(NoOp) =>
+    }
+
     Tinker.receiveMessage {
       case ItsMidnight(midnight) =>
         context.actorContext.log.info(s"Detected midnight: $midnight")
-        val start = midnight
-        val end = start.plusDays(1)
-        val events = service.getTodaysEvents(
-          new DateTime(start.toInstant.toEpochMilli),
-          new DateTime(end.toInstant.toEpochMilli)
-        )
-        context.system.notifier !! NewNotification(Notification(midnight, s"There are ${events.size} Google Calendar events today", None, NotificationId("todayscalendar"), Nil))
+        context.pipeToSelf(Future(service.getDaysEvents(midnight)))(ReceiveEventsResult)
+        Tinker.steadily
+
+      case ReceiveEventsResult(result) =>
+        result match {
+          case Failure(exception) => context.actorContext.log.warn("Failed to get calendar", exception)
+          case Success(events) =>
+            if (events.isEmpty) {
+              context.actorContext.log.warn(s"No events!")
+            } else {
+              val details = events
+                .map { event =>
+                  event.toString // FIXME
+                }
+                .mkString("- ", "\n- ", "\n")
+              
+              noteRef.setMarkdown(s"- [ ] Click to fetch today's calendar events\n\n$details") match {
+                case Failure(ex) => context.actorContext.log.error("failed to set markdown", ex)
+                case Success(NoOp) =>
+              }
+
+              val msg = s"There are ${events.size} Google Calendar events today"
+              val now = context.system.clock.now()
+              context.system.notifier !! NewNotification(Notification(now, msg, None, NotificationId(s"todayscalendar-${now.toLocalDate}"), Nil))
+            }
+        }
+
+        Tinker.steadily
+
+      case ReceivePing(NoOp) =>
+        if (noteRef.checkBoxIsChecked()) {
+          val midnight = context.system.clock.now().withHour(0).withMinute(0)
+          context.pipeToSelf(Future(service.getDaysEvents(midnight)))(ReceiveEventsResult)
+        }
+
         Tinker.steadily
     }
   }
@@ -43,7 +87,7 @@ object GoogleCalendarActor {
   //
 
   private implicit class RichService(val service: Calendar) extends AnyVal {
-    def getTodaysEvents(from: DateTime, to: DateTime): List[Event] = {
+    def getEvents(from: DateTime, to: DateTime): List[Event] = {
       val events = service.events
         .list("primary")
         .setMaxResults(10)
@@ -56,6 +100,21 @@ object GoogleCalendarActor {
       val items = events.getItems
       items.asScala.toList
     }
+
+    def getDaysEvents(day: ZonedDateTime): List[Event] = {
+      service.getEvents(
+        new DateTime(day.toInstant.toEpochMilli),
+        new DateTime(day.plusDays(1).toInstant.toEpochMilli)
+      )
+    }
+  }
+
+  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def checkBoxIsChecked(): Boolean =
+      noteRef.readMarkdown().map(markdown => markdown.startsWith("- [x] ")) match {
+        case Failure(exception) => throw exception
+        case Success(result) => result
+      }
   }
 }
 
@@ -70,12 +129,12 @@ private object TinkerGoogleCalendarService {
       .build()
   }
 
-//  def getThem(service: Calendar): List[Event] = {
-//    val now = new DateTime(System.currentTimeMillis)
-//    val events = service.events.list("primary").setMaxResults(10).setTimeMin(now).setOrderBy("startTime").setSingleEvents(true).execute
-//    val items = events.getItems
-//    items.asScala.toList
-//  }
+  //  def getThem(service: Calendar): List[Event] = {
+  //    val now = new DateTime(System.currentTimeMillis)
+  //    val events = service.events.list("primary").setMaxResults(10).setTimeMin(now).setOrderBy("startTime").setSingleEvents(true).execute
+  //    val items = events.getItems
+  //    items.asScala.toList
+  //  }
 }
 
 
