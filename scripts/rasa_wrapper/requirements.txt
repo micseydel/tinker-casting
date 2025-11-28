@@ -1,3 +1,5 @@
+# REQUIRES Python 3.10 (>=3.11 DOES NOT WORK)
+
 setproctitle
 flask
 flask[async]
