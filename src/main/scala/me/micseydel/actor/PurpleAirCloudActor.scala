@@ -81,7 +81,7 @@ object PurpleAirCloudActor {
           batchResult.time
         )
 
-        noteRef.setMarkdown(s"- [ ] Do fetch\n    - Last generated ${context.system.clock.now()} with batch result server time (${batchResult.time}\n\n![[${noteRef.noteId.id} (${context.system.clock.today()})]]\n\n---\n\n" + batchResult.results.map {
+        val textDetails = batchResult.results.map {
           case SimplePurpleAirResult(index, pm25, pm25_10minute, pm25_30minute, pm25_60minute, pm25_6hour, pm25_24hour) =>
             val sensorIndexToLabel = sensors.map {
               case ConfigEntry(index, label) => index -> label
@@ -94,7 +94,22 @@ object PurpleAirCloudActor {
                |    - pm25_60minute: $pm25_60minute
                |    - pm25_6hour: $pm25_6hour
                |    - pm25_24hour: $pm25_24hour""".stripMargin
-        }.toList.mkString("\n")) match {
+        }.toList.mkString("\n")
+
+        noteRef.setMarkdown(
+          s"""# Button
+             |
+             |- [ ] Do fetch
+             |    - Last generated ${context.system.clock.now()} with batch result server time (${batchResult.time}
+             |
+             |# Charts
+             |
+             |![[${noteRef.noteId.id} (${context.system.clock.today()})]]
+             |
+             |# Text details
+             |
+             |$textDetails
+             |""".stripMargin) match {
           case Failure(exception) => throw exception
           case Success(NoOp) =>
         }
@@ -105,7 +120,9 @@ object PurpleAirCloudActor {
   //
 
   private object ReceiveApiResultJsonProtocol extends DefaultJsonProtocol {
+
     import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
+
     implicit val simplePurpleAirResultJsonFormat: JsonFormat[SimplePurpleAirResult] = jsonFormat7(SimplePurpleAirResult)
     implicit val nonEmptyNewSimplePurpleAirResultJsonFormat: JsonFormat[NonEmptyList[SimplePurpleAirResult]] = JsonUtil.nonEmptyListJsonFormat()
     implicit val purpleAirBatchResultJsonFormat: RootJsonFormat[PurpleAirBatchResult] = jsonFormat2(PurpleAirBatchResult)
@@ -180,7 +197,7 @@ object PurpleAirCloudActor {
 
     def checkBoxIsChecked(): Boolean =
       noteRef.readMarkdown()
-        .map(markdown => markdown.startsWith("- [x] ")) match {
+        .map(markdown => markdown.split("\n").drop(2).headOption.exists(_.startsWith("- [x] "))) match {
         case Failure(exception) => throw exception
         case Success(result) => result
       }

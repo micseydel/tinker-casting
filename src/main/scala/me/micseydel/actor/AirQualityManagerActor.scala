@@ -358,7 +358,8 @@ object AirQualityDashboardActor {
         case State(latestAranet, latestAirGradients, latestPurpleAir) =>
           val sections = List(vocs, allCo2, airQualityComparison, temp)
 
-          s"""- sections:
+          s"""- refresh PurpleAirCloudActor ![[PurpleAirCloudActor#Button]]
+             |- sections:
              |${sections.flatten.mkString("    - ", "\n    - ", "")}
              |- raw state
              |    - latestAranet=$latestAranet
