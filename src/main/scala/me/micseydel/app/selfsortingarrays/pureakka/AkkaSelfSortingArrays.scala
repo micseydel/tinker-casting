@@ -95,10 +95,10 @@ object AkkaCell {
     implicit val self: AkkaCellWrapper = AkkaCellWrapper(id, value, noteName, context.self)
     remaining match {
       case Nil =>
-        waiting(CellState(id, index, value, leftNeighbor, None))
+        waiting(CellState(index, leftNeighbor, None))
       case (nextId, nextNoteName, nextValue) :: tail =>
         val rightNeighbor = context.spawn(AkkaCell.setup(nextId, index+1, nextNoteName, nextValue, tail, leftNeighbor = Some(self)), nextNoteName.replace(" ", "_").replace("(", "").replace(")", ""))
-        waiting(CellState(id, index, value, leftNeighbor, Some(AkkaCellWrapper(nextId, nextValue, nextNoteName, rightNeighbor))))
+        waiting(CellState(index, leftNeighbor, Some(AkkaCellWrapper(nextId, nextValue, nextNoteName, rightNeighbor))))
     }
   }
 
@@ -154,12 +154,12 @@ object AkkaCell {
     case ReceiveSortedDownstream(downstream) =>
       val justNums = downstream.map(_.value).toList
       if (justNums != justNums.sorted) {
-        println(s"[awaitingSortedDownstream ${state.value}] downstream not sorted: $justNums")
+        println(s"[awaitingSortedDownstream ${self.value}] downstream not sorted: $justNums")
         ???
       }
 
-      if (state.value > downstream.head.value) {
-        findNewDownstreamNeighbors(state.value, downstream) match {
+      if (self.value > downstream.head.value) {
+        findNewDownstreamNeighbors(self.value, downstream) match {
           case (newLeft, updatedDownstream) =>
             // notify our old neighbors of their new neighbors
             // FIXME: unfortunately, there's a race-condition here: if Right doesn't get this message before propagation left reaches it (unlikely), it will send its result to SELF instead of Left
@@ -275,7 +275,7 @@ object AkkaCell {
 
   //
 
-  private case class CellState(id: Int, index: Int, value: Int, maybeLeftNeighbor: Option[AkkaCellWrapper], maybeRightNeighbor: Option[AkkaCellWrapper]) {
+  private case class CellState(index: Int, maybeLeftNeighbor: Option[AkkaCellWrapper], maybeRightNeighbor: Option[AkkaCellWrapper]) {
     def withUpdatedRight(newRight:  Option[AkkaCellWrapper]): CellState = this.copy(maybeRightNeighbor = newRight)
     def withUpdatedLeft(newLeft:  Option[AkkaCellWrapper]): CellState = this.copy(maybeLeftNeighbor = newLeft)
   }

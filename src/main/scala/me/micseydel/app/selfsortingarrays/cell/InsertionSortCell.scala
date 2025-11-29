@@ -14,14 +14,19 @@ import scala.util.{Failure, Success}
 
 // loosely inspired from https://github.com/Zhangtaining/cell_research/blob/main/modules/Cell.py
 // ...but with the actor model
-// note: this is not a tight data model, and ??? is used in various places to crash if a surprise happens
+// ??? is used in various places to crash if a surprise happens, but it may need to be replaced with Behaviors.same or Tinker.steadily if it's just a duplicate message and not a bug
 object InsertionSortCell {
-  
+
+  // use this to allow Obsidian to create an animation
+  private val SleepDurationMillis = 1000
+
   type InsertionSortCellWrapper = CellWrapper[Message]
 
   // inbox 📥
 
   sealed trait Message
+
+  final case class Initialize(leftNeighbor: Option[InsertionSortCellWrapper], rightNeighbor: Option[InsertionSortCellWrapper]) extends Message
 
   sealed trait MessageToRespondTo extends Message {
     def replyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]]
@@ -31,37 +36,50 @@ object InsertionSortCell {
 
   final case class RequestSortedContents(replyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]]) extends MessageToRespondTo
 
-  private case class NewNeighbor(leftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]],
-                                 retainSort: Boolean = false,
-                                 maybeExternalReplyTo: Option[SpiritRef[NonEmptyList[InsertionSortCellWrapper]]] = None
-                                ) extends Message
+  private sealed trait NeighborChange extends Message
 
-  private case class ReceiveSortedDownstream(sortedDownstream: NonEmptyList[InsertionSortCellWrapper]) extends Message
+  private case class NewRight(newRight: Option[InsertionSortCellWrapper]) extends NeighborChange
+
+  private case class NewLeft(newLeft: InsertionSortCellWrapper) extends NeighborChange
+
+  private case class NewReplyTo(newReplyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]]) extends NeighborChange
+
+  private sealed trait ReceiveAggregation extends Message {
+    def downstream: NonEmptyList[InsertionSortCellWrapper]
+  }
+
+  private case class ReceiveDownstream(downstream: NonEmptyList[InsertionSortCellWrapper]) extends ReceiveAggregation
+
+  private case class ReceiveSortedDownstream(downstream: NonEmptyList[InsertionSortCellWrapper]) extends ReceiveAggregation
 
   // behavior 😇
 
-  def apply(id: Int, index: Int, noteName: String, value: Int, remaining: List[(Int, String, Int)])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast]): Ability[Message] = {
-    setup(id, index, noteName, value, remaining, None)
+  def apply(id: Int, index: Int, noteName: String, value: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast]): Ability[Message] = {
+    initializing(id, index, noteName, value)
   }
 
-  private def setup(id: Int, index: Int, noteName: String, value: Int, remaining: List[(Int, String, Int)], leftNeighbor: Option[InsertionSortCellWrapper])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast]): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "📵") { (context, noteRef) =>
+  private def initializing(id: Int, index: Int, noteName: String, value: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast]): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "📵") { (context, noteRef) =>
     implicit val self: InsertionSortCellWrapper = CellWrapper(id, value, noteName, context.self)
     implicit val nr: NoteRef = noteRef
-    remaining match {
-      case Nil =>
-        waiting(CellState(id, index, value, leftNeighbor, None))
-      case (nextId, nextNoteName, nextValue) :: tail =>
-        val rightNeighbor = context.cast(InsertionSortCell.setup(nextId, index+1, nextNoteName, nextValue, tail, leftNeighbor = Some(self)), nextNoteName.replace(" ", "_").replace("(", "").replace(")", ""))
-        waiting(CellState(id, index, value, leftNeighbor, Some(CellWrapper(nextId, nextValue, nextNoteName, rightNeighbor))))
+    Tinker.receiveMessage {
+      case Initialize(leftNeighbor, maybeRightNeighbor) =>
+        maybeRightNeighbor match {
+          case Some(rightNeighbor) =>
+            waiting(InsertionCellStateForWaiting(index, leftNeighbor, rightNeighbor))
+          case None =>
+            sorted(InsertionCellStateForSorted(index, leftNeighbor, None, Nil))
+        }
+
+      case _ => ???
     }
   }
 
-  private def waiting(state: CellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = {
+  private def waiting(state: InsertionCellStateForWaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = {
     if (state.maybeLeftNeighbor.contains(self)) {
       throw new RuntimeException(s"${state.maybeLeftNeighbor} contains self!")
     }
-    if (state.maybeRightNeighbor.contains(self)) {
-      throw new RuntimeException(s"${state.maybeRightNeighbor} contains self!")
+    if (state.rightNeighbor == self) {
+      throw new RuntimeException(s"right neighbor is self!")
     }
 
     Tinker.setup { context =>
@@ -74,7 +92,7 @@ object InsertionSortCell {
            |---
            |- start index: ${state.index}
            |
-           |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| ${state.maybeRightNeighbor.map(_.noteName).map(s => s"[[$s]] ->").getOrElse("")}
+           |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| [[${state.rightNeighbor.noteName}]] ->
            |""".stripMargin) match {
         case Failure(exception) => throw exception
         case Success(NoOp) =>
@@ -82,71 +100,74 @@ object InsertionSortCell {
 
       Tinker.receiveMessage {
         case GetDownstreamListContents(replyTo) =>
-          state.maybeRightNeighbor match {
-            case None =>
-              replyTo !! NonEmptyList.of(self)
-              Tinker.steadily
-            case Some(rightNeighbor) =>
-              rightNeighbor !! GetDownstreamListContents(context.messageAdapter(ReceiveSortedDownstream))
-              awaitingAggregation(state, replyTo)
-          }
+          state.rightNeighbor !! GetDownstreamListContents(context.messageAdapter(ReceiveDownstream))
+          awaitingAggregation(InsertionCellStateForAwaitingAsHead(state.index, replyTo, state.maybeLeftNeighbor, state.rightNeighbor))
 
         case RequestSortedContents(replyTo) =>
-          state.maybeRightNeighbor match {
-            case None =>
-              replyTo !! NonEmptyList.of(self)
-              sorted(state, Nil)
-            case Some(rightNeighbor) =>
-              rightNeighbor !! RequestSortedContents(context.messageAdapter(ReceiveSortedDownstream))
-              awaitingSortedDownstream(state, Some(replyTo))
-          }
+          state.rightNeighbor !! RequestSortedContents(context.messageAdapter(ReceiveSortedDownstream))
+          awaitingSortedDownstream(InsertionCellStateForAwaitingAsHead(state.index, replyTo, state.maybeLeftNeighbor, state.rightNeighbor))
 
         case ReceiveSortedDownstream(sortedDownstream) =>
-          sorted(state.withUpdatedRight(Some(sortedDownstream.head)), sortedDownstream.toList)
+          sorted(InsertionCellStateForSorted(state.index, state.maybeLeftNeighbor, Some(sortedDownstream.head), sortedDownstream.toList))
 
-        case NewNeighbor(_, _, _) => ???
+        case _: Initialize | _: NeighborChange | _: ReceiveDownstream => ???
       }
     }
   }
 
-  private def awaitingAggregation(state: CellState, replyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def awaitingAggregation(state: InsertionCellStateForAwaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.userExtension.probe !! state.probe
+
+    val label: String = state match {
+      case InsertionCellStateForAwaitingAsHead(_, replyTo, _, _) => s"$replyTo"
+      case InsertionCellStateForAwaitingAsNONHead(_, _, _) => "(left)"
+    }
+
     noteRef.setRaw(
       s"""---
          |tags: [awaitingAggregation]
          |---
          |- start index: ${state.index}
-         |- replyTo: $replyTo
+         |- replyTo: $label
          |
-         |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| ${state.maybeRightNeighbor.map(_.noteName).map(s => s"[[$s]] ->").getOrElse("")}
+         |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| [[${state.rightNeighbor.noteName}]] ->
          |""".stripMargin) match {
       case Failure(exception) => throw exception
       case Success(NoOp) =>
     }
     Tinker.receiveMessage {
-      case ReceiveSortedDownstream(downstream) =>
-        replyTo !! downstream.prepend(self)
-        waiting(state)
+      case aggregation: ReceiveAggregation =>
+        state match {
+          case InsertionCellStateForAwaitingAsHead(_, replyTo, _, _) =>
+            replyTo !! aggregation.downstream.prepend(self)
+          case InsertionCellStateForAwaitingAsNONHead(_, leftNeighbor, _) =>
+            leftNeighbor !! ReceiveSortedDownstream(aggregation.downstream.prepend(self))
+        }
+        waiting(InsertionCellStateForWaiting(state.index, state.maybeLeftNeighbor, aggregation.downstream.head))
 
-      case GetDownstreamListContents(_) => ???
-      case RequestSortedContents(_) => ???
-      case NewNeighbor(_, _, _) => ???
+      case _: GetDownstreamListContents | _: RequestSortedContents | _: NeighborChange | _: Initialize => ???
     }
   }
 
-  private def awaitingSortedDownstream(state: CellState, maybeCallerReplyTo: Option[SpiritRef[NonEmptyList[InsertionSortCellWrapper]]])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def awaitingSortedDownstream(state: InsertionCellStateForAwaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.userExtension.probe !! state.probe
+
+    val secondLine = state match {
+      case InsertionCellStateForAwaitingAsHead(_, replyTo, _, _) => s"replyTo: $replyTo"
+      case InsertionCellStateForAwaitingAsNONHead(_, leftNeighbor, _) => s"leftNeighbor: $leftNeighbor"
+    }
 
     noteRef.setRaw(
       s"""---
          |tags: [awaitingSortedDownstream]
          |---
          |- start index: ${state.index}
-         |- maybeCallerReplyTo: $maybeCallerReplyTo
+         |- $secondLine
+         |- state type ${state.getClass}
          |
-         |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| ${state.maybeRightNeighbor.map(_.noteName).map(s => s"[[$s]] ->").getOrElse("")}
+         |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| [[${state.rightNeighbor.noteName}]] ->
          |""".stripMargin) match {
       case Failure(exception) => throw exception
       case Success(NoOp) =>
@@ -154,68 +175,68 @@ object InsertionSortCell {
 
     Tinker.receiveMessage {
       case ReceiveSortedDownstream(downstream) =>
-        Thread.sleep(1000) // FIXME: BAD BAD
-        val justNums = downstream.map(_.value).toList
-        if (justNums != justNums.sorted) {
-          println(s"[awaitingSortedDownstream ${state.value}] downstream not sorted: $justNums")
-          ???
-        }
+        Thread.sleep(SleepDurationMillis) // FIXME: gotta be a better way...
 
-        if (state.value > downstream.head.value) {
-          findNewDownstreamNeighbors(state.value, downstream) match {
+        if (self.value > downstream.head.value) {
+          findNewDownstreamNeighbors(self.value, downstream) match {
             case (newLeft, updatedDownstream) =>
-              // notify our old neighbors of their new neighbors
+              val updateForRightNeighbor = state match {
+                case InsertionCellStateForAwaitingAsHead(_, _, Some(leftNeighbor), _) =>
+                  NewLeft(leftNeighbor)
+                case InsertionCellStateForAwaitingAsHead(_, replyTo, None, _) =>
+                  NewReplyTo(replyTo)
+                case InsertionCellStateForAwaitingAsNONHead(_, leftNeighbor, _) =>
+                  NewLeft(leftNeighbor)
+              }
+
+              // notify our old neighbors of their new neighbors...
               // FIXME: unfortunately, there's a race-condition here: if Right doesn't get this message before propagation left reaches it (unlikely), it will send its result to SELF instead of Left
-              state.maybeRightNeighbor.foreach(_ !! NewNeighbor(Left(state.maybeLeftNeighbor), maybeExternalReplyTo = maybeCallerReplyTo))
-              state.maybeLeftNeighbor.foreach(_ !! NewNeighbor(Right(Some(state.maybeRightNeighbor.get)))) // FIXME: sloppy .get, but receiving this message means we should have a right neighbor so this creates a thrown exception if we need it
-              // notify our new neighbors - right is special, it will remain sorted
-              newLeft !! NewNeighbor(Right(Some(self)))
-              updatedDownstream.headOption.foreach(_ !! NewNeighbor(Left(Some(self)), retainSort = true))
+              state.rightNeighbor !! updateForRightNeighbor
+              state.maybeLeftNeighbor.foreach(_ !! NewRight(Some(state.rightNeighbor)))
+              newLeft !! NewRight(Some(self))
+              updatedDownstream.headOption.foreach(_ !! NewLeft(self))
 
               // now propagate the update toward the head
               newLeft !! ReceiveSortedDownstream(NonEmptyList(self, updatedDownstream))
 
-              sorted(
-                state
-                  .withUpdatedLeft(Some(newLeft))
-                  .withUpdatedRight(updatedDownstream.headOption),
-                updatedDownstream
-              )
+              sorted(InsertionCellStateForSorted(state.index, Some(newLeft), updatedDownstream.headOption, updatedDownstream))
           }
         } else {
-          maybeCallerReplyTo match {
-            case Some(replyTo) =>
+          state match {
+            case InsertionCellStateForAwaitingAsHead(_, replyTo, _, _) =>
               replyTo !! downstream.prepend(self)
-            case None =>
-              state.maybeLeftNeighbor match {
-                case None => ???
-                case Some(replyTo) =>
-                  replyTo !! ReceiveSortedDownstream(downstream.prepend(self))
-              }
+            case InsertionCellStateForAwaitingAsNONHead(_, leftNeighbor, _) =>
+              leftNeighbor !! ReceiveSortedDownstream(downstream.prepend(self))
           }
 
-          sorted(state, downstream.toList)
+          sorted(InsertionCellStateForSorted(state.index, state.maybeLeftNeighbor, Some(state.rightNeighbor), downstream.toList))
         }
 
-      case NewNeighbor(leftOrRight, retainSort, maybeExternalReplyTo) =>
-        if (retainSort) ???
-        val updatedState = leftOrRight match {
-          case Left(newLeft) => state.withUpdatedLeft(newLeft)
-          case Right(newRight) => state.withUpdatedRight(newRight)
-        }
-        if (maybeExternalReplyTo.nonEmpty) {
-          if (maybeCallerReplyTo.nonEmpty) ???
-          awaitingSortedDownstream(updatedState, maybeExternalReplyTo)
-        } else {
-          awaitingSortedDownstream(updatedState, maybeCallerReplyTo)
+      case newNeighbor: NeighborChange =>
+        newNeighbor match {
+          case NewRight(newRight) =>
+            newRight match {
+              case Some(rightNeighbor) =>
+                awaitingSortedDownstream(state match {
+                  case InsertionCellStateForAwaitingAsHead(index, replyTo, _, _) =>
+                    InsertionCellStateForAwaitingAsHead(index, replyTo, state.maybeLeftNeighbor, rightNeighbor)
+                  case InsertionCellStateForAwaitingAsNONHead(index, leftNeighbor, _) =>
+                    InsertionCellStateForAwaitingAsNONHead(index, leftNeighbor, rightNeighbor)
+                })
+              case None =>
+                sorted(InsertionCellStateForSorted(state.index, state.maybeLeftNeighbor, None, Nil))
+            }
+          case NewLeft(newLeft) =>
+            awaitingSortedDownstream(InsertionCellStateForAwaitingAsNONHead(state.index, newLeft, state.rightNeighbor))
+          case NewReplyTo(replyTo) =>
+            awaitingSortedDownstream(InsertionCellStateForAwaitingAsHead(state.index, replyTo, None, state.rightNeighbor))
         }
 
-      case GetDownstreamListContents(_) => ???
-      case RequestSortedContents(_) => ???
+      case _: Initialize | _: GetDownstreamListContents | _: RequestSortedContents | _: ReceiveDownstream => ???
     }
   }
 
-  private def sorted(state: CellState, sortedDownstream: List[InsertionSortCellWrapper])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def sorted(state: InsertionCellStateForSorted)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.userExtension.probe !! state.probe
 
@@ -223,8 +244,8 @@ object InsertionSortCell {
       s"""---
          |tags: [sorted]
          |---
-         |- start index: ${state.index}
-         |- sortedDownstream: ${sortedDownstream.map(_.value)}
+         |- start index: ${self.id}
+         |- sortedDownstream: ${state.sortedDownstream.map(_.value)}
          |
          |${state.maybeLeftNeighbor.map(_.noteName).map(s => s"<- [[$s]] ").getOrElse("")}| ${state.maybeRightNeighbor.map(_.noteName).map(s => s"[[$s]] ->").getOrElse("")}
          |""".stripMargin) match {
@@ -234,7 +255,7 @@ object InsertionSortCell {
 
     Tinker.receiveMessage {
       case message: MessageToRespondTo =>
-        message.replyTo !! NonEmptyList(self, sortedDownstream)
+        message.replyTo !! NonEmptyList(self, state.sortedDownstream)
         Tinker.steadily
 
       case ReceiveSortedDownstream(downstream) =>
@@ -243,34 +264,33 @@ object InsertionSortCell {
           leftNeighbor !! ReceiveSortedDownstream(downstream.prepend(self))
         }
 
-        sorted(state, downstream.toList)
+        sorted(state.copy(sortedDownstream = downstream.toList))
 
-      case NewNeighbor(newNeighbor, retainSort, maybeExternalReplyTo) =>
+      case newNeighbor: NeighborChange =>
         newNeighbor match {
-          case Left(None) =>
-            val updatedState = state.withUpdatedLeft(None)
-            if (retainSort) {
-              ???
-            } else {
-              awaitingSortedDownstream(updatedState, maybeExternalReplyTo)
-            }
-          case Left(leftNeighbor) =>
-            val updatedState = state.withUpdatedLeft(leftNeighbor)
-            if (retainSort) {
-              sorted(updatedState, sortedDownstream)
-            } else {
-              waiting(updatedState)
-            }
-          case Right(maybeRightNeighbor) =>
-            if (retainSort) ???
-            val updatedState = state.withUpdatedRight(maybeRightNeighbor)
-            maybeRightNeighbor match {
-              case None => sorted(updatedState, Nil)
+          case NewReplyTo(replyTo) =>
+            state.maybeRightNeighbor match {
               case Some(rightNeighbor) =>
-                rightNeighbor !! GetDownstreamListContents(context.messageAdapter(ReceiveSortedDownstream))
-                awaitingSortedDownstream(state.withUpdatedRight(maybeRightNeighbor), maybeExternalReplyTo)
+                awaitingSortedDownstream(InsertionCellStateForAwaitingAsHead(state.index, replyTo, None, rightNeighbor))
+              case None => sorted(InsertionCellStateForSorted(state.index, None, None, Nil))
             }
+
+          case NewLeft(newLeftNeighbor) =>
+            sorted(InsertionCellStateForSorted(state.index, Some(newLeftNeighbor), state.maybeRightNeighbor, state.sortedDownstream))
+
+          case NewRight(Some(newRightNeighbor)) =>
+            val updatedState = state.maybeLeftNeighbor match {
+              case Some(leftNeighbor) => InsertionCellStateForAwaitingAsNONHead(state.index, leftNeighbor, newRightNeighbor)
+              case None =>
+                ??? // this shouldn't happen because if the head was sorted, that SHOULD have meant the tail was sorted!
+            }
+            awaitingSortedDownstream(updatedState)
+
+          case NewRight(None) =>
+            sorted(InsertionCellStateForSorted(state.index, state.maybeLeftNeighbor, None, Nil))
         }
+
+      case _: Initialize | _: ReceiveDownstream => ???
     }
   }
 
@@ -282,7 +302,7 @@ object InsertionSortCell {
     def helper(remaining: NonEmptyList[InsertionSortCellWrapper]): (InsertionSortCellWrapper, List[InsertionSortCellWrapper]) = {
       remaining match {
         case NonEmptyList(justOne, Nil) => (justOne, Nil)
-        case NonEmptyList(maybeOurNewLeft, newDownstream @ maybeOurNewRight :: _) if maybeOurNewRight.value >= value =>
+        case NonEmptyList(maybeOurNewLeft, newDownstream@maybeOurNewRight :: _) if maybeOurNewRight.value >= value =>
           (maybeOurNewLeft, newDownstream)
         case NonEmptyList(_, head :: tail) =>
           helper(NonEmptyList(head, tail))
@@ -295,24 +315,53 @@ object InsertionSortCell {
 
   //
 
-  private case class CellState(id: Int, index: Int, value: Int, maybeLeftNeighbor: Option[InsertionSortCellWrapper], maybeRightNeighbor: Option[InsertionSortCellWrapper]) {
-    def withUpdatedRight(newRight:  Option[InsertionSortCellWrapper]): CellState = this.copy(maybeRightNeighbor = newRight)
-    def withUpdatedLeft(newLeft:  Option[InsertionSortCellWrapper]): CellState = this.copy(maybeLeftNeighbor = newLeft)
+  private sealed trait InsertionCellState {
+    def index: Int
 
-    def probe: Probe.RecordLatest = Probe.RecordLatest(
-      id = id,
-      filename = SelfSortingArrays.filename(id, value),
+    def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest
+  }
+
+  private case class InsertionCellStateForWaiting(index: Int, maybeLeftNeighbor: Option[InsertionSortCellWrapper], rightNeighbor: InsertionSortCellWrapper) extends InsertionCellState {
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
+      id = cw.id,
+      filename = SelfSortingArrays.filename(cw.id, cw.value),
+      maybeLeft = maybeLeftNeighbor.map(_.noteName),
+      maybeRight = Some(rightNeighbor.noteName)
+    )
+  }
+
+  private case class InsertionCellStateForSorted(index: Int, maybeLeftNeighbor: Option[InsertionSortCellWrapper], maybeRightNeighbor: Option[InsertionSortCellWrapper], sortedDownstream: List[InsertionSortCellWrapper]) extends InsertionCellState {
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
+      id = cw.id,
+      filename = SelfSortingArrays.filename(cw.id, cw.value),
       maybeLeft = maybeLeftNeighbor.map(_.noteName),
       maybeRight = maybeRightNeighbor.map(_.noteName)
     )
   }
 
-  // convenience, makes simple comparisons less async
+  private sealed trait InsertionCellStateForAwaiting extends InsertionCellState {
+    def rightNeighbor: InsertionSortCellWrapper
 
-//  // id is its starting index
-//  case class InsertSortCellWrapper(id: Int, value: Int, noteName: String, spiritRef: SpiritRef[InsertSortCell.Message]) {
-//    def !!(message: InsertSortCell.Message)(implicit tc: TinkerContext[?]): Unit = {
-//      spiritRef !! message
-//    }
-//  }
+    def maybeLeftNeighbor: Option[InsertionSortCellWrapper]
+  }
+
+  private case class InsertionCellStateForAwaitingAsHead(index: Int, replyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]], maybeLeftNeighbor: Option[InsertionSortCellWrapper], rightNeighbor: InsertionSortCellWrapper) extends InsertionCellStateForAwaiting {
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
+      id = cw.id,
+      filename = SelfSortingArrays.filename(cw.id, cw.value),
+      maybeLeft = None,
+      maybeRight = Some(rightNeighbor.noteName)
+    )
+  }
+
+  private case class InsertionCellStateForAwaitingAsNONHead(index: Int, leftNeighbor: InsertionSortCellWrapper, rightNeighbor: InsertionSortCellWrapper) extends InsertionCellStateForAwaiting {
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
+      id = cw.id,
+      filename = SelfSortingArrays.filename(cw.id, cw.value),
+      maybeLeft = None,
+      maybeRight = Some(rightNeighbor.noteName)
+    )
+
+    override def maybeLeftNeighbor: Option[InsertionSortCellWrapper] = Some(leftNeighbor)
+  }
 }

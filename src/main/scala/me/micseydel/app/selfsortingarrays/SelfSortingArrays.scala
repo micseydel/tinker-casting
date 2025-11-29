@@ -6,7 +6,7 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
+import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{Initialize, InsertionSortCellWrapper}
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
 import me.micseydel.app.selfsortingarrays.cell.{CellWrapper, InsertionSortCell}
 import me.micseydel.dsl.*
@@ -16,18 +16,14 @@ import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.ZonedDateTime
-import scala.annotation.unused
+import scala.annotation.{tailrec, unused}
 import scala.util.{Failure, Success}
 
 object SelfSortingArrays {
   // https://github.com/Zhangtaining/cell_research/blob/1fd2bd5921c1f6b423a71f691d5189106a8a1020/sorting_cells.py#L4
   //  private val VALUE_LIST = NonEmptyList.of(28, 34, 6, 20, 7, 89, 34, 18, 29, 51)
 
-  private val VALUE_LIST = NonEmptyList.of(
-    28, 34, 6, 20, 7,
-    89, // 18, 29, 34, 51
-    // works up to 34
-    34, 18, 29, 51)
+  private val VALUE_LIST = NonEmptyList.of(28, 34, 6, 20, 7, 89, 34, 18, 29, 51)
 
   def main(args: Array[String]): Unit = {
 
@@ -71,7 +67,6 @@ object Environment {
   def apply(valueList: NonEmptyList[Int])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast]): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NotePing]("Self Sorting Arrays Probe", TinkerColor.random(), "🐄", NotePing) { (context, noteRef) =>
     implicit val tc: TinkerContext[?] = context
 
-
     noteRef.setMarkdown(s"Initializing with $valueList") match {
       case Failure(exception) => throw exception
       case Success(_) =>
@@ -81,13 +76,32 @@ object Environment {
       (startIndex, SelfSortingArrays.filename(startIndex, int), int)
     }
 
-    // this acts like the head of a linked list
-    val cellWrapper = zipped.head match {
-      case (cell_starting_index, filename, value) =>
-        CellWrapper(cell_starting_index, value, filename, context.cast(InsertionSortCell(cell_starting_index, 0, filename, value, zipped.tail), filename.replace(" ", "_").replace("(", "").replace(")", "")))
+    val cells = zipped.map {
+      case (index, filename, value) =>
+        CellWrapper(
+          index,
+          value,
+          filename,
+          context.cast(InsertionSortCell(index, index, filename, value), filename.replace(" ", "_").replace("(", "").replace(")", ""))
+        )
     }
 
+    @tailrec
+    def finishInitializingCells(remaining: List[Option[InsertionSortCellWrapper]]): Unit = {
+      remaining match {
+        case left :: Some(cell) :: right :: _ =>
+          cell !! Initialize(left, right)
+          finishInitializingCells(remaining.tail)
+
+        case List(_, _) => // done!
+
+        case _ => ???
+      }
+    }
+    finishInitializingCells(None :: cells.toList.map(Some(_)) ::: List(None))
+
     println("Requesting list contents")
+    val cellWrapper = cells.head
     cellWrapper !! InsertionSortCell.GetDownstreamListContents(context.messageAdapter(ReceiveListContents))
 
     implicit val nr: NoteRef = noteRef
