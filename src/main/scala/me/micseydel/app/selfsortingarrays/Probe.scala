@@ -1,28 +1,90 @@
 package me.micseydel.app.selfsortingarrays
 
-import me.micseydel.dsl.Tinker
+import me.micseydel.NoOp
+import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{CellState, InsertionSortCellWrapper}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.CanvasJsonFormats.canvasDataFormat
-import me.micseydel.vault.{AllCanvasNodeData, CanvasData, CanvasEdgeData, CanvasFileData}
+import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.vault.{CanvasData, CanvasEdgeData, CanvasFileData}
 import spray.json.enrichAny
 
 import java.nio.file.Path
+import scala.util.{Failure, Success}
 
 object Probe {
   sealed trait Message
 
-  final case class RecordLatest(id: Int, filename: String, maybeLeft: Option[String], maybeRight: Option[String]) extends Message
+  final case class Register(id: Int, filename: String) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = behavior(Map.empty)
+  final case class UpdatedState(id: Int, cellState: CellState) extends Message
 
-  private def behavior(state: Map[Int, (Option[String], String, Option[String])])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  final case class MessageSend(senderId: Option[Int], recipientId: Int, msg: String) extends Message
+
+  final case class ClockTick(count: Int) extends Message
+
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Notable Events", TinkerColor.random(), "🎭") { (context, noteRef) =>
+    implicit val nr: NoteRef = noteRef
+    noteRef.setMarkdown("waiting to start...\n\n") match {
+      case Failure(exception) => throw exception
+      case Success(NoOp) =>
+    }
+    behavior(Map.empty)
+  }
+
+  private case class CellProbeState(filename: String, maybeLeft: Option[InsertionSortCellWrapper], maybeRight: Option[InsertionSortCellWrapper], index: Int)
+
+  private def behavior(state: Map[Int, CellProbeState])(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { conext =>
     Tinker.receiveMessage {
-      case RecordLatest(id, filename, maybeLeft, maybeRight) =>
-        val updatedState = state.updated(id, (maybeLeft, filename, maybeRight))
+      case Register(id, filename) =>
+        // FIXME: update markdown?
+        //  - create an "append if not already present" method?
+        val updatedState: Map[Int, CellProbeState] =
+          state.updated(id, CellProbeState(filename, maybeLeft = None, maybeRight = None, index = id))
+        behavior(updatedState)
 
-        val latestNodes = updatedState.toList.sortBy(_._1).zipWithIndex.map {
-          case ((_, (mayyybeLeft, noteName, mayyybeRight)), i) =>
+      case UpdatedState(id, CellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
+        state.get(id) match {
+          case Some(CellProbeState(_, None, None, oldIndex)) if newLeftNeighbor.isEmpty && newRightNeighbor.isEmpty && oldIndex == newIndex =>
+            noteRef.appendLine2(s"""- $id uninitialized""") match {
+              case Some(throwable) => throw throwable
+              case None =>
+            }
+            Tinker.steadily
+          case Some(oldCellState@CellProbeState(_, None, None, oldIndex)) if oldIndex == newIndex =>
+            val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
+            noteRef.appendLine2(s"""- $id initialized (${newLeftNeighbor.map(_.id).getOrElse("x")}, ${newRightNeighbor.map(_.id).getOrElse("x")})""") match {
+              case Some(throwable) => throw throwable
+              case None =>
+            }
+            behavior(state.updated(id, updatedState))
+          case Some(oldCellState@CellProbeState(_, oldLeft, oldRight, oldIndex)) =>
+            val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
+            noteRef.appendLine2(s"""- $id (${getOptionalInsertionSortCellWrapperIdOrX(oldLeft)}, ${getOptionalInsertionSortCellWrapperIdOrX(oldRight)}) -> (${newLeftNeighbor.map(_.id).getOrElse("x")}, ${newRightNeighbor.map(_.id).getOrElse("x")}); index $oldIndex -> $newIndex""") match {
+              case Some(throwable) => throw throwable
+              case None =>
+            }
+            behavior(state.updated(id, updatedState))
+          case None => ???
+        }
+      case MessageSend(senderId, recipientId, msg) =>
+        val sender = senderId.map(_.toString).getOrElse("env")
+        noteRef.appendLine2(s"- $sender->$recipientId: $msg") match {
+          case Some(throwable) => throw throwable
+          case None =>
+        }
+        Tinker.steadily
+
+      case ClockTick(count) =>
+        noteRef.appendLine2(s"\n- ClockTick($count)") match {
+          case Some(throwable) => throw throwable
+          case None =>
+        }
+
+        val latestNodes = state.toList.sortBy(_._2.index).zipWithIndex.map {
+          case ((_, CellProbeState(noteName, mayyybeLeft, mayyybeRight, index)), i) =>
             wrapCanvasFileData(400 * i, noteName) -> (mayyybeLeft, mayyybeRight)
         }
 
@@ -38,7 +100,7 @@ object Probe {
               appendCanvasEdgeData(
                 appendTo = edgesSoFar,
                 myNoteName = canvasNode.id,
-                maybeNeighborNoteName = maybeRight,
+                maybeNeighborNoteName = maybeRight.map(n => s"Cell ${n.id} (${n.value})"),
                 fromSide = fromSide,
                 toSide = toSide
               )
@@ -53,7 +115,7 @@ object Probe {
               appendCanvasEdgeData(
                 appendTo = withMaybeRight,
                 myNoteName = canvasNode.id,
-                maybeNeighborNoteName = maybeLeft,
+                maybeNeighborNoteName = maybeLeft.map(n => s"Cell ${n.id} (${n.value})"),
                 fromSide = fromSide,
                 toSide = toSide
               )
@@ -62,7 +124,7 @@ object Probe {
             withMaybeLeft
         }
 
-        val withMutualEdgesDeduped =  edges.groupBy {
+        val withMutualEdgesDeduped = edges.groupBy {
           case CanvasEdgeData(id, fromNode, fromSide, fromEnd, toNode, toSide, toEnd, color, label) =>
             List(fromNode, toNode).sorted.mkString("")
         }.map {
@@ -96,10 +158,11 @@ object Probe {
           Path.of("/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/self_sorting_arrays/Self Sorting Lists.canvas"),
           canvas.toJson.prettyPrint
         )
-
-        behavior(updatedState)
+        Tinker.steadily
     }
   }
+
+  //
 
   private def wrapCanvasFileData(
                                   //                    id: String,
@@ -131,10 +194,10 @@ object Probe {
                                     maybeNeighborNoteName: Option[String],
                                     //                                  id: String,
                                     //                                  fromNode: String,
-                                                                      fromSide: String,
+                                    fromSide: String,
                                     ////                                  fromEnd: Option[String],
                                     //                                  toNode: String,
-                                                                      toSide: String,
+                                    toSide: String,
                                     //                                  toEnd: Option[String],
                                     //                                  color: Option[String],
                                     //                                  label: Option[String]
@@ -161,4 +224,6 @@ object Probe {
         ) :: appendTo
     }
   }
+
+  def getOptionalInsertionSortCellWrapperIdOrX(t: Option[InsertionSortCellWrapper]): String = t.map(_.id.toString).getOrElse("x")
 }

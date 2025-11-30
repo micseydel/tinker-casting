@@ -34,6 +34,7 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
   }
 
   def appendLine(line: String): Option[Throwable] = appendOrOption(line + "\n")
+  def appendLine2(line: String): Option[Throwable] = appendOrOption(line)
 
   def setTo(note: Note): Try[Note] = {
     setRaw(note.raw).map(_ => note)

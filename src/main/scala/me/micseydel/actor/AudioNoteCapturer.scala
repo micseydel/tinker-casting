@@ -154,7 +154,7 @@ object AudioNoteCapturer {
                   if (removed) {
                     context.actorContext.log.info(s"Removed $transcriptionNoteName")
                   } else {
-                    context.actorContext.log.warn(s"Failed to remove $transcriptionNoteName")
+                    context.actorContext.log.debug(s"Failed to remove $transcriptionNoteName")
                   }
               }
             }

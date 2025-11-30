@@ -199,7 +199,7 @@ object NotificationCenterManager {
                 }
 
               case None =>
-                context.actorContext.log.warn(s"id $id was already completed or not recorded")
+                context.actorContext.log.debug(s"id $id was already completed or not recorded")
               case Some(Notification(_, _, _, _, _, None)) =>
                 context.actorContext.log.debug(s"No replyTo request for id $id")
             }
