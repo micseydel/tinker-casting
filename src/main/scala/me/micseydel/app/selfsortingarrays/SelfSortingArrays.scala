@@ -170,7 +170,7 @@ object Environment {
     Tinker.receiveMessage {
       case NotePing(_) => Tinker.steadily // ignore
       case ClockTick =>
-        noteRef.setMarkdown(s"clock tick: $count\n")
+        noteRef.setMarkdown(s"sorting $VALUE_LIST\n\nclock tick: $count\n")
         Tinker.userExtension.probe !! Probe.ClockTick(count)
         for (cell <- cells) {
           //          println(s"sending tick to ${cell.id}")
@@ -184,7 +184,6 @@ object Environment {
     def checkBoxIsChecked(): Boolean =
       noteRef.readMarkdown()
         .map(markdown => {
-          //          println(markdown)
           markdown.startsWith("- [x] ")
         }) match {
         case Failure(exception) => throw exception

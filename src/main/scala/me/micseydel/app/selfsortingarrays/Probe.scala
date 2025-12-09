@@ -82,6 +82,7 @@ object Probe {
         Tinker.steadily
 
       case ClockTick(count) =>
+        debugger !! SelfSortingArrayDebugger.ClockTick(count)
         noteRef.appendLine2(s"\n- ClockTick($count) ${currentOrder(state)}") match {
           case Some(throwable) => throw throwable
           case None =>
