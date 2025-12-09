@@ -194,7 +194,7 @@ object InsertionSortCell {
               // this means we moved right
               val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
               state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
-              println(s"!!! ${updatedState.terseTransition(state)}")
+//              println(s"!!! ${updatedState.terseTransition(state)}")
 //              StateMachine.swappingOrPassive(updatedState, state.maybeLeftNeighbor)
               updatedState.maybeRightNeighbor match {
                 case Some(rightNeighbor) if rightNeighbor.value < self.value =>
@@ -355,7 +355,7 @@ object InsertionSortCell {
           }
           state.maybeRightNeighbor.foreach(_ !~! NotifyOfSwap(Left(Some(oldLeftNeighbor)), self.id))
           oldLeftNeighbor !~! CompleteSwap(state.maybeRightNeighbor, self.id)
-          println(s"!!! ${updatedState.terseTransition(state)}")
+//          println(s"!!! ${updatedState.terseTransition(state)}")
           StateMachine.waitingOrSorted(updatedState)
       }
     }
@@ -365,7 +365,7 @@ object InsertionSortCell {
       replacementLeftOrRight match {
         case Left(newMaybeLeftNeighbor) =>
           val updatedState = state.copy(maybeLeftNeighbor = newMaybeLeftNeighbor)
-          println(s"!!! ${updatedState.terseTransition(state)}")
+//          println(s"!!! ${updatedState.terseTransition(state)}")
           StateMachine.waitingOrSorted(updatedState)
         // THIS IS ALLOWED TO TRIGGER DOWNSTREAM SORTING
         //          StateMachine.swappingOrPassive(updatedState, state.maybeLeftNeighbor)
@@ -382,7 +382,7 @@ object InsertionSortCell {
             ???
           }
           updatedState.sanityChecks()
-          println(s"!!! ${updatedState.terseTransition(state)}")
+//          println(s"!!! ${updatedState.terseTransition(state)}")
           //          StateMachine.waiting(updatedState)
           StateMachine.swappingOrPassive(updatedState, state.maybeLeftNeighbor)
       }
@@ -392,7 +392,7 @@ object InsertionSortCell {
       // this means we moved right
       val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
       state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
-      println(s"!!! ${updatedState.terseTransition(state)}")
+//      println(s"!!! ${updatedState.terseTransition(state)}")
       //      StateMachine.waitingOrSorted(updatedState) // FIXME
       StateMachine.swappingOrPassive(updatedState, state.maybeLeftNeighbor)
     }

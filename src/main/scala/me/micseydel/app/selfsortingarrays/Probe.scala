@@ -4,7 +4,7 @@ import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{CellState, InsertionSortCellWrapper}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.CanvasJsonFormats.canvasDataFormat
 import me.micseydel.vault.persistence.NoteRef
@@ -31,18 +31,20 @@ object Probe {
       case Failure(exception) => throw exception
       case Success(NoOp) =>
     }
+    implicit val debugger: SpiritRef[SelfSortingArrayDebugger.Message] = context.cast(SelfSortingArrayDebugger(), "SelfSortingArrayDebugger")
     behavior(Map.empty)
   }
 
-  private case class CellProbeState(filename: String, maybeLeft: Option[InsertionSortCellWrapper], maybeRight: Option[InsertionSortCellWrapper], index: Int)
+  case class CellProbeState(filename: String, maybeLeft: Option[InsertionSortCellWrapper], maybeRight: Option[InsertionSortCellWrapper], index: Int)
 
-  private def behavior(state: Map[Int, CellProbeState])(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { conext =>
+  private def behavior(state: Map[Int, CellProbeState])(implicit Tinker: Tinker, noteRef: NoteRef, debugger: SpiritRef[SelfSortingArrayDebugger.Message]): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
       case Register(id, filename) =>
-        // FIXME: update markdown?
-        //  - create an "append if not already present" method?
+        val probeState = CellProbeState(filename, maybeLeft = None, maybeRight = None, index = id)
         val updatedState: Map[Int, CellProbeState] =
-          state.updated(id, CellProbeState(filename, maybeLeft = None, maybeRight = None, index = id))
+          state.updated(id, probeState)
+        debugger !! SelfSortingArrayDebugger.UpdatedState(id, probeState)
         behavior(updatedState)
 
       case UpdatedState(id, CellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
@@ -55,6 +57,7 @@ object Probe {
             Tinker.steadily
           case Some(oldCellState@CellProbeState(_, None, None, oldIndex)) if oldIndex == newIndex =>
             val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
+            debugger !! SelfSortingArrayDebugger.UpdatedState(id, updatedState)
             noteRef.appendLine2(s"""- $id initialized (${newLeftNeighbor.map(_.id).getOrElse("x")}, ${newRightNeighbor.map(_.id).getOrElse("x")})""") match {
               case Some(throwable) => throw throwable
               case None =>
@@ -62,6 +65,7 @@ object Probe {
             behavior(state.updated(id, updatedState))
           case Some(oldCellState@CellProbeState(_, oldLeft, oldRight, oldIndex)) =>
             val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
+            debugger !! SelfSortingArrayDebugger.UpdatedState(id, updatedState)
             noteRef.appendLine2(s"""- $id (${getOptionalInsertionSortCellWrapperIdOrX(oldLeft)}, ${getOptionalInsertionSortCellWrapperIdOrX(oldRight)}) -> (${newLeftNeighbor.map(_.id).getOrElse("x")}, ${newRightNeighbor.map(_.id).getOrElse("x")}); index $oldIndex -> $newIndex""") match {
               case Some(throwable) => throw throwable
               case None =>
@@ -78,7 +82,7 @@ object Probe {
         Tinker.steadily
 
       case ClockTick(count) =>
-        noteRef.appendLine2(s"\n- ClockTick($count)") match {
+        noteRef.appendLine2(s"\n- ClockTick($count) ${currentOrder(state)}") match {
           case Some(throwable) => throw throwable
           case None =>
         }
@@ -226,4 +230,6 @@ object Probe {
   }
 
   def getOptionalInsertionSortCellWrapperIdOrX(t: Option[InsertionSortCellWrapper]): String = t.map(_.id.toString).getOrElse("x")
+
+  def currentOrder(state: Map[Int, CellProbeState]): List[Int] = state.toList.sortBy(_._2.index).map(_._1)
 }
