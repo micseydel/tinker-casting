@@ -32,7 +32,7 @@ object GmailExperimentActor {
         }.mkString("", "\n", "\n")
 
         val formattedHeaders = emails.map {
-          case GmailActor.Email(_, _, body, sentAt, headers) =>
+          case GmailActor.Email(sender, subject, body, sentAt, headers) =>
             val formattedHeaders = headers.map {
               case (key, List(justOne)) =>
                 if (justOne.length > 200) {
@@ -51,7 +51,9 @@ object GmailExperimentActor {
         }.mkString("", "\n", "\n")
 
         noteRef.setMarkdown(
-          s"""Fetched ${emails.size} emails at around ${ZonedDateTime.now()}
+          s"""![[Gmail Configuration]]
+             |
+             |Fetched ${emails.size} emails at around ${ZonedDateTime.now()}
              |
              |$formattedEmails
              |

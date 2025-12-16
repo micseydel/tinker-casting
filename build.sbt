@@ -37,6 +37,7 @@ lazy val additionalLibraryDependencies = Seq(
   "com.google.apis" % "google-api-services-calendar" % "v3-rev20250404-2.0.0",
   "com.fasterxml.jackson.core" % "jackson-databind" % "2.18.3",
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.18.3",
+  "com.google.apis" % "google-api-services-slides" % "v1-rev20250401-2.0.0",
 
   "org.dmfs" % "lib-recur" % "0.17.1",
   "net.jcazevedo" %% "moultingyaml" % "0.4.2",

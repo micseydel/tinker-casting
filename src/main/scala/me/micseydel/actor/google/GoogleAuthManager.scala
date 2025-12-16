@@ -10,9 +10,11 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.store.FileDataStoreFactory
 import com.google.api.services.calendar.CalendarScopes
+import com.google.api.services.slides.v1.SlidesScopes
 import me.micseydel.Common
 import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.GmailExperimentActor
+import me.micseydel.app.GoogleSlideUpdater
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}
@@ -40,11 +42,16 @@ object GoogleAuthManager {
   private def behavior(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     val gmail = context.cast(GmailExperimentActor(credential), "GmailExperimentActor")
     val calendar = context.cast(GoogleCalendarActor(credential), "GoogleCalendarActor")
+    val slides = context.cast(GoogleSlideUpdater(credential), "GoogleSlideUpdaterActorEXPERIMENT")
 
     // FIXME: swap the experiment actor above out so I can register with Operator here instead of in the actors
     //   then, update the auth code so that it refreshes automatically
     Tinker.ignore
   }
+
+  //
+
+  val GoogleApplicationName = "Tinker Casting"
 
   //
 
@@ -93,7 +100,8 @@ private object GmailAuth {
         CalendarScopes.CALENDAR_EVENTS_OWNED_READONLY,
         CalendarScopes.CALENDAR_EVENTS_PUBLIC_READONLY,
         CalendarScopes.CALENDAR_EVENTS_READONLY,
-        CalendarScopes.CALENDAR_SETTINGS_READONLY
+        CalendarScopes.CALENDAR_SETTINGS_READONLY,
+        SlidesScopes.PRESENTATIONS
       ).asJava
     ).setDataStoreFactory(new FileDataStoreFactory(new File(tokensDir)))
       .setAccessType("offline")

@@ -8,13 +8,14 @@ import com.google.api.services.calendar.Calendar
 import com.google.api.services.calendar.model.Event
 import me.micseydel.NoOp
 import me.micseydel.actor.FolderWatcherActor.Ping
+import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Operator, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.persistence.NoteRef
 
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.ZonedDateTime
 import scala.concurrent.{ExecutionContextExecutorService, Future}
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.{Failure, Success, Try}
@@ -125,7 +126,7 @@ private object TinkerGoogleCalendarService {
       GsonFactory.getDefaultInstance,
       credential
     )
-      .setApplicationName("Calendar Actor Service") // FIXME: APPLICATION_NAME
+      .setApplicationName(GoogleApplicationName)
       .build()
   }
 

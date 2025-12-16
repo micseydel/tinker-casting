@@ -12,6 +12,7 @@ import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
+import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
@@ -178,7 +179,7 @@ private object TinkerGmailService {
 
   def createGmailService(credential: Credential): Gmail = {
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
-      .setApplicationName("Gmail Actor Service") // FIXME: ApplicationName
+      .setApplicationName(GoogleApplicationName)
       .build()
   }
 

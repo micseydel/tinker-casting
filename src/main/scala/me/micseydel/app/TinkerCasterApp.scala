@@ -9,13 +9,12 @@ import me.micseydel.actor.kitties.CatsHelper
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.perimeter.HomeMonitorActor
-import me.micseydel.actor.tasks.{RecurringResponsibilityManager, TaskManager}
+import me.micseydel.actor.tasks.RecurringResponsibilityManager
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.cast.chronicler.Chronicler
-import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerConfig
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.VaultPath
 
@@ -106,6 +105,9 @@ object UserTinkerCast {
 
     @unused // driven internally
     val homeMonitor = context.spawn(HomeMonitorActor(purpleAirApiKey), "HomeMonitor")
+
+    @unused // driven internally by emails
+    val acaUpdater = context.cast(ACAUpdater(), "ACAUpdater")
 
     Tinker.receiveMessage {
       case NoOp =>
