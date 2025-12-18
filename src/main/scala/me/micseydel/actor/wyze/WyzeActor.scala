@@ -79,7 +79,7 @@ object WyzeActor {
 
         if (markdown.contains("[x] Refresh now")) {
           api !! WyzeAPIActor.GetDevices(context.messageAdapter(ReceiveDeviceList))
-          context.actorContext.log.warn("Refreshing devices, but FYI that the app must be restarted if the uri was changed")
+          context.actorContext.log.info("Refreshing devices, but FYI that the app must be restarted if the uri was changed")
           Tinker.steadily
         } else {
           val isOnMapFromDisk = markdown.split("\n")

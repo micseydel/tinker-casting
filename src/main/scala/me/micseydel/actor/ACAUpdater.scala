@@ -108,7 +108,7 @@ object ACAUpdater {
                   Replacement(config.replacements.body, body, fontSize = 14, italics = false),
                   Replacement(config.replacements.footer, footer, fontSize = 14, italics = true),
                 ))
-              case None => context.actorContext.log.warn(s"No matching emails out of ${emails.size}")
+              case None => context.actorContext.log.debug(s"No matching emails out of ${emails.size}")
             }
 
           case Validated.Invalid(e) =>
