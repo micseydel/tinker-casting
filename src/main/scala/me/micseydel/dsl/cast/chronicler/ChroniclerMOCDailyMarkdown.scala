@@ -16,7 +16,10 @@ import scala.annotation.tailrec
 object ChroniclerMOCDailyMarkdown {
 
   def updatedMarkdown(markdown: String, message: PostInitMessage)(implicit log: Logger): String = {
-    val document = parse(markdown, message.time.toLocalDate)
+    val document = parse(
+      markdown
+        .replace("~~~~", "~~") // FIXME: HACK HACK HACK (is this a code problem, or an Obsidian Sync problem?)
+      , message.time.toLocalDate)
     (message match {
       case AddNote(noteEntry) =>
         document.addEntry(noteEntry)
