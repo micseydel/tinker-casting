@@ -1,5 +1,6 @@
 package me.micseydel.app.selfsortingarrays
 
+import akka.actor.typed.DispatcherSelector
 import cats.data.{NonEmptyList, Validated}
 import me.micseydel.NoOp
 import me.micseydel.actor.FolderWatcherActor.Ping
@@ -81,13 +82,16 @@ object Environment {
       (startIndex, SelfSortingArrays.filename(startIndex, int), int)
     }
 
+    val dispatcher = DispatcherSelector.fromConfig("self-sorting-dispatcher") // use one thread
     val cells: NonEmptyList[CellWrapper[InsertionSortCell.Message]] = zipped.map {
       case (index, filename, value) =>
         CellWrapper(
           index,
           value,
           filename,
-          context.cast(InsertionSortCell(index, index, filename, value), filename.replace(" ", "_").replace("(", "").replace(")", ""))
+          context.cast(InsertionSortCell(index, index, filename, value), filename.replace(" ", "_").replace("(", "").replace(")", "")
+            , dispatcher
+          )
         )
     }
 

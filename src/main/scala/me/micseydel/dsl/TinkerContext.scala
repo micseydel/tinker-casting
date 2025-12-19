@@ -1,6 +1,6 @@
 package me.micseydel.dsl
 
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, Behavior, Props}
 import akka.actor.typed.scaladsl.ActorContext
 import me.micseydel.actor.perimeter.NtfyerActor
 import me.micseydel.dsl.Tinker.Ability
@@ -14,8 +14,9 @@ import scala.util.Try
 trait TinkerContext[T] {
   def cast[U](ability: Ability[U], name: String): SpiritRef[U]
 
-  def castAnonymous[U](ability: Ability[U]): SpiritRef[U]
+  def cast[U](ability: Ability[U], name: String, props: Props): SpiritRef[U]
 
+  def castAnonymous[U](ability: Ability[U]): SpiritRef[U]
 
   def self: SpiritRef[T]
 
@@ -42,6 +43,12 @@ class TinkerContextImpl[T](val actorContext: ActorContext[T], val system: Tinker
 
   def cast[U](ability: Ability[U], name: String): SpiritRef[U] = {
     val actorRef = actorContext.spawn(ability, name)
+    system.tinkerBrain ! TinkerBrain.SpiritCast(actorRef.path)
+    new SpiritRefImpl(actorRef, system.clock, system.tinkerBrain)
+  }
+
+  def cast[U](ability: Ability[U], name: String, props: Props): SpiritRef[U] = {
+    val actorRef = actorContext.spawn(ability, name, props)
     system.tinkerBrain ! TinkerBrain.SpiritCast(actorRef.path)
     new SpiritRefImpl(actorRef, system.clock, system.tinkerBrain)
   }

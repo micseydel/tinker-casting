@@ -1,6 +1,7 @@
 package me.micseydel.app.selfsortingarrays
 
 import me.micseydel.NoOp
+import me.micseydel.app.selfsortingarrays.SelfSortingArrayDebugger.Message
 import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{CellState, InsertionSortCellWrapper}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -24,6 +25,8 @@ object Probe {
   final case class MessageSend(senderId: Option[Int], recipientId: Int, msg: String) extends Message
 
   final case class ClockTick(count: Int) extends Message
+
+  final case class FoundABug(details: String) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Notable Events", TinkerColor.random(), "🎭") { (context, noteRef) =>
     implicit val nr: NoteRef = noteRef
@@ -163,6 +166,10 @@ object Probe {
           Path.of("/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/self_sorting_arrays/Self Sorting Lists.canvas"),
           canvas.toJson.prettyPrint
         )
+        Tinker.steadily
+
+      case FoundABug(details) =>
+        debugger !! SelfSortingArrayDebugger.FoundABug(details)
         Tinker.steadily
     }
   }
