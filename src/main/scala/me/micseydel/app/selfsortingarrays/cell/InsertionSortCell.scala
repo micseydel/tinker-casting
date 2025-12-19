@@ -105,18 +105,18 @@ object InsertionSortCell {
 
         override def doSort(): Ability[Message] = ???
 
-        override def beginSwap(priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] = ???
-
-        override def completeSwap(priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] = ???
-
-        override def notifyOfSwap(priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int): Ability[Message] = ???
-
         override def clockTick(count: Int): Ability[Message] = Tinker.steadily
+
+        override def beginSwap(state: CellState, priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[_], probe: SpiritRef[Probe.Message]): Ability[Message] = ???
+
+        override def completeSwap(state: CellState, priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[_], probe: SpiritRef[Probe.Message]): Ability[Message] = ???
+
+        override def notifyOfSwap(state: CellState, priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[_], probe: SpiritRef[Probe.Message]): Ability[Message] = ???
       })
 
     def waiting(priorState: Option[CellState], state: CellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] =
       stateMachine("waiting")(priorState, state) {
-        class WaitingBehavior extends CellBehaviors with Initialized {
+        class WaitingBehavior extends CellBehaviors with Initialized with DefaultOnCompleteSwap with DefaultBehavior {
           override def doSort(): Ability[Message] =
             state.maybeRightNeighbor match {
               case Some(rightNeighbor) =>
@@ -129,15 +129,6 @@ object InsertionSortCell {
               case None =>
                 StateMachine.waitingOrSorted(priorState, state)
             }
-
-          override def beginSwap(priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] =
-            Experimentation.beginSwap(priorState, state)(newLeft, originator)
-
-          override def completeSwap(priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] =
-            Experimentation.completeSwap(priorState, state)(newRight)
-
-          override def notifyOfSwap(priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int): Ability[Message] =
-            Experimentation.notifyOfSwap(priorState, state)(replacementLeftOrRight, originator)
 
           override def clockTick(count: Int): Ability[Message] = Tinker.steadily
         }
@@ -165,16 +156,11 @@ object InsertionSortCell {
         Behaviors.withStash(10) { stash =>
           Tinker.receiveMessage {
             case ClockTick(count) =>
-//              println(s"[waitingForClockTick ${self.id}] tick $count, unstashing ${stash.size}")
               stash.unstashAll(newAbility)
 
             case other =>
               stash.stash(other)
               Tinker.steadily
-
-            //            case Initialize(leftNeighbor, rightNeighbor) => ???
-            //            case DoSort => ???
-            //            case protocol: SwapProtocol => ???
           }
         }
 
@@ -185,20 +171,19 @@ object InsertionSortCell {
       Tinker.setup { _ =>
         state.maybeRightNeighbor.foreach(_ !~! BeginSwap(oldLeftNeighbor, self.id))
         stateMachine("swappingRight")(priorState, state) {
-          class SwappingRightBehavior extends CellBehaviors with Initialized with DoesNotSort {
-            override def beginSwap(priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] =
+          class SwappingRightBehavior extends CellBehaviors with Initialized with DoesNotSort with DefaultBehavior {
+            override def beginSwap(state: CellState, priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] =
               throw InvariantViolation(s"[swappingRight ${self.id}] unexpected message from $originator: newLeft=$newLeft")
 
-            override def completeSwap(priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] = {
-              // FIXME: when transitioning to waiting, need to tell it to sort
-//              Experimentation.completeSwap(state)(newRight, originator)
+            override def completeSwap(state: CellState, priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
               // this means we moved right
               val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
               state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
+              /// expansion-for-tinkering of:
 //              StateMachine.swappingOrPassive(updatedState, state.maybeLeftNeighbor)
               updatedState.maybeRightNeighbor match {
                 case Some(rightNeighbor) if rightNeighbor.value < self.value =>
-                  StateMachine.swappingRight(priorState, updatedState, state.maybeLeftNeighbor) // FIXME: this looks wrong? maybe not?
+                  StateMachine.swappingRight(priorState, updatedState, state.maybeLeftNeighbor)
                 case Some(_) | None =>
 
 //                  StateMachine.waitingOrSorted(updatedState)
@@ -216,9 +201,6 @@ object InsertionSortCell {
               }
             }
 
-            override def notifyOfSwap(priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int): Ability[Message] =
-              Experimentation.notifyOfSwap(priorState, state)(replacementLeftOrRight, originator)
-
             override def clockTick(count: Int): Ability[Message] = Tinker.steadily
           }
           new SwappingRightBehavior()
@@ -226,21 +208,16 @@ object InsertionSortCell {
       })
 
     def sorted(priorState: Option[CellState], state: CellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] =
-      stateMachine("sorted")(priorState, state) {
-        class SortedBehavior extends CellBehaviors with Initialized with DoesNotSort {
-          override def beginSwap(priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] =
-            Experimentation.beginSwap(priorState, state)(newLeft, originator)
 
-          override def notifyOfSwap(priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int): Ability[Message] = {
-            Experimentation.notifyOfSwap(priorState, state)(replacementLeftOrRight, originator)
+      Tinker.setup { context =>
+        // FIXME: experiment- should this tell downstream to start sorting itself?
+
+        stateMachine("sorted")(priorState, state) {
+          class SortedBehavior extends CellBehaviors with Initialized with DoesNotSort with DefaultBehavior with DefaultOnCompleteSwap {
+            override def clockTick(count: Int): Ability[Message] = Tinker.steadily
           }
-
-          override def completeSwap(priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int): Ability[Message] =
-            Experimentation.completeSwap(priorState, state)(newRight)
-
-          override def clockTick(count: Int): Ability[Message] = Tinker.steadily
+          new SortedBehavior()
         }
-        new SortedBehavior()
       }
 
     def waitingOrSorted(priorState: Option[CellState], state: CellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
@@ -265,7 +242,7 @@ object InsertionSortCell {
     private def stateMachine(tag: String)(priorState: Option[CellState], state: CellState)(behaviors: CellBehaviors)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = {
       Tinker.setup { context =>
         implicit val tc: TinkerContext[?] = context
-        state.sanityChecks(priorState) // FIXME: is this ok here?
+        state.sanityChecks(priorState)
         Tinker.userExtension.probe !! state.probe
 
         noteRef.setRaw(
@@ -287,14 +264,14 @@ object InsertionSortCell {
   }
 
   private abstract class CellBehaviors {
-    def ability(priorState: Option[CellState], state: CellState)(message: Message): Ability[Message] = (message match {
+    def ability(priorState: Option[CellState], state: CellState)(message: Message)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = (message match {
       case Initialize(leftNeighbor, rightNeighbor) => initialize(leftNeighbor, rightNeighbor)
       case DoSort => doSort()
       case protocol: SwapProtocol =>
         protocol match {
-          case BeginSwap(newLeft, originator) => beginSwap(priorState, newLeft, originator)
-          case CompleteSwap(newRight, originator) => completeSwap(priorState, newRight, originator)
-          case NotifyOfSwap(replacementLeftOrRight, originator) => notifyOfSwap(priorState, replacementLeftOrRight, originator)
+          case BeginSwap(newLeft, originator) => beginSwap(state, priorState, newLeft, originator)
+          case CompleteSwap(newRight, originator) => completeSwap(state, priorState, newRight, originator)
+          case NotifyOfSwap(replacementLeftOrRight, originator) => notifyOfSwap(state, priorState, replacementLeftOrRight, originator)
         }
 
       case ClockTick(count) => clockTick(count)
@@ -304,11 +281,11 @@ object InsertionSortCell {
 
     def doSort(): Ability[Message]
 
-    def beginSwap(priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int): Ability[Message]
+    def beginSwap(state: CellState, priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message]
 
-    def completeSwap(priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int): Ability[Message]
+    def completeSwap(state: CellState, priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message]
 
-    def notifyOfSwap(priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int): Ability[Message]
+    def notifyOfSwap(state: CellState, priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message]
 
     def clockTick(count: Int): Ability[Message]
   }
@@ -325,10 +302,19 @@ object InsertionSortCell {
       throw InvariantViolation(s"state does not support sorting")
   }
 
-  // consistent?
+  private trait DefaultOnCompleteSwap {
+    def completeSwap(state: CellState, priorState: Option[CellState], newRight: Option[InsertionSortCellWrapper], originator: Int)
+                    (implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
+      // this means we moved right
+      val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
+      state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
+      //      StateMachine.waitingOrSorted(updatedState) // FIXME
+      StateMachine.swappingOrPassive(Some(state), updatedState, state.maybeLeftNeighbor)
+    }
+  }
 
-  object Experimentation {
-    def beginSwap(priorState: Option[CellState], state: CellState)(newLeft: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
+  private trait DefaultBehavior {
+    def beginSwap(state: CellState, priorState: Option[CellState], newLeft: Option[InsertionSortCellWrapper], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[_], probe: SpiritRef[Probe.Message]): Ability[Message] = {
       state.sanityChecks(priorState)
       // our left neighbor is trying to swap with THIS; it's moving right, THIS is moving left
       // - THIS is receiving a replacement (or None) left neighbor
@@ -361,7 +347,8 @@ object InsertionSortCell {
       }
     }
 
-    def notifyOfSwap(priorState: Option[CellState], state: CellState)(replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
+    def notifyOfSwap(state: CellState, priorState: Option[CellState], replacementLeftOrRight: Either[Option[InsertionSortCellWrapper], Option[InsertionSortCellWrapper]], originator: Int)
+                    (implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
       state.sanityChecks(priorState)
       replacementLeftOrRight match {
         case Left(newMaybeLeftNeighbor) =>
@@ -385,14 +372,6 @@ object InsertionSortCell {
           //          StateMachine.waiting(updatedState)
           StateMachine.swappingOrPassive(priorState, updatedState, state.maybeLeftNeighbor)
       }
-    }
-
-    def completeSwap(priorState: Option[CellState], state: CellState)(newRight: Option[InsertionSortCellWrapper])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
-      // this means we moved right
-      val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
-      state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
-      //      StateMachine.waitingOrSorted(updatedState) // FIXME
-      StateMachine.swappingOrPassive(Some(state), updatedState, state.maybeLeftNeighbor)
     }
   }
 }
