@@ -189,7 +189,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
                     print_with_time("FYI, the result was:", mqtt_publish_result)
 
                 print_with_time(f"Trying #{message_n} now...")
-                mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
+                status_code, message_n = mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
                 print_with_time("FYI, the result was:", mqtt_publish_result)
         except:
             print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
