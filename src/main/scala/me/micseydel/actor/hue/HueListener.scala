@@ -82,7 +82,7 @@ object HueListener {
         // FIXME: check expiry first?
         val isStale = TimeUtil.timeSince(capturedTime).toMinutes > IgnoredMinutesAgo
         if (isStale) {
-          log.warn(s"Ignored $noteId because it was more than $IgnoredMinutesAgo minutes ago, even though it was a valid light-changing request")
+          log.info(s"Ignored $noteId because it was more than $IgnoredMinutesAgo minutes ago, even though it was a valid light-changing request")
           context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Warning(Material)), Some(("isstale", 1)))
           Tinker.steadily
         } else {
