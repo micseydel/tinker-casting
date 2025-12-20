@@ -16,7 +16,7 @@ object SelfSortingArrayDebugger {
 
   final case class UpdatedState(id: Int, probe: CellProbeState) extends Message
   final case class ClockTick(count: Int) extends Message
-  // FIXME: MessageSend
+  final case class MessageSend(senderId: Option[Int], recipientId: Int, msg: String) extends Message // FIXME: MessageSend
   final case class FoundABug(details: String) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("SelfSortingArrayDebugger", TinkerColor.random(), "🐜") { (context, noteRef) =>
@@ -25,10 +25,10 @@ object SelfSortingArrayDebugger {
       case Failure(exception) => throw exception
       case Success(NoOp) =>
     }
-    behavior(Map.empty)
+    behavior(Map.empty, Nil)
   }
 
-  private def behavior(state: Map[Int, CellProbeState])(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+  private def behavior(state: Map[Int, CellProbeState], bufferedMessages: List[MessageSend])(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     Tinker.receiveMessage {
       case UpdatedState(id, newProbe) =>
         state.get(id).foreach {
@@ -38,26 +38,58 @@ object SelfSortingArrayDebugger {
             }
           case _ => // ignore
         }
-        behavior(state.updated(id, newProbe))
+        behavior(state.updated(id, newProbe), bufferedMessages)
 
       case ClockTick(count) =>
-        val currentOrder: List[Int] = state.toList.sortBy(_._2.index).map(_._1)
+        val orderedByCurrentIndex: List[(Int, CellProbeState)] = state.toList.sortBy(_._2.index)
+        val currentOrder: List[Int] = orderedByCurrentIndex.map(_._1)
+
+        val sequenceDiagram = mermaidSequenceDiagram(orderedByCurrentIndex, bufferedMessages.reverse)
+
         ORACLE.drop(count).headOption match {
           case Some(ClockTickExpectation(currentOracle, expectedMessage)) =>
             if (currentOrder == currentOracle) {
-              noteRef.appendLine2(s"- ⏰($count) ✅").foreach(throw _)
+              noteRef.appendLine2(s"\n\n$sequenceDiagram\n\n- ⏰($count) ✅").foreach(throw _)
             } else {
-              noteRef.appendLine2(s"""- ⏰($count) ${currentOrder.mkString("\\[", ", ", "]")} (❌should have been ${currentOracle.mkString("\\[", ", ", "]")})""").foreach(throw _)
+              noteRef.appendLine2(s"""\n\n$sequenceDiagram\n\n- ⏰($count) ${currentOrder.mkString("\\[", ", ", "]")} (❌should have been ${currentOracle.mkString("\\[", ", ", "]")})""").foreach(throw _)
             }
           case None =>
-            noteRef.appendLine2(s"- ⏰($count) ${currentOrder.mkString("\\[", ", ", "]")}").foreach(throw _)
+            noteRef.appendLine2(s"\n\n$sequenceDiagram\n\n- ⏰($count) ${currentOrder.mkString("\\[", ", ", "]")}").foreach(throw _)
         }
-        Tinker.steadily
+        behavior(state, Nil)
+
+      case m@MessageSend(_, _, _) =>
+        behavior(state, m :: bufferedMessages)
 
       case FoundABug(details) =>
         noteRef.appendLine2(s"- $details").foreach(throw _)
         Tinker.steadily
     }
+  }
+
+  private def mermaidSequenceDiagram(participatingCells: List[(Int, CellProbeState)], buffered: List[MessageSend]): String = {
+    val participatingCellIds = if (buffered.exists(_.senderId.isEmpty)) {
+      "environment" :: participatingCells.map(_._1)
+    } else {
+      participatingCells.map(_._1)
+    }
+
+    val participants = participatingCellIds.map { participant =>
+      s"    participant $participant"
+    }.mkString("\n")
+
+    val messages = buffered.map {
+      case MessageSend(Some(senderId), recipientId, msg) =>
+        s"    $senderId->>$recipientId: $msg"
+      case MessageSend(None, recipientId, msg) =>
+        s"    environment->>$recipientId: $msg"
+    }.mkString("\n")
+
+    s"""```mermaid
+      |sequenceDiagram
+      |$participants
+      |$messages
+      |```""".stripMargin
   }
 
   private def terseTransition(id: Int, priorState: CellProbeState, newState: CellProbeState): String = {

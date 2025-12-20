@@ -77,6 +77,7 @@ object Probe {
           case None => ???
         }
       case MessageSend(senderId, recipientId, msg) =>
+        debugger !! SelfSortingArrayDebugger.MessageSend(senderId, recipientId, msg)
         val sender = senderId.map(_.toString).getOrElse("env")
         noteRef.appendLine2(s"- $sender->$recipientId: $msg") match {
           case Some(throwable) => throw throwable
