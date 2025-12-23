@@ -135,6 +135,17 @@ nlu:
       - There were [three pee clumps](urine:three) in [the back litter](litterbox:back).
       - [The back litter](litterbox:back) had [both pee](urine:one) and [poop](poop:one) when I sifted it.
       - I sifted [the pea](urine:one) from [the back litter box](litterbox:back).
+      - I just sifted [a pink lump](urine:one) from [the back litter box](litterbox:back).
+      - I just sifted [pee](urine:one) and [poop](poop:one) from [the back of the box](litterbox:back).
+      - I just sifted [a pee clump](urine:one) from [the back litter box](litterbox:back).
+      - I just sifted [two bean clumps](urine:two) from [the back litter box](litterbox:back).
+      - I just sifted [three pea clumps](urine:three) from [the back of the litter box](litterbox:back).
+      - I just sifted [peen](urine:one) and [poop](poop:one) from [the back litter box](litterbox:back).
+      - I just sifted [a pee clump](urine:one) from [the back letterbox](litterbox:back).
+      - I just sifted [poop](poop:one) and [two bee clumps](urine:two) from [the back of the rocks](litterbox:back).
+      - I just did [a bee clump](urine:one) from [the back letterbox](litterbox:back).
+      - I just sifted [poop](poop:one) and [pee](urine:one) from [the back lip box](litterbox:back).
+      - I just sifted [a pee club](urine:one) from [the back litter box](litterbox:back).
 
   - lookup: color
     examples: |
@@ -205,3 +216,5 @@ nlu:
       - Both the cats are on my bed.
       - Peanut is on the heating pad which is currently heated.
       - Peanut is sleeping near me on the heating pad, although it is not currently turned on.
+      - Remind me to get two more cartons of chocolate milk from Trader Joe's.
+      - Remind me to get cat food from the storage unit.
