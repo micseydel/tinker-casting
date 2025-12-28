@@ -1,5 +1,6 @@
 package me.micseydel.app.selfsortingarrays.cell
 
+import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.Probe
 import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{BeginSwap, ClockTick, CompleteSwap, DoSort, Initialize, InsertionSortCellWrapper, NotifyOfSwap, SwapProtocol}
 import me.micseydel.dsl.{SpiritRef, TinkerContext}
@@ -32,7 +33,13 @@ case class CellWrapper[CM](id: Int, value: Int, noteName: String, spiritRef: Spi
           case swap: SwapProtocol =>
             probe !! Probe.MessageSend(Some(swap.originator), id, swap match {
               case BeginSwap(newLeft, _) => s"BeginSwap(newLeft=${Probe.getOptionalInsertionSortCellWrapperIdOrX(newLeft)})"
-              case CompleteSwap(newRight, _) => s"CompleteSwap(newRight=${Probe.getOptionalInsertionSortCellWrapperIdOrX(newRight)})"
+              case CompleteSwap(newRightOrReject, _) =>
+                newRightOrReject match {
+                  case Left(NoOp) =>
+                    s"CompleteSwap((reject))"
+                  case Right(newRight) =>
+                    s"CompleteSwap(newRight=${Probe.getOptionalInsertionSortCellWrapperIdOrX(newRight)})"
+                }
               case NotifyOfSwap(replacementLeftOrRight, _) =>
                 val leftOrRight = replacementLeftOrRight match {
                   case Left(value) => s"left=${Probe.getOptionalInsertionSortCellWrapperIdOrX(value)}"

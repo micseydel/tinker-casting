@@ -33,7 +33,15 @@ object TimeKeeper {
     RemindMeAt(at.atStartOfDay(ZoneId.systemDefault()), recipient, message, timerKey)
   }
 
-  case class RemindMeEvery[M](delay: FiniteDuration, replyTo: SpiritRef[M], message: M, timerKey: Option[Any]) extends Message
+  case class RemindMeEvery[M](interval: FiniteDuration, initialDelay: Option[FiniteDuration], replyTo: SpiritRef[M], message: M, timerKey: Option[Any]) extends Message
+
+  object RemindMeEvery {
+    def apply[M](interval: FiniteDuration, replyTo: SpiritRef[M], message: M, timerKey: Option[Any]): RemindMeEvery[M] =
+      RemindMeEvery(interval, None, replyTo, message, timerKey)
+
+    def apply[M](interval: FiniteDuration, initialDelay: FiniteDuration, replyTo: SpiritRef[M], message: M, timerKey: Option[Any]): RemindMeEvery[M] =
+      RemindMeEvery(interval, Some(initialDelay), replyTo, message, timerKey)
+  }
 
   case class Cancel(key: Any) extends Message
 
@@ -93,9 +101,14 @@ object TimeKeeper {
 
           Behaviors.same
 
-        case RemindMeEvery(delay, replyTo, message, timerKey) =>
-          context.actorContext.log.debug("Starting timer for every {}", delay)
-          timers.startTimerAtFixedRate(timerKey.getOrElse(UUID.randomUUID()), TimerFired(replyTo, message), delay)
+        case RemindMeEvery(interval, maybeInitialDelay, replyTo, message, timerKey) =>
+          context.actorContext.log.debug("Starting timer for every {}", interval)
+          maybeInitialDelay match {
+            case Some(initialDelay) =>
+              timers.startTimerAtFixedRate(timerKey.getOrElse(UUID.randomUUID()), TimerFired(replyTo, message), initialDelay, interval)
+            case None =>
+              timers.startTimerAtFixedRate(timerKey.getOrElse(UUID.randomUUID()), TimerFired(replyTo, message), interval)
+          }
           Behaviors.same
 
         case TimerFired(replyTo, message) =>

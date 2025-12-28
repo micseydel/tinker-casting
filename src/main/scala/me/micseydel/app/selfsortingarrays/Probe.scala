@@ -18,7 +18,7 @@ import scala.util.{Failure, Success}
 object Probe {
   sealed trait Message
 
-  final case class Register(id: Int, filename: String) extends Message
+  final case class Register(id: Int, value: Int, filename: String) extends Message
 
   final case class UpdatedState(id: Int, cellState: CellState) extends Message
 
@@ -38,13 +38,21 @@ object Probe {
     behavior(Map.empty)
   }
 
-  case class CellProbeState(filename: String, maybeLeft: Option[InsertionSortCellWrapper], maybeRight: Option[InsertionSortCellWrapper], index: Int)
+  case class ImmutableCellProbeState(id: Int, value: Int, filename: String)
+
+  case class CellProbeState(maybeLeft: Option[InsertionSortCellWrapper], maybeRight: Option[InsertionSortCellWrapper], index: Int, immutableCellProbeState: ImmutableCellProbeState) {
+
+    def id: Int = immutableCellProbeState.id
+    def value: Int = immutableCellProbeState.value
+
+    def simpleString = s"""[$index] ${maybeLeft.map(_.id).getOrElse("x")} <-> ${maybeRight.map(_.id).getOrElse("x")}"""
+  }
 
   private def behavior(state: Map[Int, CellProbeState])(implicit Tinker: Tinker, noteRef: NoteRef, debugger: SpiritRef[SelfSortingArrayDebugger.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
-      case Register(id, filename) =>
-        val probeState = CellProbeState(filename, maybeLeft = None, maybeRight = None, index = id)
+      case Register(id, value, filename) =>
+        val probeState = CellProbeState(maybeLeft = None, maybeRight = None, index = id, ImmutableCellProbeState(id, value, filename))
         val updatedState: Map[Int, CellProbeState] =
           state.updated(id, probeState)
         debugger !! SelfSortingArrayDebugger.UpdatedState(id, probeState)
@@ -52,13 +60,13 @@ object Probe {
 
       case UpdatedState(id, CellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
         state.get(id) match {
-          case Some(CellProbeState(_, None, None, oldIndex)) if newLeftNeighbor.isEmpty && newRightNeighbor.isEmpty && oldIndex == newIndex =>
+          case Some(CellProbeState(None, None, oldIndex, _)) if newLeftNeighbor.isEmpty && newRightNeighbor.isEmpty && oldIndex == newIndex =>
             noteRef.appendLine2(s"""- $id uninitialized""") match {
               case Some(throwable) => throw throwable
               case None =>
             }
             Tinker.steadily
-          case Some(oldCellState@CellProbeState(_, None, None, oldIndex)) if oldIndex == newIndex =>
+          case Some(oldCellState@CellProbeState(None, None, oldIndex, _)) if oldIndex == newIndex =>
             val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
             debugger !! SelfSortingArrayDebugger.UpdatedState(id, updatedState)
             noteRef.appendLine2(s"""- $id initialized (${newLeftNeighbor.map(_.id).getOrElse("x")}, ${newRightNeighbor.map(_.id).getOrElse("x")})""") match {
@@ -66,7 +74,7 @@ object Probe {
               case None =>
             }
             behavior(state.updated(id, updatedState))
-          case Some(oldCellState@CellProbeState(_, oldLeft, oldRight, oldIndex)) =>
+          case Some(oldCellState@CellProbeState(oldLeft, oldRight, oldIndex, _)) =>
             val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
             debugger !! SelfSortingArrayDebugger.UpdatedState(id, updatedState)
             noteRef.appendLine2(s"""- $id (${getOptionalInsertionSortCellWrapperIdOrX(oldLeft)}, ${getOptionalInsertionSortCellWrapperIdOrX(oldRight)}) -> (${newLeftNeighbor.map(_.id).getOrElse("x")}, ${newRightNeighbor.map(_.id).getOrElse("x")}); index $oldIndex -> $newIndex""") match {
@@ -93,7 +101,7 @@ object Probe {
         }
 
         val latestNodes = state.toList.sortBy(_._2.index).zipWithIndex.map {
-          case ((_, CellProbeState(noteName, mayyybeLeft, mayyybeRight, index)), i) =>
+          case ((_, CellProbeState(mayyybeLeft, mayyybeRight, index, ImmutableCellProbeState(_, _, noteName))), i) =>
             wrapCanvasFileData(400 * i, noteName) -> (mayyybeLeft, mayyybeRight)
         }
 

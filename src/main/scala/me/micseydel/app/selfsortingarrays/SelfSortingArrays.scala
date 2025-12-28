@@ -2,18 +2,17 @@ package me.micseydel.app.selfsortingarrays
 
 import akka.actor.typed.DispatcherSelector
 import cats.data.{NonEmptyList, Validated}
-import me.micseydel.NoOp
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{Initialize, InsertionSortCellWrapper}
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.{SelfSortingArrayCentralCast, VALUE_LIST}
+import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{Initialize, InsertionSortCellWrapper}
 import me.micseydel.app.selfsortingarrays.cell.{CellWrapper, InsertionSortCell}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
-import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
+import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 
@@ -64,8 +63,6 @@ object SelfSortingArrays {
 object Environment {
   sealed trait Message
 
-//  private final case class ReceiveListContents(contents: NonEmptyList[InsertionSortCellWrapper]) extends Message
-
   private final case class NotePing(ping: Ping) extends Message
   private case object ClockTick extends Message
 
@@ -82,15 +79,16 @@ object Environment {
       (startIndex, SelfSortingArrays.filename(startIndex, int), int)
     }
 
-    val dispatcher = DispatcherSelector.fromConfig("self-sorting-dispatcher") // use one thread
     val cells: NonEmptyList[CellWrapper[InsertionSortCell.Message]] = zipped.map {
       case (index, filename, value) =>
+        val actorName = filename.replace(" ", "_").replace("(", "").replace(")", "")
         CellWrapper(
           index,
           value,
           filename,
-          context.cast(InsertionSortCell(index, index, filename, value), filename.replace(" ", "_").replace("(", "").replace(")", "")
-            , dispatcher
+          context.cast(
+            InsertionSortCell(index, index, filename, value), actorName,
+            DispatcherSelector.fromConfig("self-sorting-dispatcher") // use one thread
           )
         )
     }
@@ -109,7 +107,6 @@ object Environment {
     }
     finishInitializingCells(None :: cells.toList.map(Some(_)) ::: List(None))
 
-//    println("Requesting list contents")
     implicit val nr: NoteRef = noteRef
     println(s"click to sort $VALUE_LIST")
     noteRef.setMarkdown(s"- [ ] Check to sort $VALUE_LIST") match {
@@ -119,47 +116,16 @@ object Environment {
     waiting(cells)
   }
 
-//  private def waitingForOriginalList(listHead: InsertionSortCellWrapper)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
-//    implicit val tc: TinkerContext[?] = context
-//    Tinker.receiveMessage {
-//      case ReceiveListContents(listContents) =>
-//        val values = listContents.map(_.value)
-//        noteRef.setMarkdown(s"- [ ] Check to sort $values") match {
-//          case Failure(exception) => throw exception
-//          case Success(_) =>
-//        }
-//        val msg = s"Starting list: $values"
-//        println(msg)
-//        val newHead = listContents.head
-//        if (newHead.spiritRef.path != listHead.spiritRef.path) {
-//          println(s"WARNING no sorting so listHead ${listHead.spiritRef.path} should not have changed to ${newHead.spiritRef.path}")
-//        }
-//        println("Waiting for sort request")
-//        waiting(listHead)
-//
-//      case NotePing(_) => Tinker.steadily // ignore
-//    }
-//  }
 
   private def waiting(cells: NonEmptyList[CellWrapper[InsertionSortCell.Message]])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
-//      case ReceiveListContents(listContents) =>
-//        val values = listContents.map(_.value)
-//        noteRef.setMarkdown(s"Sorted list: $values") match {
-//          case Failure(exception) => throw exception
-//          case Success(_) =>
-//        }
-//        val msg = s"FINISHED!!! Head ${listHead.value}->${listContents.head.value}, sorted contents: $values"
-//        println(msg)
-//        Tinker.steadily
-
       case NotePing(_) =>
         if (noteRef.checkBoxIsChecked()) {
           println("Starting sort request!")
           cells.head !!! InsertionSortCell.DoSort
           val timeKeeper = context.castTimeKeeper()
-          timeKeeper !! TimeKeeper.RemindMeEvery(2.seconds, context.self, ClockTick, None)
+          timeKeeper !! TimeKeeper.RemindMeEvery(2.seconds, 1.seconds, context.self, ClockTick, None)
           implicit val cellsList: List[CellWrapper[InsertionSortCell.Message]] = cells.toList
           clockTicking(0)
         } else {
@@ -172,15 +138,33 @@ object Environment {
   private def clockTicking(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[InsertionSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
-      case NotePing(_) => Tinker.steadily // ignore
+      case NotePing(_) =>
+        if (noteRef.checkBoxIsChecked()) {
+          paused(count)
+        } else {
+          Tinker.steadily // ignore
+        }
       case ClockTick =>
-        noteRef.setMarkdown(s"sorting $VALUE_LIST\n\nclock tick: $count\n")
+        noteRef.setMarkdown(s"- [ ] Pause\n\nsorting $VALUE_LIST\n\nclock tick: $count\n")
         Tinker.userExtension.probe !! Probe.ClockTick(count)
         for (cell <- cells) {
-          //          println(s"sending tick to ${cell.id}")
           cell !!! InsertionSortCell.ClockTick(count)
         }
         clockTicking(count + 1)
+    }
+  }
+
+  private def paused(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[InsertionSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[?] = context
+    Tinker.receiveMessage {
+      case NotePing(_) =>
+        if (!noteRef.checkBoxIsChecked()) {
+          clockTicking(count)
+        } else {
+          Tinker.steadily // ignore
+        }
+      case ClockTick =>
+        Tinker.steadily // ignore
     }
   }
 
@@ -194,6 +178,10 @@ object Environment {
         case Success(result) => result
       }
   }
+
+  //
+
+  case class InvariantViolation(details: String) extends RuntimeException(details)
 }
 
 

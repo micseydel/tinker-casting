@@ -117,7 +117,7 @@ object Chronicler {
           val wavName = Path.of(result.whisperResultMetadata.vaultPath).getFileName.toString
           wavNameToTranscriptionNoteOwner.get(wavName) match {
             case None =>
-              context.actorContext.log.error(s"Tried to update transcription for $wavName but it wasn't in $wavNameToTranscriptionNoteOwner")
+              context.actorContext.log.info(s"Tried to update transcription for $wavName but it wasn't in $wavNameToTranscriptionNoteOwner")
               Tinker.steadily
             case Some(ref) =>
               // FIXME: new ChroniclerMOCActor, has an AmendLine(captureTime) message
