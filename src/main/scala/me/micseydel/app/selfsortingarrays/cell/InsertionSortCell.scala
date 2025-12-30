@@ -61,10 +61,6 @@ object InsertionSortCell {
       maybeRightNeighbor.exists(_.value < self.value)
     }
 
-    // FIXME: create a changeState (or something) method, which returns the new state and does the sanity checks automatically
-    //  - updateneighbor leftorright
-    //  - OR move (left or right)
-
     def sanityChecks(maybePriorState: Option[CellState])(implicit self: InsertionSortCellWrapper, Tinker: EnhancedTinker[SelfSortingArrayCentralCast], tinkerContext: TinkerContext[?]): Unit = {
       // we can't be our own neighbor
       if (maybeLeftNeighbor.map(_.id).contains(self.id)) {
@@ -93,12 +89,6 @@ object InsertionSortCell {
     def locallySorted()(implicit self: InsertionSortCellWrapper): Boolean = {
       maybeLeftNeighbor.forall(self.value >= _.value) &&
         maybeRightNeighbor.forall(self.value <= _.value)
-    }
-
-    def terseTransition(prior: CellState)(implicit cw: InsertionSortCellWrapper): String = {
-      def f(t: Option[InsertionSortCellWrapper]): String = t.map(_.id.toString).getOrElse("x")
-
-      s"${cw.id} (${f(prior.maybeLeftNeighbor)}, ${f(prior.maybeRightNeighbor)}) -> (${f(maybeLeftNeighbor)}, ${f(maybeRightNeighbor)})"
     }
   }
 
@@ -192,6 +182,19 @@ object InsertionSortCell {
       }
     }
 
+    def debuggingHacking(rightNeighbor: InsertionSortCellWrapper, oldLeftNeighbor: Option[InsertionSortCellWrapper], state: CellState, priorState: CellState, from: String)(implicit self: InsertionSortCellWrapper): Unit = {
+      if (self.id == 5) {
+        // FIXME: hacking
+        if (rightNeighbor.id == 7 && oldLeftNeighbor.map(_.id).contains(1) && state.maybeLeftNeighbor.map(_.id).contains(6)) {
+          println(s"[5] ❌ ${priorState.index == state.index} ${oldLeftNeighbor.map(_.id)} but it should send ${state.maybeLeftNeighbor.map(_.id)} - but why? (from:$from)")
+        } else {
+          println(s"[5] ✅? ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (did not send ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
+        }
+      } else {
+        println(s"[${self.id}] ✅ ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (and ignoring ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
+      }
+    }
+
     def swappingRight(priorState: CellState, state: CellState, oldLeftNeighbor: Option[InsertionSortCellWrapper]
                       , from: String
                      )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] =
@@ -201,17 +204,9 @@ object InsertionSortCell {
           state.maybeRightNeighbor match {
             case Some(rightNeighbor) =>
             // FIXME: it seems that state.maybeLeftNeighbor needs to be used instead of oldLeftNeighbor sometimes, but how to differentiate?
-            if (self.id == 5) {
-              // FIXME: hacking
-              if (rightNeighbor.id == 7 && oldLeftNeighbor.map(_.id).contains(1) && state.maybeLeftNeighbor.map(_.id).contains(6)) {
-                println(s"[5] ❌ ${priorState.index == state.index} ${oldLeftNeighbor.map(_.id)} but it should send ${state.maybeLeftNeighbor.map(_.id)} - but why? (from:$from)")
-              } else {
-                println(s"[5] ✅? ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (did not send ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
-              }
-            } else {
-              println(s"[${self.id}] ✅ ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (and ignoring ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
-            }
-              // FIXME is it a TIMING issue?
+            debuggingHacking(rightNeighbor, oldLeftNeighbor, state, priorState, from)
+
+            // FIXME it looks like this is sometimes using a cached value instead of a newer value
             rightNeighbor !~! BeginSwap(oldLeftNeighbor, self.id)
 
             case None => ??? // 😬
@@ -256,30 +251,21 @@ object InsertionSortCell {
           }
         })
 
-    def waitingForClockTick(priorState: CellState, state: CellState, newAbility: => Ability[Message])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+    private def waitingForClockTick(priorState: CellState, state: CellState, newAbility: => Ability[Message])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
       state.sanityChecks(Some(priorState))
 
-      helper("waitingForClockTick")(Some(priorState), state) { m =>
-        Behaviors.withStash(10) { stash =>
-          m match {
-            case BeginSwap(_, _) =>
-              priorState.maybeLeftNeighbor.foreach(_ !~! CompleteSwap(Left(NoOp), self.id))
-              Behaviors.same
+      helper("waitingForClockTick")(Some(priorState), state) {
+        case BeginSwap(_, _) =>
+          priorState.maybeLeftNeighbor.foreach(_ !~! CompleteSwap(Left(NoOp), self.id))
+          Behaviors.same
 
-            case DoSort => Behaviors.same // can safely ignore? FIXME
+        case DoSort => Behaviors.same // can safely ignore?
 
-            case ClockTick(count) =>
-              if (stash.size > 0) {
-                println(s"unstashing ${stash.size} for clock tick $count")
-              }
-              stash.unstashAll(newAbility)
+        case ClockTick(count) =>
+          newAbility
 
-            case other =>
-              println(s"STASHING $other")
-              stash.stash(other)
-              Behaviors.same
-          }
-        }
+        case _ =>
+          Behaviors.same
       }
     }
 
