@@ -110,7 +110,7 @@ object InsertionSortCell {
         case Initialize(leftNeighbor, rightNeighbor) => throw InvariantViolation(s"can't initialize, already initialized; leftNeighbor=$leftNeighbor, rightNeighbor=$rightNeighbor")
         case DoSort =>
           if (state.wantToSwapWithRight()) {
-            StateMachine.swappingRight(state, state, /*FIXME: why is this state rather than prior state?!*/ state.maybeLeftNeighbor, "DoSort->waiting")
+            StateMachine.swappingRight(state, state, state.maybeLeftNeighbor, "DoSort->waiting")
           } else {
             state.maybeRightNeighbor.foreach(_ !~! DoSort)
             StateMachine.waiting(state, state)
@@ -136,13 +136,6 @@ object InsertionSortCell {
                   // meaning our left neighbor is taking our place and our new left neighbor is their old left neighbor,
                   // so we let our OLD left neighbor know
                   val updatedState = state.copy(state.index - 1, maybeLeftNeighbor = newLeft, maybeRightNeighbor = Some(oldLeftNeighbor))
-                  Try(updatedState.sanityChecks(Some(state))) match {
-                    case Failure(exception: InvariantViolation) =>
-                      val msg = s"[sorted ${self.id}] ${exception.details} (caused by BeginSwap(newLeft=${newLeft.map(_.id)}) from $originator, prior state left&right: ${state.maybeLeftNeighbor.map(_.id)} & ${state.maybeRightNeighbor.map(_.id)})"
-                      throw InvariantViolation(msg)
-                    case Failure(e) => throw e
-                    case Success(_) =>
-                  }
                   state.maybeRightNeighbor.foreach(_ !~! NotifyOfSwap(Left(Some(oldLeftNeighbor)), self.id))
                   oldLeftNeighbor !~! CompleteSwap(Right(state.maybeRightNeighbor), self.id)
                   StateMachine.waiting(state, updatedState)
@@ -170,7 +163,6 @@ object InsertionSortCell {
                     throw InvariantViolation(s"[${self.id}] left/right conflict, told Notify(right=${newMaybeRightNeighbor.get.id}) by $originator (overwriting right=${state.maybeRightNeighbor.map(_.id)}) but left is already ${state.maybeLeftNeighbor.get.id} so FIGURE OUT HOW TO CHANGE BOTH, don't conflict!")
                   }
                   val updatedState = state.copy(maybeRightNeighbor = newMaybeRightNeighbor)
-                  updatedState.sanityChecks(Some(state)) // FIXME: should be able to remove
                   if (updatedState.wantToSwapWithRight()) {
                     StateMachine.swappingRight(state, updatedState, state.maybeLeftNeighbor, s"NotifyOfSwap->waiting  state changed=${priorState == state}")
                   } else {
@@ -182,9 +174,9 @@ object InsertionSortCell {
       }
     }
 
+    // FIXME: hacking
     def debuggingHacking(rightNeighbor: InsertionSortCellWrapper, oldLeftNeighbor: Option[InsertionSortCellWrapper], state: CellState, priorState: CellState, from: String)(implicit self: InsertionSortCellWrapper): Unit = {
       if (self.id == 5) {
-        // FIXME: hacking
         if (rightNeighbor.id == 7 && oldLeftNeighbor.map(_.id).contains(1) && state.maybeLeftNeighbor.map(_.id).contains(6)) {
           println(s"[5] ❌ ${priorState.index == state.index} ${oldLeftNeighbor.map(_.id)} but it should send ${state.maybeLeftNeighbor.map(_.id)} - but why? (from:$from)")
         } else {
@@ -195,10 +187,11 @@ object InsertionSortCell {
       }
     }
 
-    def swappingRight(priorState: CellState, state: CellState, oldLeftNeighbor: Option[InsertionSortCellWrapper]
-                      , from: String
+    def swappingRight(priorState: CellState, state: CellState,
+                      oldLeftNeighbor: Option[InsertionSortCellWrapper] // FIXME DEBUGGING is this necessary? can it be removed?
+                      , from: String // for debugging
                      )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] =
-      waitingForClockTick(priorState, state, // FIXME
+      waitingForClockTick(priorState, state,
         Tinker.setup { _ =>
           // after the clock ticks, we start the actual swapping
           state.maybeRightNeighbor match {
@@ -207,6 +200,7 @@ object InsertionSortCell {
             debuggingHacking(rightNeighbor, oldLeftNeighbor, state, priorState, from)
 
             // FIXME it looks like this is sometimes using a cached value instead of a newer value
+            //  - using state.maybeLeftNeighbor or priorState.leftNeighbor does not work either
             rightNeighbor !~! BeginSwap(oldLeftNeighbor, self.id)
 
             case None => ??? // 😬
@@ -225,8 +219,9 @@ object InsertionSortCell {
                     state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
 
                     if (updatedState.wantToSwapWithRight()) {
-                      // FIXME this is involved in the bug!
+                      // FIXME this is (probably) involved in the bug!
                       println(s"[${self.id}] CANARY left=${state.maybeLeftNeighbor.map(_.id)}; prior=${priorState.maybeLeftNeighbor.map(_.id)} and updated=${updatedState.maybeLeftNeighbor.map(_.id)}")
+                      // FIXME DEBUGGING changing state.maybeLeftNeighbor to updatedState.maybeLeftNeighbor does not resolve the problem
                       StateMachine.swappingRight(state, updatedState, state.maybeLeftNeighbor, "CompleteSwap->swappingRight") // trying to use updatedState here breaks things!
                     } else {
                       if (updatedState.locallySorted()) {
