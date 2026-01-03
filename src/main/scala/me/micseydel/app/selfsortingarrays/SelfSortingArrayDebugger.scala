@@ -148,7 +148,12 @@ object SelfSortingArrayDebugger {
 
     val messagesAndNotes: List[String] = buffered.flatMap {
       case MessageSend(Some(senderId), recipientId, msg) =>
-        val mermaidSend = s"    C$senderId->>C$recipientId: $msg"
+        val mermaidSend = if (msg.contains("Notify")) {
+          s"    C$senderId--)C$recipientId: $msg"
+        } else {
+          s"    C$senderId-)C$recipientId: $msg"
+        }
+
         if (msg.contains("Begin")) {
           List(
             s"activate C$senderId",
@@ -163,7 +168,7 @@ object SelfSortingArrayDebugger {
           List(mermaidSend)
         }
       case MessageSend(None, recipientId, msg) =>
-        List(s"    env-->>C$recipientId: $msg")
+        List(s"    env--)C$recipientId: $msg")
       case StateChangeMoved(id, movedRight) =>
         if (movedRight) {
           val rightNeighbor = findRightNeighbor(id, participatingCells)
@@ -208,6 +213,7 @@ object SelfSortingArrayDebugger {
 
     s"""```mermaid
       |sequenceDiagram
+      |    autonumber
       |$mermaidParticipants
       |${messagesAndNotes.mkString("\n")}
       |```""".stripMargin

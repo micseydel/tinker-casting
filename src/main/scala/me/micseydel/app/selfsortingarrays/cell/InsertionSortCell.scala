@@ -28,6 +28,7 @@ object InsertionSortCell {
 
   case object DoSort extends Message
 
+  // three parts: Begin (left->right), Complete (left<-right), Notify out to non-participants of the swap
   sealed trait SwapProtocol extends Message {
     def originator: Int
   }
@@ -64,10 +65,14 @@ object InsertionSortCell {
     def sanityChecks(maybePriorState: Option[CellState])(implicit self: InsertionSortCellWrapper, Tinker: EnhancedTinker[SelfSortingArrayCentralCast], tinkerContext: TinkerContext[?]): Unit = {
       // we can't be our own neighbor
       if (maybeLeftNeighbor.map(_.id).contains(self.id)) {
-        throw InvariantViolation(s"[${self.id}] Left neighbor ${maybeLeftNeighbor.get.id} is self!")
+        val msg = s"[${self.id}] Left neighbor ${maybeLeftNeighbor.get.id} is self!"
+        Tinker.userExtension.probe !! Probe.FoundABug(msg)
+        throw InvariantViolation(msg)
       }
       if (maybeRightNeighbor.map(_.id).contains(self.id)) {
-        throw InvariantViolation(s"[${self.id}] right neighbor is self!")
+        val msg = s"[${self.id}] right neighbor is self!"
+        Tinker.userExtension.probe !! Probe.FoundABug(msg)
+        throw InvariantViolation(msg)
       }
 
       // if we have two neighbors, they can't be the same
@@ -174,30 +179,36 @@ object InsertionSortCell {
       }
     }
 
-    // FIXME: hacking
-    def debuggingHacking(rightNeighbor: InsertionSortCellWrapper, oldLeftNeighbor: Option[InsertionSortCellWrapper], state: CellState, priorState: CellState, from: String)(implicit self: InsertionSortCellWrapper): Unit = {
-      if (self.id == 5) {
-        if (rightNeighbor.id == 7 && oldLeftNeighbor.map(_.id).contains(1) && state.maybeLeftNeighbor.map(_.id).contains(6)) {
-          println(s"[5] ❌ ${priorState.index == state.index} ${oldLeftNeighbor.map(_.id)} but it should send ${state.maybeLeftNeighbor.map(_.id)} - but why? (from:$from)")
-        } else {
-          println(s"[5] ✅? ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (did not send ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
-        }
-      } else {
-        println(s"[${self.id}] ✅ ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (and ignoring ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
-      }
-    }
 
+
+    // FIXME: waiting / prepped to swap right
     def swappingRight(priorState: CellState, state: CellState,
                       oldLeftNeighbor: Option[InsertionSortCellWrapper] // FIXME DEBUGGING is this necessary? can it be removed?
                       , from: String // for debugging
-                     )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] =
+                     )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
+
+
+      // FIXME: hacking
+      def debuggingHacking(rightNeighbor: InsertionSortCellWrapper, oldLeftNeighbor: Option[InsertionSortCellWrapper]): Unit = {
+        if (self.id == 5) {
+          if (rightNeighbor.id == 7 && oldLeftNeighbor.map(_.id).contains(1) && state.maybeLeftNeighbor.map(_.id).contains(6)) {
+            println(s"[5] ❌ ${priorState.index == state.index} ${oldLeftNeighbor.map(_.id)} but it should send ${state.maybeLeftNeighbor.map(_.id)} - but why? (from:$from)")
+          } else {
+            println(s"[5] ✅? ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (did not send ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
+          }
+        } else {
+          println(s"[${self.id}] ✅ ${priorState.index == state.index} -${oldLeftNeighbor.map(_.id)}-> ${rightNeighbor.id} (and ignoring ${state.maybeLeftNeighbor.map(_.id)}, from:$from)")
+        }
+      }
+
+      // FIXME: fold waitingForClockTick into this method?
       waitingForClockTick(priorState, state,
         Tinker.setup { _ =>
           // after the clock ticks, we start the actual swapping
           state.maybeRightNeighbor match {
             case Some(rightNeighbor) =>
             // FIXME: it seems that state.maybeLeftNeighbor needs to be used instead of oldLeftNeighbor sometimes, but how to differentiate?
-            debuggingHacking(rightNeighbor, oldLeftNeighbor, state, priorState, from)
+            debuggingHacking(rightNeighbor, oldLeftNeighbor)
 
             // FIXME it looks like this is sometimes using a cached value instead of a newer value
             //  - using state.maybeLeftNeighbor or priorState.leftNeighbor does not work either
@@ -245,6 +256,7 @@ object InsertionSortCell {
             case ClockTick(count) => Tinker.steadily
           }
         })
+    }
 
     private def waitingForClockTick(priorState: CellState, state: CellState, newAbility: => Ability[Message])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
       state.sanityChecks(Some(priorState))
