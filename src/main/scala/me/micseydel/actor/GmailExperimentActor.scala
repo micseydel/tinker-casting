@@ -26,13 +26,18 @@ object GmailExperimentActor {
     Tinker.receiveMessage {
       case ReceiveEmail(emails) =>
         val formattedEmails = emails.map {
-          case GmailActor.Email(sender, subject, _, sentAt, _) =>
+          case GmailActor.Email(sender, subject, _, sentAt, _, maybeThreadId) =>
             val formattedSentAt = utcToLosAngeles(sentAt).getOrElse(sentAt)
-            s"- \\[$formattedSentAt] \\<$sender> **$subject**"
+            maybeThreadId match {
+              case Some(threadId) =>
+                s"- \\[$formattedSentAt] \\<$sender> **$subject** ([link](https://mail.google.com/mail/u/0/#inbox/$threadId))"
+              case None =>
+                s"- \\[$formattedSentAt] \\<$sender> **$subject**"
+            }
         }.mkString("", "\n", "\n")
 
         val formattedHeaders = emails.map {
-          case GmailActor.Email(sender, subject, body, sentAt, headers) =>
+          case GmailActor.Email(sender, subject, body, sentAt, headers, threadId) =>
             val formattedHeaders = headers.map {
               case (key, List(justOne)) =>
                 if (justOne.length > 200) {
