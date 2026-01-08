@@ -4,6 +4,7 @@ import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.stream.StreamTcpException
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import spray.json.*
@@ -63,7 +64,17 @@ private object AirGradientApiActor {
               context.actorContext.log.warn(s"Failed to connect to local Air Gradient; there are $remainingRetries remaining retries but this exception is unknown so dropping this request, $replyTo will not receive a reply", exception)
           }
         } else {
-          context.actorContext.log.warn(s"Failed to connect to local Air Gradient; no remaining retries so stopping for $replyTo", exception)
+          // log the stack trace if we're in debug or if it's a non-StreamTcpException
+          if (context.actorContext.log.isDebugEnabled) {
+            context.actorContext.log.warn(s"Failed to connect to local Air Gradient; no remaining retries so stopping for $replyTo", exception)
+          } else {
+            exception match {
+              case _: StreamTcpException =>
+                context.actorContext.log.warn(s"Failed to connect to local Air Gradient; no remaining retries so stopping for $replyTo (for the stack trace, set the logger to debug mode)")
+              case other =>
+                context.actorContext.log.warn(s"Failed to connect to local Air Gradient; no remaining retries so stopping for $replyTo", other)
+            }
+          }
         }
 
         Tinker.steadily
