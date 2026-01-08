@@ -80,7 +80,7 @@ object GroceryListMOCActor {
       case Validated.Valid(Document(nextNote, _, _, Config(senderEquals, subjectContains))) =>
         context.actorContext.log.info(s"Starting with nextNote=$nextNote, senderEquals=$senderEquals, subjectContains=$subjectContains")
         implicit val currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message] = context.cast(CurrentGroceryNoteActor(nextNote), Common.tryToCleanForActorName(nextNote))
-        implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[LocalDate] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
+        implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[(Option[String], LocalDate)] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
         behavior(Map.empty)
 
       case Validated.Invalid(problems) =>
@@ -89,7 +89,7 @@ object GroceryListMOCActor {
     }
   }
 
-  private def behavior(archivalSpiritRefs: Map[LocalDate, SpiritRef[ArchivalGroceryNoteActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message], doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[LocalDate]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(archivalSpiritRefs: Map[LocalDate, SpiritRef[ArchivalGroceryNoteActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message], doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[(Option[String], LocalDate)]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ReceiveEmails(emails) =>
@@ -100,12 +100,12 @@ object GroceryListMOCActor {
             context.actorContext.log.info(s"Received ${emails.size} emails, read wikilinks list from ${noteRef.noteId} with latestArchiveNote [[$latestArchiveNote]], latestDate $latestDate")
 
             doTurnOverFor(emails, latestDate) match {
-              case Some(day) =>
+              case Some((maybeThreadId, day)) =>
                 context.actorContext.log.info(s"Turn over detected after $latestDate, for $day")
                 archivalSpiritRefs.get(day) match {
                   case Some(existing) =>
                     context.actorContext.log.debug(s"$day was already created")
-                    currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(existing)
+                    currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(existing, maybeThreadId)
                     Tinker.steadily
                   case None =>
                     // this is just to keep whatever the convention happened ot be
@@ -116,7 +116,7 @@ object GroceryListMOCActor {
                     } else {
                       context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
                       val newArchivalNote = context.cast(ArchivalGroceryNoteActor(newNoteName), Common.tryToCleanForActorName(newNoteName))
-                      currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote)
+                      currentGroceryNoteActor !! CurrentGroceryNoteActor.DoTurnOver(newArchivalNote, maybeThreadId)
                       noteRef.setMarkdown(document.withNewLatest(newNoteName).toMarkdown)
                       behavior(archivalSpiritRefs.updated(day, newArchivalNote))
                     }
@@ -136,16 +136,17 @@ object GroceryListMOCActor {
 
   //
 
-  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime)(implicit log: Logger): Option[LocalDate] = {
+  // returns the day for turnover as well as the Option(threadId)
+  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime)(implicit log: Logger): Option[(Option[String], LocalDate)] = {
     emails.flatMap {
-      case email@Email(sender, subject, _, _, _) =>
+      case email@Email(sender, subject, _, _, _, threadId) =>
         email.getTimeHacky match {
           case Success(dateFromEmail) =>
             val matches = dateFromEmail.isAfter(lastSeenDate) &&
               sender == senderEquals &&
               subjectContains.exists(subject.contains)
             if (matches) {
-              Some(dateFromEmail.toLocalDate)
+              Some(threadId -> dateFromEmail.toLocalDate)
             } else {
               None
             }
@@ -213,12 +214,12 @@ object GroceryListMOCActor {
 object CurrentGroceryNoteActor {
   sealed trait Message
 
-  final case class DoTurnOver(archivalNote: SpiritRef[ArchivalGroceryNoteActor.Message]) extends Message
+  final case class DoTurnOver(archivalNote: SpiritRef[ArchivalGroceryNoteActor.Message], maybeThreadId: Option[String]) extends Message
 
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "☑️️") { (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
-      case DoTurnOver(archivalNote) =>
+      case DoTurnOver(archivalNote, maybeThreadId) =>
         noteRef.readMarkdown().map { markdown =>
           val (turningOver, keeping) = markdown.split("\n").partition(_.startsWith("- [x] "))
           if (turningOver.isEmpty) {
@@ -227,7 +228,7 @@ object CurrentGroceryNoteActor {
             context.actorContext.log.info(s"Turning over ${turningOver.length} items")
             // this should be a transaction https://github.com/micseydel/tinker-casting/issues/22
             noteRef.setMarkdown(keeping.mkString("\n"))
-            archivalNote !! ArchivalGroceryNoteActor.AddContents(turningOver.toList)
+            archivalNote !! ArchivalGroceryNoteActor.AddContents(turningOver.toList, maybeThreadId)
           }
         }
 
@@ -239,12 +240,13 @@ object CurrentGroceryNoteActor {
 object ArchivalGroceryNoteActor {
   sealed trait Message
 
-  final case class AddContents(lines: Seq[String]) extends Message
+  final case class AddContents(lines: Seq[String], maybeThreadId: Option[String]) extends Message
 
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "✅️") { (context, noteRef) =>
     Tinker.receiveMessage {
-      case AddContents(lines) =>
+      case AddContents(lines, maybeThreadId) =>
         val toAppend = lines.mkString("\n")
+
         noteRef.readMarkdown().flatMap { markdown =>
           if (markdown.contains(toAppend)) {
             context.actorContext.log.warn(s"Ignoring duplicate request to add ${lines.size} to [[$noteName]]")
@@ -255,7 +257,10 @@ object ArchivalGroceryNoteActor {
           }
         } match {
           case Failure(_: FileNotFoundException) =>
-            noteRef.setMarkdown(toAppend) match {
+            noteRef.setMarkdown(maybeThreadId match {
+              case Some(threadId) => s"- ([gmail](https://mail.google.com/mail/u/0/#inbox/$threadId))\n" + toAppend
+              case None => toAppend
+            }) match {
               case Failure(exception) => throw exception
               case Success(_) =>
             }

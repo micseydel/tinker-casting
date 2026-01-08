@@ -7,12 +7,13 @@ import cats.implicits.catsSyntaxValidatedId
 import com.google.api.client.auth.oauth2.Credential
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
-import com.google.api.services.gmail.Gmail
-import com.google.api.services.gmail.model.MessagePart
+import com.google.api.services.gmail.model.{ListThreadsResponse, Message, MessagePart, MessagePartHeader}
+import com.google.api.services.gmail.{Gmail, model}
 import me.micseydel.Common
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
+import me.micseydel.actor.google.TinkerGmailService.MaxThreadResults
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
@@ -23,7 +24,9 @@ import org.slf4j.Logger
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
+import java.util
 import java.util.Base64
+import scala.collection.mutable
 import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.jdk.CollectionConverters.*
@@ -44,7 +47,7 @@ object GmailActor {
 
   private val formatterUnderTest = DateTimeFormatter.ofPattern("EEE,  d MMM yyyy HH:mm:ss Z")
 
-  case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]]) {
+  case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]], maybeThreadId: Option[String]) {
     private def tryToGetWestCoastTime: Try[ZonedDateTime] =
       Try(ZonedDateTime.parse(sentAt))
         .map(_.withZoneSameInstant(ZoneId.of("America/Los_Angeles")))
@@ -175,7 +178,9 @@ object GmailActor {
 case class GmailConfig(credentialsPath: String, tokensPath: String)
 
 private object TinkerGmailService {
-  private val MaxResults = 30
+  private[google] val MaxResults = 30 // FIXME: DELETE
+  private[google] val MaxThreadResults = 30
+  private[google] val MaxMessageResults = 30
 
   def createGmailService(credential: Credential): Gmail = {
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
@@ -206,16 +211,16 @@ private object TinkerGmailService {
         val subject = headers.find(_.getName == "Subject").map(_.getValue).getOrElse("No Subject")
 
         val parts = payload.getParts
-        val body = if (parts != null) extractPlainText(parts)
+        val body = if (parts != null) Util.extractPlainText(parts)
         else Option(payload.getBody).map(body => {
           Option(body.decodeData()).map(_.map(_.toChar).mkString).getOrElse("")
         }).getOrElse("(No Content)")
 
-        val time = getSentTimeFromHeaders(payload)
+        val time = Util.getSentTimeFromHeaders(payload)
 
         val groupedHeaders = headers.groupBy(_.getName).map { case (k, v) => k -> v.map(_.getValue).toList }
 
-        Email(sender, subject, body, time, groupedHeaders)
+        Email(sender, subject, body, time, groupedHeaders, Some(msg.getThreadId))
       } match {
         case Failure(exception) =>
           log.warn(s"Failed to fetch ${msg.getId}", exception)
@@ -231,15 +236,22 @@ private object TinkerGmailService {
         Future.failed(e)
       }
   }
+}
 
-  private def extractPlainText(parts: java.util.List[MessagePart]): String = {
+class LocalGmailDatabaseService {
+  def upsertThreads = ???
+  def saveEmails = ???
+}
+
+private object Util {
+  def extractPlainText(parts: java.util.List[MessagePart]): String = {
     parts.asScala.collectFirst {
       case part if part.getMimeType == "text/plain" =>
         new String(Base64.getUrlDecoder.decode(part.getBody.getData))
     }.getOrElse("[No plain text content found]")
   }
 
-  private def getSentTimeFromHeaders(payload: MessagePart): String = {
+  def getSentTimeFromHeaders(payload: MessagePart): String = {
     val headers = payload.getHeaders.asScala
 
     headers.find(_.getName.equalsIgnoreCase("Date"))
@@ -259,3 +271,36 @@ private object TinkerGmailService {
       .toString
   }
 }
+
+//private object Experimentation {
+//  def fetchThreads(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor, log: Logger): Future[Seq[Email]] = Future {
+//    val unreadThreadsRequest: Gmail#Users#Threads#List = gmailService.users().threads().list("me")
+//      .setLabelIds(List("INBOX").asJava)
+//      .setQ("is:unread")
+//      .setMaxResults(MaxThreadResults)
+//
+//    val response: ListThreadsResponse = unreadThreadsRequest.execute()
+//
+//    val factory = GsonFactory.getDefaultInstance
+//    // Get the threads from the response
+//    val threads: mutable.Buffer[model.Thread] = response.getThreads.asScala
+//    val t: mutable.Seq[String] = threads.map((thread: model.Thread) => factory.toString(thread))
+//    val t2: mutable.Seq[model.Thread] = t.map(jsthread => factory.fromString(jsthread, classOf[model.Thread]))
+//    val threadIds: mutable.Seq[String] = threads.map(_.getId)
+//    val msgIdsByThread: mutable.Seq[(String, String)] = threads.flatMap(thread =>
+//      thread.getMessages.asScala.map(thread.getId -> _.getId)
+//    )
+//    val msgIdsByThreadId: Map[String, List[String]] = msgIdsByThread
+//      .groupBy(_._1)
+//      .view
+//      .mapValues(_.map(_._2).toList)
+//      .toMap
+//    //      .map { case (k, vs) =>
+//    //      k -> vs.map(_._2).toList
+//    //    }
+//    val msgIds: mutable.Seq[String] = threads.flatMap(_.getMessages.asScala.map(_.getId))
+//    // FIXME cache! both thread and message objects... in folders?
+//
+//    ???
+//  }
+//}

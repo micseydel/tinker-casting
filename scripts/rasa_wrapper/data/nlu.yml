@@ -146,6 +146,14 @@ nlu:
       - I just did [a bee clump](urine:one) from [the back letterbox](litterbox:back).
       - I just sifted [poop](poop:one) and [pee](urine:one) from [the back lip box](litterbox:back).
       - I just sifted [a pee club](urine:one) from [the back litter box](litterbox:back).
+      - I just lifted [peeing](urine:one) and [poop](poop:one) from [the back litter box](litterbox:back).
+      - I just sifted [a pea clump](urine:one) from [the back of my box](litterbox:back).
+      - I just sifted [two peak lumps](urine:two) from [the back litter box](litterbox:back).
+      - I just sifted [a pea clump](urine:one) from [the back of the box](litterbox:back).
+      - I just sifted [a bean clump](urine:one) from [the back litter box](litterbox:back).
+      - I just sifted [a pea clump](urine:one) from the [back of the litter box](litterbox:back).
+      - I just sifted [two pea clumps](urine:two) from [the back water box](litterbox:back).
+      - I just sifted [a bean clump](urine:one) from [the back litter box](litterbox:back).
 
   - lookup: color
     examples: |

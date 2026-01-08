@@ -71,12 +71,13 @@ object ACAUpdater {
       case ReceiveSlidesActor(Some(slidesActor)) => initialized(slidesActor)
       case ReceiveSlidesActor(None) =>
         if (!retryDone) {
-          context.actorContext.log.warn("No slides actor yet, will check again in a second...")
-          timeKeeper !! TimeKeeper.RemindMeIn(1.seconds, context.self, CheckForSlidesOneMoreTime, None)
+          val secondsToWait = 20
+          context.actorContext.log.warn(s"No slides actor yet, will check once more in $secondsToWait seconds...")
+          timeKeeper !! TimeKeeper.RemindMeIn(secondsToWait.seconds, context.self, CheckForSlidesOneMoreTime, None)
         } else {
           context.actorContext.log.error("Fetching slides failed, not retrying again")
         }
-        Tinker.steadily
+        initializing(retryDone = true)
 
       case CheckForSlidesOneMoreTime =>
         context.actorContext.log.warn("Requesting slides actor one more time...")
