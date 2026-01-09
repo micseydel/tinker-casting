@@ -255,18 +255,14 @@ object ArchivalGroceryNoteActor {
             context.actorContext.log.info(s"Adding ${lines.size} to [[$noteName]]")
             noteRef.append(toAppend)
           }
-        } match {
-          case Failure(_: FileNotFoundException) =>
+        }.recoverWith {
+          case _: FileNotFoundException =>
             noteRef.setMarkdown(maybeThreadId match {
               case Some(threadId) => s"- ([gmail](https://mail.google.com/mail/u/0/#inbox/$threadId))\n" + toAppend
               case None => toAppend
-            }) match {
-              case Failure(exception) => throw exception
-              case Success(_) =>
-            }
-          case Failure(exception) => throw exception
-          case Success(_) =>
+            })
         }
+
         Tinker.steadily
     }
   }
