@@ -9,22 +9,22 @@ import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerContext}
 import me.micseydel.model.*
 import me.micseydel.vault.NoteId
 
-import java.time.LocalDate
+import java.time.{LocalDate, ZonedDateTime}
 import scala.concurrent.duration.DurationInt
 
 private[hue] object HueListerHelperForNote {
   sealed trait Message
 
-  final case class ReceiveNoteInfo(forDay: LocalDate, whisperModel: WhisperModel, lightState: LightState, confidence: Double) extends Message
-  final case class GoNoGo(noteId: NoteId, forDay: LocalDate, model: WhisperModel, decision: Either[String, String], deferred: LightState) extends Message
+  final case class ReceiveNoteInfo(captureTime: ZonedDateTime, whisperModel: WhisperModel, lightState: LightState, confidence: Double) extends Message
+  final case class GoNoGo(noteId: NoteId, captureTime: ZonedDateTime, model: WhisperModel, decision: Either[String, String], deferred: LightState) extends Message
 
   //
 
   def apply(noteId: NoteId, manager: SpiritRef[HueListener.ReceiveDelegated])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
-    def helper(lightState: LightState, confidence: Double, model: WhisperModel, forDay: LocalDate): Ability[HelperForModel.Message] =
-      HelperForModel(noteId, confidence, lightState, context.self, VotingTimeout, model, forDay)
+    def helper(lightState: LightState, confidence: Double, model: WhisperModel, captureTime: ZonedDateTime): Ability[HelperForModel.Message] =
+      HelperForModel(noteId, confidence, lightState, context.self, VotingTimeout, model, captureTime)
 
     def waiting(baseHasAlreadyFinished: Boolean = false): Ability[Message] = Tinker.setup { context =>
       Tinker.receiveMessage {

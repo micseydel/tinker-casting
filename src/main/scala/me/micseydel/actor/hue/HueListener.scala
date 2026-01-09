@@ -25,7 +25,7 @@ import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
 
-import java.time.LocalDate
+import java.time.{LocalDate, ZonedDateTime}
 import scala.annotation.unused
 
 object HueListener {
@@ -33,7 +33,7 @@ object HueListener {
 
   final case class TranscriptionEvent(rasaAnnotatedNotedTranscription: RasaAnnotatedNotedTranscription) extends Message
 
-  case class ReceiveDelegated(noteId: NoteId, forDay: LocalDate, lightState: LightState, model: WhisperModel) extends Message
+  case class ReceiveDelegated(noteId: NoteId, captureTime: ZonedDateTime, lightState: LightState, model: WhisperModel) extends Message
 
   // just for marking something as not relevant, we ignore any incoming votes
   // REAL voting is handled by delegates
@@ -54,11 +54,15 @@ object HueListener {
 
     val dailyNoteLookup: LazierLookUpSpiritByKey[NoteId, HueListerHelperForNote.Message] = new LazierLookUpSpiritByKey()
 
-    behavior(dailyNoteLookup)
+    behavior(
+      dailyNoteLookup,
+      // FIXME: hacky
+      ZonedDateTime.now().minusDays(365)
+    )
   }
 
   // FIXME: latestCompleted re:large state so that older stuff is ignored with constant state?
-  private def behavior(dailyNoteLookup: LazierLookUpSpiritByKey[NoteId, HueListerHelperForNote.Message])
+  private def behavior(dailyNoteLookup: LazierLookUpSpiritByKey[NoteId, HueListerHelperForNote.Message], mostRecentlySeen: ZonedDateTime)
                       (implicit Tinker: EnhancedTinker[MyCentralCast],
                        noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerClock = context.system.clock
@@ -66,21 +70,19 @@ object HueListener {
     implicit val log: Logger = context.actorContext.log
 
     Tinker.receiveMessage {
-
-      case ReceiveDelegated(noteId, forDay, lightState, model) =>
-        Tinker.userExtension.chronicler !! genAckMessage(noteId, forDay, model, s"Setting lights to $lightState")
+      case ReceiveDelegated(noteId, captureTime, lightState, model) =>
+        Tinker.userExtension.chronicler !! genAckMessage(noteId, captureTime, model, s"Setting lights to $lightState")
         context.actorContext.log.info(s"Processing deferred $lightState update for $noteId, $model")
         context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Info(Material)))
         for (light <- AllList) {
           // FIXME: lightState -> JustSideEffect ???
           context.system.notifier !! NotificationCenterManager.JustSideEffect(HueCommand(HueControl.SetLight(light, lightState)))
         }
-        Tinker.steadily
+        behavior(dailyNoteLookup, captureTime)
 
       // Rasa match
       case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(_, WhisperResultMetadata(model, _, _, _)), capturedTime), noteId), Some(rasaResult@KnownIntent.set_the_lights(validated)))) =>
-        // FIXME: check expiry first?
-        val isStale = TimeUtil.timeSince(capturedTime).toMinutes > IgnoredMinutesAgo
+        val isStale = capturedTime.isBefore(mostRecentlySeen) || TimeUtil.timeSince(capturedTime).toMinutes > IgnoredMinutesAgo
         if (isStale) {
           log.info(s"Ignored $noteId because it was more than $IgnoredMinutesAgo minutes ago, even though it was a valid light-changing request")
           context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Warning(Material)), Some(("isstale", 1)))
@@ -98,8 +100,8 @@ object HueListener {
               } match {
                 case (potentiallyUpdated, delegate) =>
                   val finalLightState: LightState = genLightState(maybeColor, maybeBrightness)
-                  delegate !! HueListerHelperForNote.ReceiveNoteInfo(capturedTime.toLocalDate, model, finalLightState, confidence)
-                  behavior(potentiallyUpdated)
+                  delegate !! HueListerHelperForNote.ReceiveNoteInfo(capturedTime, model, finalLightState, confidence)
+                  behavior(potentiallyUpdated, capturedTime)
               }
 
             case Invalid(e) =>
@@ -118,7 +120,7 @@ object HueListener {
         Tinker.steadily
 
       // no Rasa, maybe an exact-match
-      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), _), noteId), None)) =>
+      case TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(WhisperResultContent(text, _), _), captureTime), noteId), None)) =>
         val flashCommands = List("please flash the lights", "please do a light show")
         if (flashCommands.contains(text.trim.toLowerCase)) {
           context.system.notifier !! NotificationCenterManager.JustSideEffect(HueCommand(HueControl.FlashTheLights()))
@@ -128,7 +130,7 @@ object HueListener {
 
         Tinker.userExtension.gossiper !! noteId.voteConfidently(Some(true), context.messageAdapter(ReceiveVotes), Some("exact match"))
 
-        Tinker.steadily
+        behavior(dailyNoteLookup, captureTime)
 
       case ReceiveVotes(votes) =>
         if (context.actorContext.log.isDebugEnabled) {
@@ -155,7 +157,7 @@ object HueListener {
   }
 
   // FIXME: can chronicler act as a "final" tracker of what happens after voting?!
-  private def genAckMessage(noteId: NoteId, forDay: LocalDate, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
+  private def genAckMessage(noteId: NoteId, captureTime: ZonedDateTime, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
     val ackText = model match {
       case BaseModel =>
         s"Updated the lights (fast): $text"
@@ -164,7 +166,7 @@ object HueListener {
       case TurboModel => ???
     }
 
-    Chronicler.ListenerAcknowledgement(noteId, forDay, clock.now(), ackText, Some(AutomaticallyIntegrated))
+    Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, clock.now(), ackText, Some(AutomaticallyIntegrated))
   }
 
   private def genLightState(maybeLightState: Option[LightState], maybeBrightness: Option[Int])(implicit log: Logger): LightState = {
