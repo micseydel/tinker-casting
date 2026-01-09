@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import cats.implicits.catsSyntaxValidatedId
-import com.google.api.client.auth.oauth2.Credential
+import com.google.api.client.auth.oauth2.{Credential, TokenResponseException}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.gmail.model.{ListThreadsResponse, Message, MessagePart, MessagePartHeader}
@@ -14,6 +14,7 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
 import me.micseydel.actor.google.TinkerGmailService.MaxThreadResults
+import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
@@ -87,7 +88,15 @@ object GmailActor {
         implicit val requestGmailAsync: () => Unit = () => {
           implicit val ec: ExecutionContextExecutor = context.system.httpExecutionContext
           implicit val l: Logger = context.actorContext.log
-          context.pipeToSelf(TinkerGmailService.fetchEmails(gmailService))(ReceiveInbox)
+          context.pipeToSelf(
+            TinkerGmailService.fetchEmails(gmailService).recoverWith {
+              case e: TokenResponseException =>
+                val msg = "Gmail has stopped updating due to (most likely) an expired token"
+                val notification = Notification(ZonedDateTime.now(), msg, None, NotificationId("goog-auth-expired"), Nil)
+                context.system.notifier !! NewNotification(notification)
+                Future.failed(e)
+            }
+          )(ReceiveInbox)
         }
 
         active(Set.empty)
