@@ -14,10 +14,12 @@ import com.google.api.services.slides.v1.SlidesScopes
 import me.micseydel.Common
 import me.micseydel.Common.getValidatedStringFromConfig
 import me.micseydel.actor.GmailExperimentActor
+import me.micseydel.actor.google.GmailActor.AuthExpiredNotificationId
+import me.micseydel.actor.notifications.NotificationCenterManager
 import me.micseydel.app.GoogleSlideUpdater
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.{File, FileInputStream, InputStreamReader}
@@ -28,10 +30,12 @@ object GoogleAuthManager {
   sealed trait Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Google API Configuration", TinkerColor.random(), "🕸️") { (context, noteRef) =>
+    implicit val tc: TinkerContext[?] = context
     noteRef.getDocument() match {
       case Validated.Valid(config: GmailConfig) =>
         // FIXME: this should almost certainly be pipeToSelf'd with a Future
         val credential: Credential = GmailAuth.authenticate(config.credentialsPath, config.tokensPath)
+        context.system.notifier !! NotificationCenterManager.CompleteNotification(AuthExpiredNotificationId.id)
         behavior(credential)
       case Validated.Invalid(e) =>
         context.actorContext.log.warn(s"Failed to get config: $e")

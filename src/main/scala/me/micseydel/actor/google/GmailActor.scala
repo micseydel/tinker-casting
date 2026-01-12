@@ -7,13 +7,12 @@ import cats.implicits.catsSyntaxValidatedId
 import com.google.api.client.auth.oauth2.{Credential, TokenResponseException}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
-import com.google.api.services.gmail.model.{ListThreadsResponse, Message, MessagePart, MessagePartHeader}
-import com.google.api.services.gmail.{Gmail, model}
+import com.google.api.services.gmail.Gmail
+import com.google.api.services.gmail.model.MessagePart
 import me.micseydel.Common
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
-import me.micseydel.actor.google.TinkerGmailService.MaxThreadResults
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
@@ -25,9 +24,7 @@ import org.slf4j.Logger
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
-import java.util
 import java.util.Base64
-import scala.collection.mutable
 import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.jdk.CollectionConverters.*
@@ -69,6 +66,7 @@ object GmailActor {
   }
 
   val NoteName = "Gmail Configuration"
+  val AuthExpiredNotificationId: NotificationId = NotificationId("goog-auth-expired")
 
   def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "💌", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
@@ -92,7 +90,7 @@ object GmailActor {
             TinkerGmailService.fetchEmails(gmailService).recoverWith {
               case e: TokenResponseException =>
                 val msg = "Gmail has stopped updating due to (most likely) an expired token"
-                val notification = Notification(ZonedDateTime.now(), msg, None, NotificationId("goog-auth-expired"), Nil)
+                val notification = Notification(ZonedDateTime.now(), msg, None, AuthExpiredNotificationId, Nil)
                 context.system.notifier !! NewNotification(notification)
                 Future.failed(e)
             }
