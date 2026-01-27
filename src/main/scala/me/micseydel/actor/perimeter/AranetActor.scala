@@ -204,6 +204,14 @@ object AranetActor {
     def anyElevated: Option[Aranet] = aras.find(_.co2 > 1000)
 
     override def getOrFail: AranetResults = this
+
+    def averageHumidity: Double = {
+      def mean(elements: List[Double]): Double = {
+        elements.sum / elements.size
+      }
+
+      mean(aras.map(_.humidity))
+    }
   }
 
   object AranetJsonProtocol extends DefaultJsonProtocol {
