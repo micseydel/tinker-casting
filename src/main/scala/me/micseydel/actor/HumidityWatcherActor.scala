@@ -23,7 +23,7 @@ object HumidityWatcherActor {
 
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AranetResults]]] = context.cast(DailyNotesRouter(
       NoteName,
-      "aranet",
+      "humidity",
       AranetJsonProtocol.payloadFormat,
       toMarkdown
     ), "DailyNotesRouter")
@@ -38,12 +38,16 @@ object HumidityWatcherActor {
               meta.captureTime
             )
 
-            val lines = s"- generated at ${meta.captureTime}" :: aras.map {
+            val lines = s"- generated at ${meta.captureTime} via [[Aranet Devices]]" :: aras.map {
               case Aranet(address, co2, humidity, name, pressure, rssi, temperature) =>
                 s"- $name = $humidity"
             }
 
-            val markdown = lines.mkString("\n")
+            val today = s"""\n# Today
+               |![[$NoteName (${context.system.clock.today()})]]
+               |""".stripMargin
+
+            val markdown = lines.mkString("\n") + today
             noteRef.setMarkdown(markdown) match {
               case Failure(exception) => throw exception
               case Success(NoOp) =>
@@ -64,10 +68,10 @@ object HumidityWatcherActor {
 
         val latest: AranetResults = items.last
 
-        s"""# Chart
+        f"""# Chart
            |
            |$chart
-           |- Latest average humdity: **${latest.averageHumidity}** at ${latest.meta.captureTime.toString.take(19)}
+           |- Latest average humidity: **${latest.averageHumidity}%.1f** at ${latest.meta.captureTime.toString.take(19)}
            |- Markdown generated ${clock.now().toString.take(19)}
            |""".stripMargin
     }
