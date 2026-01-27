@@ -109,6 +109,9 @@ object UserTinkerCast {
     @unused // driven internally by emails
     val acaUpdater = context.cast(ACAUpdater(), "ACAUpdater")
 
+    @unused
+    val humidityWatcher = context.cast(HumidityWatcherActor(), "HumidityWatcherActor")
+
     Tinker.receiveMessage {
       case NoOp =>
         context.actorContext.log.warn("didn't expect to receive a message")
