@@ -64,15 +64,25 @@ object HumidityWatcherActor {
         "No measurements\n"
       case _ =>
         val measurements: List[Double] = items.sortBy(_.meta.captureTime).map(_.averageHumidity)
-        val chart = ObsidianCharts.chart(List.fill(measurements.size)(""), List(DoubleSeries("humdity", measurements)))
+        val averageChart = ObsidianCharts.chart(List.fill(measurements.size)(""), List(DoubleSeries("average", measurements)))
+
+        // FIXME: hack
+        val justBedroomHumidity = items.flatMap(_.aras).filter(_.name == "Aranet4 29686").map(_.humidity)
+        val justBedroomChart = ObsidianCharts.chart(List.fill(justBedroomHumidity.size)(""), List(DoubleSeries("bedroom", justBedroomHumidity)))
 
         val latest: AranetResults = items.last
 
-        f"""# Chart
-           |
-           |$chart
-           |- Latest average humidity: **${latest.averageHumidity}%.1f** at ${latest.meta.captureTime.toString.take(19)}
+        f"""- Latest average humidity: **${latest.averageHumidity}%.1f** at ${latest.meta.captureTime.toString.take(19)}
            |- Markdown generated ${clock.now().toString.take(19)}
+           |# Charts
+           |
+           |## Bedroom
+           |
+           |$justBedroomChart
+           |
+           |## Average
+           |
+           |$averageChart
            |""".stripMargin
     }
   }
