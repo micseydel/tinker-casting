@@ -162,6 +162,7 @@ nlu:
       - I just did [a pee clump](urine:one) from [the pack litter box](litterbox:back).
       - I just sifted [a peat lump](urine:one) from [the back litter box](litterbox:back).
       - I just lifted [a pee-plump](urine:one) from [the back footer box](litterbox:back).
+      - I just lifted [pee](urine:one) and [pooped](poop:one) from [the back footer box](litterbox:back).
 
   - lookup: color
     examples: |
