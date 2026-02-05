@@ -35,13 +35,13 @@ object TinkerCasterApp {
   }
 
   def run(config: AppConfig): Unit = {
-    val taskNotesTasksPath = config.vaultRoot.resolve("TaskNotes/Tasks/")
+//    val taskNotesTasksPath = config.vaultRoot.resolve("TaskNotes/Tasks/")
 
     @unused
     val container =
       TinkerContainer(config, NotificationCenterAbilities.Defaults)(
         centralCastFactory(config.vaultRoot)(_, _), // effectively globals
-        UserTinkerCast(config.purpleAirReadAPIKey, taskNotesTasksPath)(_: EnhancedTinker[MyCentralCast])
+        UserTinkerCast(config.purpleAirReadAPIKey, config.pirateWeatherApiKey)(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] System done starting")
@@ -65,7 +65,7 @@ case class MyCentralCast(
 
 
 object UserTinkerCast {
-  def apply(purpleAirApiKey: Option[String], taskNotesTasksPath: Path)(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[NoOp.type] = Tinker.setup { context =>
+  def apply(purpleAirApiKey: Option[String], pirateWeatherApiKey: Option[String])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[NoOp.type] = Tinker.setup { context =>
     @unused
     val appRestartTracker = context.cast(AppRestartTracker(), "AppRestartTracker")
 
@@ -111,6 +111,11 @@ object UserTinkerCast {
 
     @unused
     val humidityWatcher = context.cast(HumidityWatcherActor(), "HumidityWatcherActor")
+
+    pirateWeatherApiKey.foreach { key =>
+      @unused
+      val weatherActor = context.cast(WeatherActor(key), "WeatherActor")
+    }
 
     Tinker.receiveMessage {
       case NoOp =>
