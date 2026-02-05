@@ -71,7 +71,7 @@ object ACAUpdater {
       case ReceiveSlidesActor(Some(slidesActor)) => initialized(slidesActor)
       case ReceiveSlidesActor(None) =>
         if (!retryDone) {
-          val secondsToWait = 20
+          val secondsToWait = 10
           context.actorContext.log.warn(s"No slides actor yet, will check once more in $secondsToWait seconds...")
           timeKeeper !! TimeKeeper.RemindMeIn(secondsToWait.seconds, context.self, CheckForSlidesOneMoreTime, None)
         } else {
