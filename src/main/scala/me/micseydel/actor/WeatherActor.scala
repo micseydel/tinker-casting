@@ -10,11 +10,13 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 import net.jcazevedo.moultingyaml.{PimpedString, *}
 import spray.json.*
 
+import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
@@ -112,38 +114,57 @@ object WeatherActor {
 
     def setWeather(weatherResult: WeatherResult)(implicit context: TinkerContext[?]): Unit = {
       import JsonFormat.*
+
+      val alertsMarkdown: String = weatherResult.alerts.map {
+        case alert@Alert(title, _, severity, _, _, description, uri) =>
+          s"""> [!danger] $title ([ref]($uri))
+             |> (${alert.timeZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)} - ${alert.expiresZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)})
+             |> ${description.replace("\n", "\n> ")}
+             |> For more details:
+             |""".stripMargin
+      }.mkString("\n")
+
       noteRef.setMarkdown(
         s"""- [ ] Click to refresh ${context.system.clock.now()}
+           |
+           |$alertsMarkdown
            |
            |- Current (${weatherResult.alerts.size} alerts)
            |    - Humidity ${weatherResult.currently.humidity}
            |    - UV index ${weatherResult.currently.uvIndex}
            |    - Apparent temperature ${weatherResult.currently.apparentTemperature}
            |
-           |# Alerts
+           |# Raw
+           |
+           |## Alerts
            |
            |```json
            |${weatherResult.alerts.toJson.prettyPrint}
            |```
            |
-           |# Minutely
+           |## Minutely (rain)
            |
            |```json
            |${weatherResult.minutely.toJson.prettyPrint}
            |```
            |
-           |# Hourly
+           |## Hourly
            |
            |```json
            |${weatherResult.hourly.toJson.prettyPrint}
            |```
            |
-           |# Daily
+           |## Daily
            |
            |```json
            |${weatherResult.daily.toJson.prettyPrint}
            |```
            |
+           |## Currently
+           |
+           |```json
+           |${weatherResult.currently.toJson.prettyPrint}
+           |```
            |""".stripMargin) match {
         case Failure(exception) => throw exception
         case Success(NoOp) =>
@@ -318,7 +339,10 @@ object WeatherActor {
                      expires: Long,
                      description: String,
                      uri: String
-                   )
+                   ) {
+    def timeZoned: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
+    def expiresZoned: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(expires), ZoneId.systemDefault())
+  }
 
   case class Flags(
                     sources: List[String],
