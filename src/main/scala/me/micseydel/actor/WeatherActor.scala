@@ -116,23 +116,31 @@ object WeatherActor {
       import JsonFormat.*
 
       val alertsMarkdown: String = weatherResult.alerts.map {
-        case alert@Alert(title, _, severity, _, _, description, uri) =>
-          s"""> [!danger] $title ([ref]($uri))
-             |> (${alert.timeZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)} - ${alert.expiresZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)})
+        case alert@Alert(title, _, severity, _, _, description, _) =>
+          s"""> [!danger] \\[${alert.timeZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)}] $title ($severity)
+             |> Through: ${alert.expiresZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)}
              |> ${description.replace("\n", "\n> ")}
-             |> For more details:
              |""".stripMargin
       }.mkString("\n")
+
+      val rainForecast = weatherResult.hourly.data.map {
+        case data@HourlyData(time, summary, icon, precipIntensity, precipProbability, precipIntensityError, precipAccumulation, precipType, temperature, apparentTemperature, dewPoint, humidity, pressure, windSpeed, windGust, windBearing, cloudCover, uvIndex, visibility, ozone, nearestStormDistance, nearestStormBearing) =>
+          s"${data.timeZoned.format(TimeUtil.WithinDayHourMinute24HourDateTimeFormatter)}: ${precipProbability*100}% ($summary)"
+      }.mkString("- ", "\n- ", "")
 
       noteRef.setMarkdown(
         s"""- [ ] Click to refresh ${context.system.clock.now()}
            |
            |$alertsMarkdown
            |
-           |- Current (${weatherResult.alerts.size} alerts)
+           |- Current
            |    - Humidity ${weatherResult.currently.humidity}
            |    - UV index ${weatherResult.currently.uvIndex}
            |    - Apparent temperature ${weatherResult.currently.apparentTemperature}
+           |
+           |## Rain Forecast
+           |
+           |$rainForecast
            |
            |# Raw
            |
@@ -140,12 +148,6 @@ object WeatherActor {
            |
            |```json
            |${weatherResult.alerts.toJson.prettyPrint}
-           |```
-           |
-           |## Minutely (rain)
-           |
-           |```json
-           |${weatherResult.minutely.toJson.prettyPrint}
            |```
            |
            |## Hourly
@@ -164,6 +166,12 @@ object WeatherActor {
            |
            |```json
            |${weatherResult.currently.toJson.prettyPrint}
+           |```
+           |
+           |## Minutely (rain)
+           |
+           |```json
+           |${weatherResult.minutely.toJson.prettyPrint}
            |```
            |""".stripMargin) match {
         case Failure(exception) => throw exception
@@ -281,7 +289,9 @@ object WeatherActor {
                          ozone: Double,
                          nearestStormDistance: Double,
                          nearestStormBearing: Int
-                       )
+                       ) {
+    def timeZoned: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
+  }
 
   case class Daily(
                     summary: String,
