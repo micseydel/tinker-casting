@@ -55,6 +55,7 @@ nlu:
       - [Butter](cat:Butter) is using [the back litter](litterbox:back).
       - I believe [Butter](cat:Butter) is using [the back glitter box](litterbox:back).
       - I just heard [peanut](cat:Peanut) pee in [the back litter box](litterbox:back).
+      - [Butter](cat:Butter) just pooped in [the back litter box](litterbox:back).
 # need to add capturing senses!
 
   - intent: posthoc_litter_observation
