@@ -284,10 +284,16 @@ case class Document(report: Report, inbox: List[String]) {
 
   def append(dataPoint: DataPoint): Document = this.copy(report = report.append(dataPoint))
 
-  def appendToInbox(string: String): Document = this.copy(
-    report = report.copy(audited = false),
-    inbox = string :: inbox
-  )
+  def appendToInbox(string: String): Document = {
+    if (inbox.contains(string)) {
+      this
+    } else {
+      this.copy(
+        report = report.copy(audited = false),
+        inbox = string :: inbox
+      )
+    }
+  }
 
   private def inboxMd: String = ("# Inbox" :: "" :: inbox.map("- " + _).reverse).mkString("\n")
 
