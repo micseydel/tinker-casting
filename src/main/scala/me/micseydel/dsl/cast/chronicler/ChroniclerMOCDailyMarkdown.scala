@@ -24,7 +24,6 @@ object ChroniclerMOCDailyMarkdown {
       case AddNote(noteEntry) =>
         document.addEntry(noteEntry)
       case ack@ListenerAcknowledgement(_, _, _, _, _) =>
-        log.warn(s"adding ack for ${ack.noteRef}")
         document.addAcknowledgement(ack)
     }).toMarkdown
   }

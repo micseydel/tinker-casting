@@ -59,11 +59,8 @@ object RecurringResponsibilityActor {
           timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, TimerUp, Some(TimerUp))
 
           if (markedAsDone) {
-            // FIXME: why doesn't this work? hypothesis?
             val forDay = context.system.clock.today() // FIXME: we can't ack without knowing the day the NoteId was, and this will be mostly right for now 😕 (the race condition is unlikely!)
-            val ack = Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
-            context.actorContext.log.warn(s"Attempting ack (a): $ack")
-            Tinker.userExtension.chronicler !! ack
+            Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
             val today = context.system.clock.today()
             noteRef.prepend(today, Some(today.plusDays(intervalDays)), None) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong prepending", exception)
@@ -139,9 +136,7 @@ object RecurringResponsibilityActor {
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 val forDay = context.system.clock.today()
-                val ack = Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
-                context.actorContext.log.warn(s"Attempting ack (b): $ack")
-                Tinker.userExtension.chronicler !! ack
+                Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
                 noteRef.prepend(Today, Some(nextTrigger), None)
             }
 
@@ -172,8 +167,7 @@ object RecurringResponsibilityActor {
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
                 context.actorContext.log.info(s"Prepending today ($today), setting timer for $nextTrigger, and ack'ing as done ${noteRef.noteId}")
                 noteRef.prepend(today, Some(nextTrigger), Some(noteId))
-                val ack = Chronicler.ListenerAcknowledgement(noteRef.noteId, captureTime.toLocalDate, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
-                context.actorContext.log.warn(s"Attempting ack (c): $ack")
+                val ack = Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
                 Tinker.userExtension.chronicler !! ack
               } else {
                 context.actorContext.log.info("Mark as completion request detected, but not a match")
