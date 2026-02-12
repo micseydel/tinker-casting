@@ -62,7 +62,7 @@ object RecurringResponsibilityActor {
             // FIXME: why doesn't this work? hypothesis?
             val forDay = context.system.clock.today() // FIXME: we can't ack without knowing the day the NoteId was, and this will be mostly right for now 😕 (the race condition is unlikely!)
             val ack = Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
-            context.actorContext.log.warn(s"Attempting ack (c): $ack")
+            context.actorContext.log.warn(s"Attempting ack (a): $ack")
             Tinker.userExtension.chronicler !! ack
             val today = context.system.clock.today()
             noteRef.prepend(today, Some(today.plusDays(intervalDays)), None) match {

@@ -54,7 +54,7 @@ object ChroniclerMOC {
           context.actorContext.log.info(s"Forwarding AddNote ${noteEntry.ref}")
           ChroniclerMOCDailyNote.AddNote(noteEntry)
         case ListenerAcknowledgement(noteRef, forDay, timeOfAck, details, setState) =>
-          context.actorContext.log.info(s"Forwarding ListenerAcknowledgement $noteRef")
+          context.actorContext.log.info(s"Forwarding ListenerAcknowledgement $noteRef for day $forDay")
           ChroniclerMOCDailyNote.ListenerAcknowledgement(noteRef, forDay, timeOfAck, details, setState)
       }
 
