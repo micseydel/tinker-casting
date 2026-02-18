@@ -50,15 +50,17 @@ object WeatherActor {
     Tinker.receiveMessage {
       case ReceiveNotePing(NoOp) =>
         if (noteRef.checkBoxIsChecked()) {
-          context.actorContext.log.warn("Starting weather request!")
+          context.actorContext.log.debug("Starting weather request!")
           context.pipeToSelf(startHttp(apiKey, config))(Receive)
-        } else context.actorContext.log.warn("Box not checked")
+        } else {
+          context.actorContext.log.debug("Box not checked")
+        }
         Tinker.steadily
       case Receive(tried) =>
         tried match {
           case Failure(exception) => context.actorContext.log.warn(s"Problem fetching weather", exception)
           case Success(httpResponse) =>
-            context.actorContext.log.warn("Piping weather request response to self")
+            context.actorContext.log.info("Piping weather request response to self")
             val umarshal: Unmarshal[ResponseEntity] = Unmarshal(httpResponse.entity)
             val fut: Future[String] = umarshal.to[String]
             context.pipeToSelf(fut)(ReceiveUnmarshalling)
@@ -117,30 +119,47 @@ object WeatherActor {
 
       val alertsMarkdown: String = weatherResult.alerts.map {
         case alert@Alert(title, _, severity, _, _, description, _) =>
-          s"""> [!danger] \\[${alert.timeZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)}] $title ($severity)
+          s"""> [!danger]- \\[${alert.timeZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)}] $title ($severity)
              |> Through: ${alert.expiresZoned.format(TimeUtil.YearMonthDaySpaceTimeFormatter)}
              |> ${description.replace("\n", "\n> ")}
              |""".stripMargin
       }.mkString("\n")
 
-      val rainForecast = weatherResult.hourly.data.map {
+      val forecast = weatherResult.hourly.data.map {
         case data@HourlyData(time, summary, icon, precipIntensity, precipProbability, precipIntensityError, precipAccumulation, precipType, temperature, apparentTemperature, dewPoint, humidity, pressure, windSpeed, windGust, windBearing, cloudCover, uvIndex, visibility, ozone, nearestStormDistance, nearestStormBearing) =>
-          s"${data.timeZoned.format(TimeUtil.WithinDayHourMinute24HourDateTimeFormatter)}: ${precipProbability*100}% ($summary)"
+          val precipString = f"${precipProbability*100}%.0f%%"
+          val formattedPrecipitation = if (precipProbability > .2) {
+            s"==$precipString=="
+          } else if (precipProbability > 0) {
+            s"**$precipString**"
+          } else {
+            precipString
+          }
+
+          s"${data.timeZoned.format(TimeUtil.WithinDayHourMinute24HourDateTimeFormatter)}: $formattedPrecipitation ($summary)"
       }.mkString("- ", "\n- ", "")
 
+      val formattedUvIndex = if (weatherResult.currently.uvIndex > 4) {
+        s"==${weatherResult.currently.uvIndex}=="
+      } else if (weatherResult.currently.uvIndex > 3) {
+        s"**${weatherResult.currently.uvIndex}**"
+      } else {
+        s"${weatherResult.currently.uvIndex}"
+      }
+
       noteRef.setMarkdown(
-        s"""- [ ] Click to refresh ${context.system.clock.now()}
+        f"""- [ ] Click to refresh ${context.system.clock.now()}
            |
            |$alertsMarkdown
            |
-           |- Current
-           |    - Humidity ${weatherResult.currently.humidity}
-           |    - UV index ${weatherResult.currently.uvIndex}
+           |- **Current**
+           |    - Humidity ${weatherResult.currently.humidity*100}%.1f%%
+           |    - UV index $formattedUvIndex
            |    - Apparent temperature ${weatherResult.currently.apparentTemperature}
            |
-           |## Rain Forecast
+           |## Forecast
            |
-           |$rainForecast
+           |$forecast
            |
            |# Raw
            |
