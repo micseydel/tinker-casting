@@ -127,7 +127,7 @@ object WeatherActor {
 
       val forecast = weatherResult.hourly.data.map {
         case data@HourlyData(time, summary, icon, precipIntensity, precipProbability, precipIntensityError, precipAccumulation, precipType, temperature, apparentTemperature, dewPoint, humidity, pressure, windSpeed, windGust, windBearing, cloudCover, uvIndex, visibility, ozone, nearestStormDistance, nearestStormBearing) =>
-          val precipString = f"${precipProbability*100}%.0f%%"
+          val precipString = f"${precipProbability * 100}%.0f%%"
           val formattedPrecipitation = if (precipProbability > .2) {
             s"==$precipString=="
           } else if (precipProbability > 0) {
@@ -136,7 +136,27 @@ object WeatherActor {
             precipString
           }
 
-          s"${data.timeZoned.format(TimeUtil.WithinDayHourMinute24HourDateTimeFormatter)}: $formattedPrecipitation ($summary)"
+          s"${data.timeZoned.format(TimeUtil.WithinDayHourMinute24HourDateTimeFormatter)}: $formattedPrecipitation ($summary)" + (if (windSpeed > 5 || windGust > 10) {
+            val formattedWindSpeed = if (windSpeed > 15) {
+              s"==$windSpeed=="
+            } else if (windSpeed > 10) {
+              s"**$windSpeed**"
+            } else {
+              s"$windSpeed"
+            }
+
+            val formattedGust = if (windGust > 20) {
+              s"==$windGust=="
+            } else if (windGust > 15) {
+              s"**$windGust**"
+            } else {
+              s"$windGust"
+            }
+
+            s"\n    - Wind speed $formattedWindSpeed, gusts $formattedGust"
+          } else {
+            ""
+          })
       }.mkString("- ", "\n- ", "")
 
       val formattedUvIndex = if (weatherResult.currently.uvIndex > 4) {
@@ -153,7 +173,7 @@ object WeatherActor {
            |$alertsMarkdown
            |
            |- **Current**
-           |    - Humidity ${weatherResult.currently.humidity*100}%.1f%%
+           |    - Humidity ${weatherResult.currently.humidity * 100}%.1f%%
            |    - UV index $formattedUvIndex
            |    - Apparent temperature ${weatherResult.currently.apparentTemperature}
            |
@@ -215,7 +235,7 @@ object WeatherActor {
   private object JsonFormat extends DefaultJsonProtocol {
     implicit val flagsJsonFormat: RootJsonFormat[Flags] = jsonFormat4(Flags)
     implicit val alertsJsonFormat: RootJsonFormat[Alert] = jsonFormat7(Alert)
-//    implicit val dailyDataFormat = jsonFormat39(DailyData)
+    //    implicit val dailyDataFormat = jsonFormat39(DailyData)
     implicit val dailyDataJsonFormat: RootJsonFormat[DailyData] = jsonFormat22(DailyData)
     implicit val dailyJsonFormat: RootJsonFormat[Daily] = jsonFormat3(Daily)
     implicit val hourlyDataFormat: RootJsonFormat[HourlyData] = jsonFormat22(HourlyData)
@@ -322,34 +342,34 @@ object WeatherActor {
                         time: Long,
                         summary: String,
                         icon: String,
-//                        sunriseTime: Long,
-//                        sunsetTime: Long,
-//                        moonPhase: Double,
+                        //                        sunriseTime: Long,
+                        //                        sunsetTime: Long,
+                        //                        moonPhase: Double,
                         precipIntensity: Double,
                         precipIntensityMax: Double,
                         precipIntensityMaxTime: Long,
                         precipProbability: Double,
                         precipAccumulation: Double,
                         precipType: String,
-//                        temperatureHigh: Double,
-//                        temperatureHighTime: Long,
-//                        temperatureLow: Double,
-//                        temperatureLowTime: Long,
-//                        apparentTemperatureHigh: Double,
-//                        apparentTemperatureHighTime: Long,
-//                        apparentTemperatureLow: Double,
-//                        apparentTemperatureLowTime: Long,
-//                        dewPoint: Double,
+                        //                        temperatureHigh: Double,
+                        //                        temperatureHighTime: Long,
+                        //                        temperatureLow: Double,
+                        //                        temperatureLowTime: Long,
+                        //                        apparentTemperatureHigh: Double,
+                        //                        apparentTemperatureHighTime: Long,
+                        //                        apparentTemperatureLow: Double,
+                        //                        apparentTemperatureLowTime: Long,
+                        //                        dewPoint: Double,
                         humidity: Double,
                         pressure: Double,
                         windSpeed: Double,
-//                        windGust: Double,
-//                        windGustTime: Long,
-//                        windBearing: Long,
-//                        cloudCover: Double,
+                        //                        windGust: Double,
+                        //                        windGustTime: Long,
+                        //                        windBearing: Long,
+                        //                        cloudCover: Double,
                         uvIndex: Double,
                         uvIndexTime: Long,
-//                        visibility: Double,
+                        //                        visibility: Double,
                         temperatureMin: Double,
                         temperatureMinTime: Long,
                         temperatureMax: Double,
@@ -361,22 +381,23 @@ object WeatherActor {
                       )
 
   case class Alert(
-                     title: String,
-                     regions: List[String],
-                     severity: String,
-                     time: Long,
-                     expires: Long,
-                     description: String,
-                     uri: String
-                   ) {
+                    title: String,
+                    regions: List[String],
+                    severity: String,
+                    time: Long,
+                    expires: Long,
+                    description: String,
+                    uri: String
+                  ) {
     def timeZoned: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault())
+
     def expiresZoned: ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(expires), ZoneId.systemDefault())
   }
 
   case class Flags(
                     sources: List[String],
                     sourceTimes: Map[String, String],
-//                    nearestStation: Double,
+                    //                    nearestStation: Double,
                     units: String,
                     version: String
                   )
