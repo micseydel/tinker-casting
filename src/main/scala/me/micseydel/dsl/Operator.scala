@@ -110,7 +110,7 @@ object Operator {
         behavior(systemWideTimeKeeper, timeKeeper, homeMonitor, gmailSubscription, Some(slides))
 
       case FetchGoogleSlides(replyTo) =>
-        if (slides.isEmpty) context.log.warn(s"$replyTo requested slides, but we don't have slides yet!")
+        if (slides.isEmpty) context.log.info(s"$replyTo requested slides, but we don't have slides yet!")
         replyTo !!! slides
         Behaviors.same
     }
