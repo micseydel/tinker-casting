@@ -45,10 +45,18 @@ object GmailActor {
 
   private val formatterUnderTest = DateTimeFormatter.ofPattern("EEE,  d MMM yyyy HH:mm:ss Z")
 
+  // FIXME: move this value class to somewhere shared
+  class Hyperlink(val hyperlink: String) extends AnyVal {
+    override def toString: String = hyperlink
+  }
+
   case class Email(sender: String, subject: String, body: String, sentAt: String, groupedHeaders: Map[String, List[String]], maybeThreadId: Option[String]) {
     private def tryToGetWestCoastTime: Try[ZonedDateTime] =
       Try(ZonedDateTime.parse(sentAt))
         .map(_.withZoneSameInstant(ZoneId.of("America/Los_Angeles")))
+
+    def maybeGmailHyperlink: Option[Hyperlink] =
+      maybeThreadId.map(threadId => new Hyperlink(s"https://mail.google.com/mail/u/0/#inbox/$threadId"))
 
     def getTimeHacky: Try[ZonedDateTime] = {
       val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss Z")

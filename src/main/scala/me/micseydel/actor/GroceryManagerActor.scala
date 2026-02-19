@@ -2,7 +2,7 @@ package me.micseydel.actor
 
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
-import me.micseydel.actor.google.GmailActor.Email
+import me.micseydel.actor.google.GmailActor.{Email, Hyperlink}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.*
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -80,7 +80,7 @@ object GroceryListMOCActor {
       case Validated.Valid(Document(nextNote, _, _, Config(senderEquals, subjectContains))) =>
         context.actorContext.log.info(s"Starting with nextNote=$nextNote, senderEquals=$senderEquals, subjectContains=$subjectContains")
         implicit val currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message] = context.cast(CurrentGroceryNoteActor(nextNote), Common.tryToCleanForActorName(nextNote))
-        implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[(Option[String], LocalDate)] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
+        implicit val doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[(Option[Hyperlink], LocalDate)] = anEmailIndicatesTurnOver(senderEquals, subjectContains)(_, _)
         behavior(Map.empty)
 
       case Validated.Invalid(problems) =>
@@ -89,7 +89,7 @@ object GroceryListMOCActor {
     }
   }
 
-  private def behavior(archivalSpiritRefs: Map[LocalDate, SpiritRef[ArchivalGroceryNoteActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message], doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[(Option[String], LocalDate)]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(archivalSpiritRefs: Map[LocalDate, SpiritRef[ArchivalGroceryNoteActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, currentGroceryNoteActor: SpiritRef[CurrentGroceryNoteActor.Message], doTurnOverFor: (Seq[Email], ZonedDateTime) => Option[(Option[Hyperlink], LocalDate)]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     Tinker.receiveMessage {
       case ReceiveEmails(emails) =>
@@ -137,16 +137,16 @@ object GroceryListMOCActor {
   //
 
   // returns the day for turnover as well as the Option(threadId)
-  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime)(implicit log: Logger): Option[(Option[String], LocalDate)] = {
+  private def anEmailIndicatesTurnOver(senderEquals: String, subjectContains: List[String])(emails: Seq[Email], lastSeenDate: ZonedDateTime)(implicit log: Logger): Option[(Option[Hyperlink], LocalDate)] = {
     emails.flatMap {
-      case email@Email(sender, subject, _, _, _, threadId) =>
+      case email@Email(sender, subject, _, _, _, _) =>
         email.getTimeHacky match {
           case Success(dateFromEmail) =>
             val matches = dateFromEmail.isAfter(lastSeenDate) &&
               sender == senderEquals &&
               subjectContains.exists(subject.contains)
             if (matches) {
-              Some(threadId -> dateFromEmail.toLocalDate)
+              Some(email.maybeGmailHyperlink -> dateFromEmail.toLocalDate)
             } else {
               None
             }
@@ -155,7 +155,7 @@ object GroceryListMOCActor {
             None
         }
     }
-  }.maxOption
+  }.maxByOption(_._2)
 
   //
 
@@ -214,7 +214,7 @@ object GroceryListMOCActor {
 object CurrentGroceryNoteActor {
   sealed trait Message
 
-  final case class DoTurnOver(archivalNote: SpiritRef[ArchivalGroceryNoteActor.Message], maybeThreadId: Option[String]) extends Message
+  final case class DoTurnOver(archivalNote: SpiritRef[ArchivalGroceryNoteActor.Message], maybeGmailHyperlink: Option[Hyperlink]) extends Message
 
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "☑️️") { (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
@@ -240,7 +240,7 @@ object CurrentGroceryNoteActor {
 object ArchivalGroceryNoteActor {
   sealed trait Message
 
-  final case class AddContents(lines: Seq[String], maybeThreadId: Option[String]) extends Message
+  final case class AddContents(lines: Seq[String], maybeGmailHyperlink: Option[Hyperlink]) extends Message
 
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "✅️") { (context, noteRef) =>
     Tinker.receiveMessage {

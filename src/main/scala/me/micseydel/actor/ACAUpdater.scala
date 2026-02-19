@@ -3,7 +3,7 @@ package me.micseydel.actor
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.google.GmailActor
-import me.micseydel.actor.google.GmailActor.Email
+import me.micseydel.actor.google.GmailActor.{Email, Hyperlink}
 import me.micseydel.app.GoogleSlideUpdater
 import me.micseydel.app.GoogleSlideUpdater.Replacement
 import me.micseydel.dsl.*
@@ -97,7 +97,7 @@ object ACAUpdater {
         checkForMatchingEmails(emails) match {
           case Validated.Valid(maybeMatch) =>
             maybeMatch match {
-              case Some(emailMatch@EmailMatch(title, brb, body, footer)) =>
+              case Some(emailMatch@EmailMatch(title, brb, body, footer, _)) =>
                 context.actorContext.log.info(s"Match for $title! Updating slide...")
                 noteRef.writeMatchingEmailToDisk(emailMatch) match {
                   case Failure(exception) => context.actorContext.log.warn(s"Failed to write matching email to disk! ${emailMatch.title}", exception)
@@ -127,11 +127,12 @@ object ACAUpdater {
                          title: String,
                          brb: String,
                          body: String,
-                         footer: String
+                         footer: String,
+                         maybeGmailHyperlink: Option[Hyperlink]
                        )
 
   private def checkForMatchingEmails(emails: Seq[Email])(implicit config: ACAUpdaterConfig): ValidatedNel[String, Option[EmailMatch]] = {
-    val matches = emails.filter(_.subject == config.subject).map(_.body).flatMap { rawBody =>
+    val matches = emails.filter(_.subject == config.subject).map(email => (email.body, email.maybeGmailHyperlink)).flatMap { case (rawBody, maybeGmailHyperlink) =>
       rawBody.split("\n").toList.map(_.trim) match {
         case _ :: _ :: _ :: _ :: _ :: _ :: _ :: _ :: day :: _ :: _ :: _ :: topic :: _ :: _ :: brb :: _ :: theRest =>
           val subjectWithoutPrefix = if (topic.startsWith(config.topicPrefix)) {
@@ -145,7 +146,7 @@ object ACAUpdater {
           bodyAndFooter.lastOption.map { footer =>
             val bodyLines = bodyAndFooter.dropRight(2)
             val topic = s"$day - $fixedSubject"
-            EmailMatch(topic, brb, bodyLines.mkString("\n"), footer)
+            EmailMatch(topic, brb, bodyLines.mkString("\n"), footer, maybeGmailHyperlink)
           }
 
         case _ => None
@@ -202,9 +203,13 @@ object ACAUpdater {
     }
 
     def writeMatchingEmailToDisk(matching: EmailMatch)(implicit context: TinkerContext[?]): Try[NoOp.type] = {
+      val provenance = matching.maybeGmailHyperlink
+        .map(link => s"    - (via [gmail]($link))\n")
+        .getOrElse("")
+
       noteRef.setMarkdown(
         s"""- Generated: ${context.system.clock.now()}
-           |
+           |$provenance
            |# ${matching.title}
            |
            |**${matching.brb}**
