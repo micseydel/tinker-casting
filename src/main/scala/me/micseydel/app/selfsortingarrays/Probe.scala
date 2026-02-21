@@ -2,7 +2,8 @@ package me.micseydel.app.selfsortingarrays
 
 import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.SelfSortingArrayDebugger.Message
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{CellState, InsertionSortCellWrapper}
+import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
+import me.micseydel.app.selfsortingarrays.cell.atom.InsertionSortCellState
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
@@ -20,7 +21,7 @@ object Probe {
 
   final case class Register(id: Int, value: Int, filename: String) extends Message
 
-  final case class UpdatedState(id: Int, cellState: CellState) extends Message
+  final case class UpdatedState(id: Int, cellState: InsertionSortCellState) extends Message
 
   final case class MessageSend(senderId: Option[Int], recipientId: Int, msg: String) extends Message
 
@@ -58,7 +59,7 @@ object Probe {
         debugger !! SelfSortingArrayDebugger.UpdatedState(id, probeState)
         behavior(updatedState)
 
-      case UpdatedState(id, CellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
+      case UpdatedState(id, InsertionSortCellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
         state.get(id) match {
           case Some(CellProbeState(None, None, oldIndex, _)) if newLeftNeighbor.isEmpty && newRightNeighbor.isEmpty && oldIndex == newIndex =>
             noteRef.appendLine2(s"""- $id uninitialized""") match {
