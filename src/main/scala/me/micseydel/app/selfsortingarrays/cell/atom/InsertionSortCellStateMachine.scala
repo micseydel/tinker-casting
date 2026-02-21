@@ -25,11 +25,11 @@ object InsertionSortCellStateMachine {
         markdownListHistoryLine("initialized, waiting") ->
           InsertionSortCellStateMachine.waiting(state, updatedState)
 
-      case _ => ???
+      case _ => throw InvariantViolation("only ready to init")
     }
   }
 
-  def waiting(priorState: InsertionSortCellState, state: InsertionSortCellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+  def waiting(priorState: InsertionSortCellState, state: InsertionSortCellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { _ =>
     helper("waiting")(Some(priorState), state) {
       case Initialize(leftNeighbor, rightNeighbor) => throw InvariantViolation(s"can't initialize, already initialized; leftNeighbor=$leftNeighbor, rightNeighbor=$rightNeighbor")
       case DoSort =>
@@ -37,13 +37,13 @@ object InsertionSortCellStateMachine {
           markdownListHistoryLine(s"swapping right do to a DoSort; left neighbor = ${state.maybeLeftNeighbor.map(_.id)}") ->
             InsertionSortCellStateMachine.swappingRight(state, state, state.maybeLeftNeighbor, "DoSort->waiting")
         } else {
-          state.maybeRightNeighbor.foreach(_ !~! DoSort)
+          state.maybeRightNeighbor.foreach(_ !~! DoSort) // FIXME
           markdownListHistoryLine(s"DoSort propagated right ${state.maybeRightNeighbor.map(_.id)}") ->
             InsertionSortCellStateMachine.waiting(state, state)
         }
       case protocol: SwapProtocol =>
         protocol match {
-          // FIXME: should this reject (or at least log) when a smaller number tries to begin a swap?
+          // FIX?ME: should this reject (or at least log) when a smaller number tries to begin a swap?
           case BeginSwap(newLeft, originator) =>
             // our left neighbor is trying to swap with THIS; it's moving right, THIS is moving left
             // - THIS is receiving a replacement (or None) left neighbor
@@ -63,18 +63,18 @@ object InsertionSortCellStateMachine {
                 // meaning our left neighbor is taking our place and our new left neighbor is their old left neighbor,
                 // so we let our OLD left neighbor know
                 val updatedState = state.copy(state.index - 1, maybeLeftNeighbor = newLeft, maybeRightNeighbor = Some(oldLeftNeighbor))
-                state.maybeRightNeighbor.foreach(_ !~! NotifyOfSwap(Left(Some(oldLeftNeighbor)), self.id))
-                oldLeftNeighbor !~! CompleteSwap(Right(state.maybeRightNeighbor), self.id)
+                state.maybeRightNeighbor.foreach(_ !~! NotifyOfSwap(Left(Some(oldLeftNeighbor)), self.id)) // FIXME
+                oldLeftNeighbor !~! CompleteSwap(Right(state.maybeRightNeighbor), self.id) // FIXME
                 markdownListHistoryLine("begin swap resulted in waiting, decremented index") ->
                   InsertionSortCellStateMachine.waiting(state, updatedState)
             }
           case CompleteSwap(newRightOrReject, originator) =>
             newRightOrReject match {
-              case Left(NoOp) => ???
+              case Left(NoOp) => throw InvariantViolation("no rejection logic yet")
               case Right(newRight) =>
                 // this means we moved right
                 val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
-                state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
+                state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id)) // FIXME
                 if (updatedState.wantToSwapWithRight()) {
                   markdownListHistoryLine(s"swapping right (index++) because of a complete swap($originator) (new right = ${updatedState.maybeRightId}), left neighbor=${state.maybeLeftId}") ->
                     InsertionSortCellStateMachine.swappingRight(state, updatedState, state.maybeLeftNeighbor, "CompleteSwap->waiting")
@@ -109,14 +109,14 @@ object InsertionSortCellStateMachine {
   }
 
 
-  // FIXME: waiting / prepped to swap right
-  def swappingRight(priorState: InsertionSortCellState, state: InsertionSortCellState,
-                    oldLeftNeighbor: Option[InsertionSortCellWrapper] // FIXME DEBUGGING is this necessary? can it be removed?
+  // FIX?ME: waiting / prepped to swap right
+  private def swappingRight(priorState: InsertionSortCellState, state: InsertionSortCellState,
+                    oldLeftNeighbor: Option[InsertionSortCellWrapper] // FIX?ME DEBUGGING is this necessary? can it be removed?
                     , from: String // for debugging
                    )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = {
 
 
-    // FIXME: hacking
+    // FIX?ME: hacking
     def debuggingHacking(rightNeighbor: InsertionSortCellWrapper, oldLeftNeighbor: Option[InsertionSortCellWrapper]): Unit = {
       if (self.id == 5) {
         if (rightNeighbor.id == 7 && oldLeftNeighbor.map(_.id).contains(1) && state.maybeLeftNeighbor.map(_.id).contains(6)) {
@@ -129,20 +129,20 @@ object InsertionSortCellStateMachine {
       }
     }
 
-    // FIXME: fold waitingForClockTick into this method?
+    // FIX?ME: fold waitingForClockTick into this method?
     waitingForClockTick(priorState, state,
       Tinker.setup { _ =>
         // after the clock ticks, we start the actual swapping
         state.maybeRightNeighbor match {
           case Some(rightNeighbor) =>
-            // FIXME: it seems that state.maybeLeftNeighbor needs to be used instead of oldLeftNeighbor sometimes, but how to differentiate?
+            // FIX?ME: it seems that state.maybeLeftNeighbor needs to be used instead of oldLeftNeighbor sometimes, but how to differentiate?
             debuggingHacking(rightNeighbor, oldLeftNeighbor)
 
-            // FIXME it looks like this is sometimes using a cached value instead of a newer value
+            // FIX?ME it looks like this is sometimes using a cached value instead of a newer value
             //  - using state.maybeLeftNeighbor or priorState.leftNeighbor does not work either
-            rightNeighbor !~! BeginSwap(oldLeftNeighbor, self.id)
+            rightNeighbor !~! BeginSwap(oldLeftNeighbor, self.id) // FIXME
 
-          case None => ??? // 😬
+          case None => throw InvariantViolation("can't init swap without a right neighbor") // 😬
         }
 
         helper("swappingRight")(Some(priorState), state) {
@@ -150,22 +150,22 @@ object InsertionSortCellStateMachine {
             protocol match {
               case BeginSwap(newLeft, originator) => throw InvariantViolation(s"[swappingRight ${self.id}] unexpected message from $originator: newLeft=$newLeft")
               case CompleteSwap(newRightOrReject, originator) => newRightOrReject match {
-                case Left(NoOp) => ???
+                case Left(NoOp) => throw InvariantViolation("reject not implemented")
                 case Right(newRight) =>
                   // this means we moved right
                   val updatedState = state.copy(state.index + 1, state.maybeRightNeighbor, maybeRightNeighbor = newRight)
                   // our old left needs to know that their new right is our old right
-                  state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id))
+                  state.maybeLeftNeighbor.foreach(_ !~! NotifyOfSwap(Right(state.maybeRightNeighbor), self.id)) // FIXME
 
                   if (updatedState.wantToSwapWithRight()) {
-                    // FIXME this is (probably) involved in the bug!
+                    // FIX?ME this is (probably) involved in the bug!
                     println(s"[${self.id}] CANARY left=${state.maybeLeftNeighbor.map(_.id)}; prior=${priorState.maybeLeftNeighbor.map(_.id)} and updated=${updatedState.maybeLeftNeighbor.map(_.id)}")
-                    // FIXME DEBUGGING changing state.maybeLeftNeighbor to updatedState.maybeLeftNeighbor does not resolve the problem
+                    // FIX?ME DEBUGGING changing state.maybeLeftNeighbor to updatedState.maybeLeftNeighbor does not resolve the problem
                     markdownListHistoryLine(s"complete swap from $originator resulting in swapping right, newRight=${updatedState.maybeRightId}") ->
                       InsertionSortCellStateMachine.swappingRight(state, updatedState, state.maybeLeftNeighbor, "CompleteSwap->swappingRight") // trying to use updatedState here breaks things!
                   } else {
                     if (updatedState.locallySorted()) {
-                      updatedState.maybeRightNeighbor.foreach(_ !~! DoSort)
+                      updatedState.maybeRightNeighbor.foreach(_ !~! DoSort) // FIXME
                     }
                     markdownListHistoryLine(s"complete swap from $originator resulted in waiting") ->
                       InsertionSortCellStateMachine.waiting(state, updatedState)
@@ -190,12 +190,12 @@ object InsertionSortCellStateMachine {
     )
   }
 
-  private def waitingForClockTick(priorState: InsertionSortCellState, state: InsertionSortCellState, newAbility: => Ability[Message])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+  private def waitingForClockTick(priorState: InsertionSortCellState, state: InsertionSortCellState, newAbility: => Ability[Message])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, tinkerContext: TinkerContext[?], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { _ =>
     state.sanityChecks(Some(priorState))
 
     helper("waitingForClockTick")(Some(priorState), state) {
       case BeginSwap(_, _) =>
-        priorState.maybeLeftNeighbor.foreach(_ !~! CompleteSwap(Left(NoOp), self.id))
+        priorState.maybeLeftNeighbor.foreach(_ !~! CompleteSwap(Left(NoOp), self.id)) // FIXME
         markdownListHistoryLine("LINE NOT REACHED (?!)") -> Behaviors.same
 
       case DoSort => markdownListHistoryLine(s"ignoring DoSort (presumably from ${state.maybeLeftId})") -> Behaviors.same // can safely ignore?
@@ -212,8 +212,10 @@ object InsertionSortCellStateMachine {
   // helper
 
   private def helper(tag: String)(priorState: Option[InsertionSortCellState], state: InsertionSortCellState)(
-    onMessage: Message => (String, Behavior[Message]) // FIXME: whatHappened documentation
-  )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = {
+    onMessage: Message => (String, Behavior[Message]) // FIX?ME: whatHappened documentation
+  )(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef
+//    , probe: SpiritRef[Probe.Message]
+  ): Ability[Message] = {
     Tinker.setup { context =>
       implicit val tc: TinkerContext[?] = context
       state.sanityChecks(priorState)
