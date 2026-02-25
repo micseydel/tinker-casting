@@ -117,6 +117,9 @@ object UserTinkerCast {
       val weatherActor = context.cast(WeatherActor(key), "WeatherActor")
     }
 
+    @unused
+    val rssTestingActor = context.cast(RomeRssTestingActor(), "RomeRssTestingActor")
+
     Tinker.receiveMessage {
       case NoOp =>
         context.actorContext.log.warn("didn't expect to receive a message")

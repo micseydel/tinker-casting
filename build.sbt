@@ -42,6 +42,9 @@ lazy val additionalLibraryDependencies = Seq(
   "org.dmfs" % "lib-recur" % "0.17.1",
   "net.jcazevedo" %% "moultingyaml" % "0.4.2",
 
+
+  "com.rometools" % "rome" % "2.1.0",
+
   // testing
 
   "com.typesafe.akka" %% "akka-http-testkit"         % akkaHttpVersion % Test,
