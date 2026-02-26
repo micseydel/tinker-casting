@@ -156,7 +156,7 @@ object RecurringResponsibilityActor {
           case None => context.actorContext.log.warn("No voice completion config, should not have subscribed to Gossiper and should not have received this message! Bug!")
           case Some(voiceCompletion) =>
             context.actorContext.log.debug(s"Using $voiceCompletion to check...")
-            if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("as done"))) {
+            if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("is completed") || loweredText.contains("as done"))) {
               if (voiceCompletion.matches(loweredText)) {
                 val notificationId = notificationIdForNoteId(noteRef.noteId)
                 context.system.notifier !! CompleteNotification(notificationId)
