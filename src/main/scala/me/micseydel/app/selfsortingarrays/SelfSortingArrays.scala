@@ -2,6 +2,7 @@ package me.micseydel.app.selfsortingarrays
 
 import akka.actor.typed.DispatcherSelector
 import cats.data.{NonEmptyList, Validated}
+import me.micseydel.NoOp
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.app.AppConfiguration
@@ -65,15 +66,15 @@ object Environment {
 
   private final case class NotePing(ping: Ping) extends Message
   private case object ClockTick extends Message
+  final case object StopTheClock extends Message
 
   def apply(valueList: NonEmptyList[Int])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast]): Ability[Message] = AttentiveNoteMakingTinkerer[Message, NotePing]("Self Sorting Arrays Probe", TinkerColor.random(), "🐄", NotePing) { (context, noteRef) =>
     implicit val probe: SpiritRef[Probe.Message] = Tinker.userExtension.probe
     implicit val tc: TinkerContext[?] = context
 
-    noteRef.setMarkdown(s"Initializing with $valueList") match {
-      case Failure(exception) => throw exception
-      case Success(_) =>
-    }
+    probe !! Probe.RegisterEnvironment(context.self)
+
+    noteRef.setMarkdownOrThrow(s"Initializing with $valueList")
 
     val zipped = valueList.zipWithIndex.map { case (int, startIndex) =>
       (startIndex, SelfSortingArrays.filename(startIndex, int), int)
@@ -109,10 +110,7 @@ object Environment {
 
     implicit val nr: NoteRef = noteRef
     println(s"click to sort $VALUE_LIST")
-    noteRef.setMarkdown(s"- [ ] Check to sort $VALUE_LIST") match {
-      case Failure(exception) => throw exception
-      case Success(_) =>
-    }
+    noteRef.setMarkdownOrThrow(s"- [ ] Check to sort $VALUE_LIST")
     waiting(cells)
   }
 
@@ -125,17 +123,14 @@ object Environment {
           println("Starting sort request!")
           cells.head !!! InsertionSortCell.DoSort
           val timeKeeper = context.castTimeKeeper()
-//          timeKeeper !! TimeKeeper.RemindMeEvery(2.seconds, 1.seconds, context.self, ClockTick, None)
-          timeKeeper !! TimeKeeper.RemindMeIn(3.seconds, context.self, ClockTick, None)
-//          timeKeeper !! TimeKeeper.RemindMeIn(5.seconds, context.self, ClockTick, None)
-//          timeKeeper !! TimeKeeper.RemindMeIn(7.seconds, context.self, ClockTick, None)
+          timeKeeper !! TimeKeeper.RemindMeEvery(1.seconds, 1.seconds, context.self, ClockTick, None)
           implicit val cellsList: List[CellWrapper[InsertionSortCell.Message]] = cells.toList
           clockTicking(0)
         } else {
           Tinker.steadily
         }
 
-      case ClockTick => ???
+      case ClockTick | StopTheClock => ???
     }
   }
   private def clockTicking(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[InsertionSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
@@ -147,8 +142,11 @@ object Environment {
         } else {
           Tinker.steadily // ignore
         }
+      case StopTheClock =>
+        noteRef.setMarkdownOrThrow(s"- [x] Paused\n\nsorting $VALUE_LIST\n\nclock tick: $count\n")
+        paused(count)
       case ClockTick =>
-        noteRef.setMarkdown(s"- [ ] Pause\n\nsorting $VALUE_LIST\n\nclock tick: $count\n")
+        noteRef.setMarkdownOrThrow(s"- [ ] Pause\n\nsorting $VALUE_LIST\n\nclock tick: $count\n")
         Tinker.userExtension.probe !! Probe.ClockTick(count)
         for (cell <- cells) {
           cell !!! InsertionSortCell.ClockTick(count)
@@ -159,6 +157,8 @@ object Environment {
 
   private def paused(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[InsertionSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
+
+    context.actorContext.log.warn(s"paused $count")
     Tinker.receiveMessage {
       case NotePing(_) =>
         if (!noteRef.checkBoxIsChecked()) {
@@ -166,6 +166,7 @@ object Environment {
         } else {
           Tinker.steadily // ignore
         }
+      case StopTheClock => Tinker.steadily
       case ClockTick =>
         Tinker.steadily // ignore
     }
@@ -180,6 +181,11 @@ object Environment {
         case Failure(exception) => throw exception
         case Success(result) => result
       }
+
+    def setMarkdownOrThrow(markdown: String): Unit = noteRef.setMarkdown(markdown) match {
+      case Failure(exception) => throw exception
+      case Success(NoOp) =>
+    }
   }
 
   //

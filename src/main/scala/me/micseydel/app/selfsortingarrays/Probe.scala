@@ -1,6 +1,7 @@
 package me.micseydel.app.selfsortingarrays
 
 import me.micseydel.NoOp
+import me.micseydel.app.selfsortingarrays.Environment.StopTheClock
 import me.micseydel.app.selfsortingarrays.SelfSortingArrayDebugger.Message
 import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
 import me.micseydel.app.selfsortingarrays.cell.atom.InsertionSortCellState
@@ -19,7 +20,7 @@ import scala.util.{Failure, Success}
 object Probe {
   sealed trait Message
 
-  final case class Register(id: Int, value: Int, filename: String) extends Message
+  final case class RegisterCell(id: Int, value: Int, filename: String) extends Message
 
   final case class UpdatedState(id: Int, cellState: InsertionSortCellState) extends Message
 
@@ -29,6 +30,8 @@ object Probe {
 
   final case class FoundABug(details: String) extends Message
 
+  final case class RegisterEnvironment(environment: SpiritRef[Environment.Message]) extends Message
+
   def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Notable Events", TinkerColor.random(), "🎭") { (context, noteRef) =>
     implicit val nr: NoteRef = noteRef
     noteRef.setMarkdown("waiting to start...\n\n") match {
@@ -36,7 +39,7 @@ object Probe {
       case Success(NoOp) =>
     }
     implicit val debugger: SpiritRef[SelfSortingArrayDebugger.Message] = context.cast(SelfSortingArrayDebugger(), "SelfSortingArrayDebugger")
-    behavior(Map.empty)
+    behavior(Map.empty, None)
   }
 
   case class ImmutableCellProbeState(id: Int, value: Int, filename: String)
@@ -49,15 +52,15 @@ object Probe {
     def simpleString = s"""[$index] ${maybeLeft.map(_.id).getOrElse("x")} <-> ${maybeRight.map(_.id).getOrElse("x")}"""
   }
 
-  private def behavior(state: Map[Int, CellProbeState])(implicit Tinker: Tinker, noteRef: NoteRef, debugger: SpiritRef[SelfSortingArrayDebugger.Message]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(state: Map[Int, CellProbeState], environment: Option[SpiritRef[Environment.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, debugger: SpiritRef[SelfSortingArrayDebugger.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
-      case Register(id, value, filename) =>
+      case RegisterCell(id, value, filename) =>
         val probeState = CellProbeState(maybeLeft = None, maybeRight = None, index = id, ImmutableCellProbeState(id, value, filename))
         val updatedState: Map[Int, CellProbeState] =
           state.updated(id, probeState)
         debugger !! SelfSortingArrayDebugger.UpdatedState(id, probeState)
-        behavior(updatedState)
+        behavior(updatedState, environment)
 
       case UpdatedState(id, InsertionSortCellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
         state.get(id) match {
@@ -74,7 +77,7 @@ object Probe {
               case Some(throwable) => throw throwable
               case None =>
             }
-            behavior(state.updated(id, updatedState))
+            behavior(state.updated(id, updatedState), environment)
           case Some(oldCellState@CellProbeState(oldLeft, oldRight, oldIndex, _)) =>
             val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
             debugger !! SelfSortingArrayDebugger.UpdatedState(id, updatedState)
@@ -82,7 +85,7 @@ object Probe {
               case Some(throwable) => throw throwable
               case None =>
             }
-            behavior(state.updated(id, updatedState))
+            behavior(state.updated(id, updatedState), environment)
           case None => ???
         }
       case MessageSend(senderId, recipientId, msg) =>
@@ -180,7 +183,13 @@ object Probe {
 
       case FoundABug(details) =>
         debugger !! SelfSortingArrayDebugger.FoundABug(details)
+        context.actorContext.log.warn(s"bug, stopping the clock $environment")
+        environment.foreach(_ !! StopTheClock)
         Tinker.steadily
+
+      case RegisterEnvironment(newEnvironment) =>
+        context.actorContext.log.debug(s"new env $newEnvironment")
+        behavior(state, Some(newEnvironment))
     }
   }
 

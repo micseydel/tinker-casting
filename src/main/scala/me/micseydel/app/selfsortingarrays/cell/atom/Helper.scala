@@ -1,38 +1,24 @@
 package me.micseydel.app.selfsortingarrays.cell.atom
 
 import me.micseydel.NoOp
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
-import me.micseydel.dsl.TinkerContext
+import me.micseydel.app.selfsortingarrays.Probe
+import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
+import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{InsertionSortCellWrapper, Message}
+import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success, Try}
 
 object Helper {
   implicit class InsertionSortCellRichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def updateDocument(tag: String, state: InsertionSortCellState, historyToAdd: String, retainHistory: Boolean = true)(implicit self: InsertionSortCellWrapper, context: TinkerContext[?]): Try[NoOp.type] = {
-      val historyMarkdownListLines: Seq[String] = if (retainHistory) {
-        noteRef.readMarkdownSafer() match {
-          case NoteRef.FileDoesNotExist =>
-            List(historyToAdd)
-
-          case NoteRef.Contents(Success(markdown)) =>
-            val history = markdown.split("\n")
-              .dropWhile(!_.startsWith("# History"))
-              .drop(1)
-              .filter(_.nonEmpty)
-              .map(_.drop(2))
-            history.toIndexedSeq.appended(historyToAdd)
-
-          case NoteRef.Contents(Failure(exception)) =>
-            throw exception
-        }
-      } else {
-        List(historyToAdd)
-      }
+    def updateDocument(tag: String, state: InsertionSortCellState, historyToAdd: String)(implicit self: InsertionSortCellWrapper, historyNote: SpiritRef[CellHistoryNote.Message], tinkerContext: TinkerContext[?]): Try[NoOp.type] = {
+      historyNote !! CellHistoryNote.AddLines(List(historyToAdd))
 
       val newRaw =
         s"""---
-           |tags: [$tag]
+           |tags: [$tag, cell]
            |---
            |- start index: ${self.id}
            |- index: ${state.index}
@@ -41,10 +27,38 @@ object Helper {
            |
            |# History
            |
-           |${historyMarkdownListLines.mkString("- ", "\n- ", "")}
+           |[[${CellHistoryNote.noteName(self.id)}]]
            |""".stripMargin
 
       noteRef.setRaw(newRaw)
+    }
+  }
+
+  def InvariantViolation(msg: String, finalState: InsertionSortCellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, nr: NoteRef, historyHolder: SpiritRef[CellHistoryNote.Message]): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[?] = context
+    nr.updateDocument("InvariantViolation", finalState, msg)
+    Tinker.userExtension.probe !! Probe.FoundABug(msg)
+    Tinker.done
+  }
+}
+
+object CellHistoryNote {
+  sealed trait Message
+
+  final case class AddLines(lines: List[String]) extends Message
+
+  def noteName(id: Int): String = s"Cell $id History"
+
+  def apply(id: Int)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName(id), TinkerColor.Purple, "🧫") { (context, noteRef) =>
+    noteRef.setMarkdown("# History\n\n")
+
+    Tinker.receiveMessage {
+      case AddLines(lines) =>
+        noteRef.append(lines.mkString("", "\n", "")) match {
+          case Failure(exception) => throw exception
+          case Success(NoOp) =>
+        }
+        Tinker.steadily
     }
   }
 }

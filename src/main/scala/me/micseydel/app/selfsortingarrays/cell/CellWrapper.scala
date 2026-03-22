@@ -15,6 +15,8 @@ import me.micseydel.dsl.{SpiritRef, TinkerContext}
  * @tparam CM the cell message
  */
 case class CellWrapper[CM](id: Int, value: Int, noteName: String, spiritRef: SpiritRef[CM]) {
+  def wikilink: String = s"[[$noteName]]"
+
   def !~!(message: CM)(implicit tc: TinkerContext[?], probe: SpiritRef[Probe.Message], sender: InsertionSortCellWrapper): Unit = {
     !~!(message, Some(sender.id))
   }
