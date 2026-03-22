@@ -12,10 +12,13 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
 import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
 import java.io.StringReader
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
@@ -105,6 +108,20 @@ object RomeRssTestingActor {
                  |```
                  |""".stripMargin
             }.mkString("\n")
+
+//            val t = feed.getEntries.asScala
+//              .map(entry =>
+//                (entry.getTitle, entry.getEnclosures.asScala.map(_.getUrl).toList, entry.getPublishedDate)
+//              )
+//            val x = t.sortBy(_._3).map {
+//              case y@(title, List(url), publishedDate) =>
+//                val date = TimeUtil.pythonEpocheToZonedDateTime(publishedDate.getTime/1000).format(DateTimeFormatter.ISO_LOCAL_DATE)
+//                val cleanTitle = title.replace("’", "").replace("?", "").replace(":", "-") // FIXME: quick and dirty
+//                s"- curl -o '$cleanTitle ($date).mp3' '$url'"
+//
+//              case y@(title, url, publishedDate) =>
+//                s"- ($publishedDate) $title ??- $url"
+//            }.mkString("\n")
 
             noteRef.setMarkdown(
               s"""- [ ] *fetch now*

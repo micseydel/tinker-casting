@@ -172,6 +172,7 @@ nlu:
       - I just sifted [poop](poop:one) and [two bee lumps](urine:two) from [the back letterbox](litterbox:back).
       - I just sifted [two beef lumps](urine:two) from [the bath litter box](litterbox:back).
       - I just lifted [a pee pump](urine:one) from [the back litter box](litterbox:back).
+      - I just sifted [a little bit of poop](poop:one) from [the front litter box](litterbox:front).
 
   - lookup: color
     examples: |
