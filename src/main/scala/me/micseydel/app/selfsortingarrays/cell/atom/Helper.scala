@@ -20,7 +20,8 @@ object Helper {
               .dropWhile(!_.startsWith("# History"))
               .drop(1)
               .filter(_.nonEmpty)
-            history.toIndexedSeq.appended((historyToAdd))
+              .map(_.drop(2))
+            history.toIndexedSeq.appended(historyToAdd)
 
           case NoteRef.Contents(Failure(exception)) =>
             throw exception
@@ -40,7 +41,7 @@ object Helper {
            |
            |# History
            |
-           |${historyMarkdownListLines.mkString("\n")}
+           |${historyMarkdownListLines.mkString("- ", "\n- ", "")}
            |""".stripMargin
 
       noteRef.setRaw(newRaw)

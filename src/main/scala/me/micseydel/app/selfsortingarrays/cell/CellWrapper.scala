@@ -32,18 +32,18 @@ case class CellWrapper[CM](id: Int, value: Int, noteName: String, spiritRef: Spi
             probe !! Probe.MessageSend(originator, id, "DoSort")
           case swap: SwapProtocol =>
             probe !! Probe.MessageSend(Some(swap.originator), id, swap match {
-              case BeginSwap(newLeft, _) => s"BeginSwap(newLeft=${Probe.getOptionalInsertionSortCellWrapperIdOrX(newLeft)})"
-              case CompleteSwap(newRightOrReject, _) =>
+              case BeginSwap(newLeft, _, _) => s"BeginSwap(newLeft=${Probe.getOptionalInsertionSortCellWrapperIdOrX(newLeft)})"
+              case CompleteSwap(newRightOrReject, _, _) =>
                 newRightOrReject match {
                   case Left(NoOp) =>
                     s"CompleteSwap((reject))"
                   case Right(newRight) =>
                     s"CompleteSwap(newRight=${Probe.getOptionalInsertionSortCellWrapperIdOrX(newRight)})"
                 }
-              case NotifyOfSwap(replacementLeftOrRight, _) =>
-                val leftOrRight = replacementLeftOrRight match {
-                  case Left(value) => s"left=${Probe.getOptionalInsertionSortCellWrapperIdOrX(value)}"
-                  case Right(value) => s"right=${Probe.getOptionalInsertionSortCellWrapperIdOrX(value)}"
+              case NotifyOfSwap(latestIndex, cell, _, _) =>
+                val leftOrRight = cell match {
+                  case Left(value) => s"left($latestIndex)=${value.id}"
+                  case Right(value) => s"right($latestIndex)=${value.id}"
                 }
                 s"NotifyOfSwap($leftOrRight)"
             })

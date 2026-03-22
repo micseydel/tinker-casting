@@ -125,7 +125,10 @@ object Environment {
           println("Starting sort request!")
           cells.head !!! InsertionSortCell.DoSort
           val timeKeeper = context.castTimeKeeper()
-          timeKeeper !! TimeKeeper.RemindMeEvery(2.seconds, 1.seconds, context.self, ClockTick, None)
+//          timeKeeper !! TimeKeeper.RemindMeEvery(2.seconds, 1.seconds, context.self, ClockTick, None)
+          timeKeeper !! TimeKeeper.RemindMeIn(3.seconds, context.self, ClockTick, None)
+//          timeKeeper !! TimeKeeper.RemindMeIn(5.seconds, context.self, ClockTick, None)
+//          timeKeeper !! TimeKeeper.RemindMeIn(7.seconds, context.self, ClockTick, None)
           implicit val cellsList: List[CellWrapper[InsertionSortCell.Message]] = cells.toList
           clockTicking(0)
         } else {
