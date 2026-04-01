@@ -1,6 +1,5 @@
 package me.micseydel.app.selfsortingarrays.cell.atom
 
-import me.micseydel.app.selfsortingarrays.Environment.InvariantViolation
 import me.micseydel.app.selfsortingarrays.Probe
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
 import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
@@ -22,12 +21,14 @@ case class InsertionSortCellState(index: Int, maybeLeftNeighbor: Option[Insertio
     if (maybeLeftNeighbor.map(_.id).contains(self.id)) {
       val msg = s"[${self.id}] Left neighbor ${maybeLeftNeighbor.get.id} is self!"
       Tinker.userExtension.probe !! Probe.FoundABug(msg)
-      throw InvariantViolation(msg)
+//      throw InvariantViolation(msg)
+      ???
     }
     if (maybeRightNeighbor.map(_.id).contains(self.id)) {
       val msg = s"[${self.id}] right neighbor is self!"
       Tinker.userExtension.probe !! Probe.FoundABug(msg)
-      throw InvariantViolation(msg)
+//      throw InvariantViolation(msg)
+      ???
     }
 
     // if we have two neighbors, they can't be the same
@@ -42,7 +43,8 @@ case class InsertionSortCellState(index: Int, maybeLeftNeighbor: Option[Insertio
           s"[${self.id}] Can't have left and right be the same: ${leftNeighbor.id} (no prior state)"
       }
       Tinker.userExtension.probe !! Probe.FoundABug(msg)
-      throw InvariantViolation(msg)
+//      throw InvariantViolation(msg)
+      ???
     }
   }
 

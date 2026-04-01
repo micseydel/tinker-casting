@@ -1,13 +1,10 @@
 package me.micseydel.app.selfsortingarrays
 
 import me.micseydel.NoOp
-import me.micseydel.app.selfsortingarrays.Environment.InvariantViolation
 import me.micseydel.app.selfsortingarrays.Probe.CellProbeState
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{CompleteSwap, InsertionSortCellWrapper, NotifyOfSwap}
-import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.dsl.{Tinker, TinkerColor}
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.annotation.tailrec
@@ -60,7 +57,8 @@ object SelfSortingArrayDebugger {
                 // right updated
                 StateChangeNewNeighbor(id, Right(newProbe.maybeRight.map(_.id))) :: sequenceDiagramEvents
               } else {
-                throw InvariantViolation(s"new: ${newProbe.simpleString} old: ${existing.simpleString}")
+//                throw InvariantViolation(s"new: ${newProbe.simpleString} old: ${existing.simpleString}")
+                ???
               }
             } else sequenceDiagramEvents
           case _ =>

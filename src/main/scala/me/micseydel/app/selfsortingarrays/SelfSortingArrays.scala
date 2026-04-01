@@ -187,10 +187,6 @@ object Environment {
       case Success(NoOp) =>
     }
   }
-
-  //
-
-  case class InvariantViolation(details: String) extends RuntimeException(details)
 }
 
 

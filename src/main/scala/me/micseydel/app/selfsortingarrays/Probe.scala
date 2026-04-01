@@ -2,7 +2,6 @@ package me.micseydel.app.selfsortingarrays
 
 import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.Environment.StopTheClock
-import me.micseydel.app.selfsortingarrays.SelfSortingArrayDebugger.Message
 import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
 import me.micseydel.app.selfsortingarrays.cell.atom.InsertionSortCellState
 import me.micseydel.dsl.Tinker.Ability
