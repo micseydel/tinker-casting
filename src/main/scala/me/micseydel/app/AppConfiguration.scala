@@ -12,7 +12,9 @@ object AppConfiguration {
     mqttConfig: Option[MqttConfig],
     purpleAirReadAPIKey: Option[String],
     tinkerbrainPort: Option[Int],
-    pirateWeatherApiKey: Option[String]
+    pirateWeatherApiKey: Option[String],
+    anthropic: Option[String],
+    openai: Option[String],
   )
 
   /**
@@ -43,7 +45,9 @@ object AppConfiguration {
           maybeMqttConfig,
           getOptionalString(config, "purpleAir.readAPIKey"),
           getOptionalInt(config, "vault.tinkerbrainPort"),
-          getOptionalString(config, "pirateWeather.apiKey")
+          getOptionalString(config, "pirateWeather.apiKey"),
+          getOptionalString(config, "llmProviders.key.anthropic"),
+          getOptionalString(config, "llmProviders.key.openai"),
         ))
     }
   }

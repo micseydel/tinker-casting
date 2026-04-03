@@ -117,6 +117,19 @@ abstract class NoteRef(val noteId: NoteId, val subdirectory: Option[String]) ext
         Note(markdown, Some(Yaml.dump(frontmatter)))
     }
   }
+
+  def setFrontMatterRaw(frontmatter: String): Try[Note] = {
+    upsert {
+      case Note(markdown, _) =>
+//        val options = new DumperOptions();
+//        options.setIndent(4);
+//        options.setPrettyFlow(true);
+//        // FIXME: I'm pretty sure this doesn't work
+//        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+//        val Yaml = new Yaml(options) // needs to be kept in its own thread
+        Note(markdown, Some(frontmatter))
+    }
+  }
 }
 
 object NoteRef {

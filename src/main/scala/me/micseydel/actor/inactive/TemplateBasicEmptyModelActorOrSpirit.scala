@@ -2,13 +2,31 @@ package me.micseydel.actor.inactive
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.dsl.Tinker
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
+import me.micseydel.vault.persistence.NoteRef
 
 object TemplateBasicEmptyModelActorOrSpirit {
   sealed trait Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+  val NoteName = ""
+  val Emoji = ""
+  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(NoteName, TinkerColor.random(), Emoji) { (context, noteRef) =>
+    implicit val tc: TinkerContext[?] = context
+    implicit val nr: NoteRef = noteRef
+
+    Tinker.unhandled
+  }
+
+  def noteWatcher()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer(NoteName, TinkerColor.random(), Emoji, ???) { (context, noteRef) =>
+    implicit val tc: TinkerContext[?] = context
+    implicit val nr: NoteRef = noteRef
+
+    Tinker.unhandled
+  }
+
+  def basic()(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     Tinker.unhandled
   }
 

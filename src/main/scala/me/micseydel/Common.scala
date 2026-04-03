@@ -3,6 +3,7 @@ package me.micseydel
 import cats.data.ValidatedNel
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.dsl.TinkerClock
+import me.micseydel.vault.persistence.NoteRef
 
 import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
@@ -150,6 +151,22 @@ object Common {
     map.get(key) match {
       case Some(value: String) => value.validNel
       case other => s"Expected a string for key $key but found: $other".invalidNel
+    }
+  }
+
+  implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def checkBoxIsChecked(): Boolean =
+      noteRef.readMarkdown()
+        .map(markdown => markdown.startsWith("- [x] ")) match {
+        case Failure(exception) => throw exception
+        case Success(result) => result
+      }
+
+    def setMarkdownOrThrow(markdown: String): NoOp.type = {
+      noteRef.setMarkdown(markdown) match {
+        case Failure(exception) => throw exception
+        case Success(NoOp) => NoOp
+      }
     }
   }
 }

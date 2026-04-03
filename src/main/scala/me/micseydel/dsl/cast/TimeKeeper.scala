@@ -63,22 +63,24 @@ object TimeKeeper {
   }
 
 
-//  private
   case class TimerFired[M](replyTo: SpiritRef[M], message: M) extends Message
 
   def apply()(implicit Tinker: Tinker): Ability[Message] = Tinkerer(rgb(0, 255, 0), "⏰").setup { context =>
-    implicit val c: TinkerContext[_] = context
+    implicit val c: TinkerContext[?] = context
 
     Behaviors.withTimers { timers =>
-      // startTimerAtFixedRate - send at fixed rate, e.g. every 5 seconds
-
       Behaviors.receiveMessage {
         case RemindMeIn(delay, replyTo, message, key) =>
-          timers.startSingleTimer(
-            key.getOrElse(UUID.randomUUID()),
-            TimerFired(replyTo, message),
-            delay
-          )
+          try {
+            timers.startSingleTimer(
+              key.getOrElse(UUID.randomUUID()),
+              TimerFired(replyTo, message),
+              delay
+            )
+          } catch {
+            case e: IllegalArgumentException if e.getMessage.contains("which is too far in future") =>
+              context.actorContext.log.error(s"BUG needs fixing (but restarts may mean I can wait a while): ${e.getMessage}")
+          }
 
           Behaviors.same
 
