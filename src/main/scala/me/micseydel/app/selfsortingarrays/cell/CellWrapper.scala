@@ -2,7 +2,7 @@ package me.micseydel.app.selfsortingarrays.cell
 
 import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.Probe
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{BeginSwap, ClockTick, CompleteSwap, DoSort, Initialize, InsertionSortCellWrapper, NotifyOfSwap, SwapProtocol}
+import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.{BeginSwap, ClockTick, CompleteSwap, DoSort, Initialize, NotifyOfSwap, SwapProtocol}
 import me.micseydel.dsl.{SpiritRef, TinkerContext}
 
 /**
@@ -17,7 +17,7 @@ import me.micseydel.dsl.{SpiritRef, TinkerContext}
 case class CellWrapper[CM](id: Int, value: Int, noteName: String, spiritRef: SpiritRef[CM]) {
   def wikilink: String = s"[[$noteName]]"
 
-  def !~!(message: CM)(implicit tc: TinkerContext[?], probe: SpiritRef[Probe.Message], sender: InsertionSortCellWrapper): Unit = {
+  def !~!(message: CM)(implicit tc: TinkerContext[?], probe: SpiritRef[Probe.Message], sender: CellWrapper[?]): Unit = {
     !~!(message, Some(sender.id))
   }
 
@@ -27,7 +27,8 @@ case class CellWrapper[CM](id: Int, value: Int, noteName: String, spiritRef: Spi
 
   private def !~!(message: CM, originator: Option[Int])(implicit tc: TinkerContext[?], probe: SpiritRef[Probe.Message]): Unit = {
     message match {
-      case insertionSortCellMessage: InsertionSortCell.Message =>
+      // FIXME: no hard-coded cells, must be generic
+      case insertionSortCellMessage: BubbleSortCell.Message =>
         insertionSortCellMessage match {
           case _: ClockTick | _: Initialize =>
           case DoSort =>

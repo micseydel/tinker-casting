@@ -8,8 +8,8 @@ import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCe
 import me.micseydel.app.AppConfiguration
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.{SelfSortingArrayCentralCast, VALUE_LIST}
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.{Initialize, InsertionSortCellWrapper}
-import me.micseydel.app.selfsortingarrays.cell.{CellWrapper, InsertionSortCell}
+import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.{Initialize, BubbleSortCellWrapper}
+import me.micseydel.app.selfsortingarrays.cell.{CellWrapper, BubbleSortCell}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
@@ -80,7 +80,7 @@ object Environment {
       (startIndex, SelfSortingArrays.filename(startIndex, int), int)
     }
 
-    val cells: NonEmptyList[CellWrapper[InsertionSortCell.Message]] = zipped.map {
+    val cells: NonEmptyList[CellWrapper[BubbleSortCell.Message]] = zipped.map {
       case (index, filename, value) =>
         val actorName = filename.replace(" ", "_").replace("(", "").replace(")", "")
         CellWrapper(
@@ -88,14 +88,14 @@ object Environment {
           value,
           filename,
           context.cast(
-            InsertionSortCell(index, index, filename, value), actorName,
+            BubbleSortCell(index, index, filename, value), actorName,
             DispatcherSelector.fromConfig("self-sorting-dispatcher") // use one thread
           )
         )
     }
 
     @tailrec
-    def finishInitializingCells(remaining: List[Option[InsertionSortCellWrapper]]): Unit = {
+    def finishInitializingCells(remaining: List[Option[BubbleSortCellWrapper]]): Unit = {
       remaining match {
         case left :: Some(cell) :: right :: _ =>
           cell !!! Initialize(left, right)
@@ -115,16 +115,16 @@ object Environment {
   }
 
 
-  private def waiting(cells: NonEmptyList[CellWrapper[InsertionSortCell.Message]])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+  private def waiting(cells: NonEmptyList[CellWrapper[BubbleSortCell.Message]])(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
       case NotePing(_) =>
         if (noteRef.checkBoxIsChecked()) {
           println("Starting sort request!")
-          cells.head !!! InsertionSortCell.DoSort
+          cells.head !!! BubbleSortCell.DoSort
           val timeKeeper = context.castTimeKeeper()
           timeKeeper !! TimeKeeper.RemindMeEvery(1.seconds, 1.seconds, context.self, ClockTick, None)
-          implicit val cellsList: List[CellWrapper[InsertionSortCell.Message]] = cells.toList
+          implicit val cellsList: List[CellWrapper[BubbleSortCell.Message]] = cells.toList
           clockTicking(0)
         } else {
           Tinker.steadily
@@ -133,7 +133,7 @@ object Environment {
       case ClockTick | StopTheClock => ???
     }
   }
-  private def clockTicking(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[InsertionSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+  private def clockTicking(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[BubbleSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
       case NotePing(_) =>
@@ -149,13 +149,13 @@ object Environment {
         noteRef.setMarkdownOrThrow(s"- [ ] Pause\n\nsorting $VALUE_LIST\n\nclock tick: $count\n")
         Tinker.userExtension.probe !! Probe.ClockTick(count)
         for (cell <- cells) {
-          cell !!! InsertionSortCell.ClockTick(count)
+          cell !!! BubbleSortCell.ClockTick(count)
         }
         clockTicking(count + 1)
     }
   }
 
-  private def paused(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[InsertionSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
+  private def paused(count: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], noteRef: NoteRef, cells: List[CellWrapper[BubbleSortCell.Message]], probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
     context.actorContext.log.warn(s"paused $count")
@@ -188,5 +188,3 @@ object Environment {
     }
   }
 }
-
-

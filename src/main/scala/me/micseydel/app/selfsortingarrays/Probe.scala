@@ -2,7 +2,7 @@ package me.micseydel.app.selfsortingarrays
 
 import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.Environment.StopTheClock
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
+import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.BubbleSortCellWrapper
 import me.micseydel.app.selfsortingarrays.cell.atom.InsertionSortCellState
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
@@ -43,7 +43,7 @@ object Probe {
 
   case class ImmutableCellProbeState(id: Int, value: Int, filename: String)
 
-  case class CellProbeState(maybeLeft: Option[InsertionSortCellWrapper], maybeRight: Option[InsertionSortCellWrapper], index: Int, immutableCellProbeState: ImmutableCellProbeState) {
+  case class CellProbeState(maybeLeft: Option[BubbleSortCellWrapper], maybeRight: Option[BubbleSortCellWrapper], index: Int, immutableCellProbeState: ImmutableCellProbeState) {
 
     def id: Int = immutableCellProbeState.id
     def value: Int = immutableCellProbeState.value
@@ -255,7 +255,7 @@ object Probe {
     }
   }
 
-  def getOptionalInsertionSortCellWrapperIdOrX(t: Option[InsertionSortCellWrapper]): String = t.map(_.id.toString).getOrElse("x")
+  def getOptionalInsertionSortCellWrapperIdOrX(t: Option[BubbleSortCellWrapper]): String = t.map(_.id.toString).getOrElse("x")
 
   def currentOrder(state: Map[Int, CellProbeState]): List[Int] = state.toList.sortBy(_._2.index).map(_._1)
 }

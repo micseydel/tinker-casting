@@ -2,21 +2,21 @@ package me.micseydel.app.selfsortingarrays.cell.atom
 
 import me.micseydel.app.selfsortingarrays.Probe
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
-import me.micseydel.app.selfsortingarrays.cell.InsertionSortCell.InsertionSortCellWrapper
+import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.BubbleSortCellWrapper
 import me.micseydel.dsl.{EnhancedTinker, TinkerContext}
 
-case class InsertionSortCellState(index: Int, maybeLeftNeighbor: Option[InsertionSortCellWrapper], maybeRightNeighbor: Option[InsertionSortCellWrapper]) {
+case class InsertionSortCellState(index: Int, maybeLeftNeighbor: Option[BubbleSortCellWrapper], maybeRightNeighbor: Option[BubbleSortCellWrapper]) {
   def maybeLeftId: Option[Int] = maybeLeftNeighbor.map(_.id)
 
   def maybeRightId: Option[Int] = maybeRightNeighbor.map(_.id)
 
-  def probe(implicit cw: InsertionSortCellWrapper): Probe.UpdatedState = Probe.UpdatedState(cw.id, this)
+  def probe(implicit cw: BubbleSortCellWrapper): Probe.UpdatedState = Probe.UpdatedState(cw.id, this)
 
-  def wantToSwapWithRight()(implicit self: InsertionSortCellWrapper): Boolean = {
+  def wantToSwapWithRight()(implicit self: BubbleSortCellWrapper): Boolean = {
     maybeRightNeighbor.exists(_.value < self.value)
   }
 
-  def sanityChecks(maybePriorState: Option[InsertionSortCellState])(implicit self: InsertionSortCellWrapper, Tinker: EnhancedTinker[SelfSortingArrayCentralCast], tinkerContext: TinkerContext[?]): Unit = {
+  def sanityChecks(maybePriorState: Option[InsertionSortCellState])(implicit self: BubbleSortCellWrapper, Tinker: EnhancedTinker[SelfSortingArrayCentralCast], tinkerContext: TinkerContext[?]): Unit = {
     // we can't be our own neighbor
     if (maybeLeftNeighbor.map(_.id).contains(self.id)) {
       val msg = s"[${self.id}] Left neighbor ${maybeLeftNeighbor.get.id} is self!"
@@ -48,7 +48,7 @@ case class InsertionSortCellState(index: Int, maybeLeftNeighbor: Option[Insertio
     }
   }
 
-  def locallySorted()(implicit self: InsertionSortCellWrapper): Boolean = {
+  def locallySorted()(implicit self: BubbleSortCellWrapper): Boolean = {
     maybeLeftNeighbor.forall(self.value >= _.value) &&
       maybeRightNeighbor.forall(self.value <= _.value)
   }
