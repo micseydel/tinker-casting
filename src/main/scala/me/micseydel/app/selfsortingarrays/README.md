@@ -1,61 +1,44 @@
-![](https://i.imgur.com/yLhBwUg.gif)
+This is my own take on [Classical Sorting Algorithms as a Model of Morphogenesis: self-sorting arrays reveal unexpected competencies in a minimal model of basal intelligence](https://arxiv.org/pdf/2401.05375) ([github](https://github.com/Zhangtaining/cell_research/)) using the actor model (Akka) and my wrapper for it, enabling easy integration with [Obsidian](https://obsidian.md). I do not have a complete mixed-agent implementation (and [couldn't find theirs](https://github.com/Zhangtaining/cell_research/issues/1)) but have tinkered with two algorithms:
 
-This is a more "agentic" reimplementation of https://github.com/Zhangtaining/cell_research/ from [Classical Sorting Algorithms as a Model of Morphogenesis: self-sorting arrays reveal unexpected competencies in a minimal model of basal intelligence](https://arxiv.org/pdf/2401.05375)
-- note that I could not find the chimeric part of the code https://github.com/Zhangtaining/cell_research/issues/1
+Bubble sort:
+
+https://github.com/user-attachments/assets/8b5dc4a2-12c3-4308-b391-42ad525086ae
+
+Insertion sort:
+
+https://github.com/user-attachments/assets/202fbb73-1b54-4fac-919b-380f611a712d
 
 - How to run
   - Install sbt (e.g. `brew install sbt`)
   - Install [Obsidian](https://obsidian.md/download) (for pretty visualizations)
-    - Create an Obsidian vault (open a potentially new folder in the app)
-  - environment variable for Obsidian
-    - set `vaultRoot` enviornment variable to the Obsidian vault path
-    - (pure Akka alternate does not require this)
+    - Create an Obsidian vault (a new folder unless you want to do otherwise)
+  - set `vaultRoot` environment variable to the Obsidian vault path
   - Run with sbt:
     - `sbt 'runMain me.micseydel.app.selfsortingarrays.SelfSortingArrays'`
-  - Open [[Self Sorting Arrays Probe]] in Obsidian, it has buttons
+  - Open [[Self Sorting Arrays Probe]] in Obsidian, that is the interface
 
 ---
-
-This implementation is different:
-- it uses the actor model (Akka) rather than raw threads
-- it's in Scala rather than Python
-- the user interface is via Obsidian (through my Akka wrapper)
 
 Algotypes
 - bubble sort (working)
 - insertion sort (working)
-  - (less mature, e.g. no decision point history)
+  - (less mature, e.g. no decision point history, Thread.sleep)
 - selection sort (stub)
 - merge sort (stub)
 
-Limitations
-- there is currently a centralized clock tick mechanism for bubble sort
-- insertion sort needs to be updated to have closer to parity (cleaner tags, time delays via messages instead of Thread.sleep, clock tick config)
-- the message protocols do not yet support chimeric testing
-
-Other Comparisons
-- probably more deterministic - single threaded (by config), cells are not fighting for a lock
-- stronger bias toward local rather than global
-  - e.g. bubble sort has a correction mechanism when swap race conditions are noticed
-
-Other Features
+Various notes
 - Each cell has a respective Obsidian note containing:
   - ...wikilinks to neighbors (allowing Obsidian to visualize the network)
   - ...a history of decisions by that cell
-- Sequence diagram of inter-cell communication
-- Ordered Obsidian Canvas of the cells
+- [[SelfSortingArrayDebugger]] contains a sequence diagram of inter-cell communication
+- [[Self Sorting Lists.canvas]] Ordered Obsidian Canvas of the cells
+  - better than the graph view for manual tinkering
 
 Future Work
 - Finish the stub algotypes
+- Documentation for the pure-Akka version
 - (checkpoint) Create a uniform cell interface for mixed-algotype testing
 - Expand the probe mechanism
 - Expand algotypes e.g. insertion sort going the opposite direction
 - Experiment with frozen cells, random failures, and such
 - Non-code algotypes, e.g. LLM "agents" or humans mixed in
-
-
-MP4 @ https://imgur.com/a/4vwOQqK
-
-# Screenshots
-
-FIXME
