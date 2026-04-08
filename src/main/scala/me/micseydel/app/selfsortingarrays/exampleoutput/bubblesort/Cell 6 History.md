@@ -1,0 +1,49 @@
+# History
+
+- initializing
+- initialized
+- ignored ClockTick(0)
+- ignored ClockTick(1)
+- ignored ClockTick(2)
+- ignored ClockTick(3)
+- 5 has initiated a swap; index decrementing to 5
+    - state change: left([[Cell 5 (89)]]->[[Cell 1 (34)]]) and right(Some([[Cell 7 (18)]])->[[Cell 5 (89)]])
+    - sent messages:
+        - [[Cell 5 (89)]] ! CompleteSwap(Right(Some([[Cell 7 (18)]])), 6, 3) (telling initiator(o=5) to finish it)
+        - [[Cell 7 (18)]] ! NotifyOfSwap(6, L[[Cell 5 (89)]], 6, 3)
+- clock ticked (4) but not swapping with right ([[Cell 5 (89)]])
+- notified of right swap [[Cell 5 (89)]]->[[Cell 7 (18)]]
+- Clock ticked 5, initiating swapping with [[Cell 7 (18)]] (**midswap now** for tick=5)
+    - just sent BeginSwap(Some([[Cell 1 (34)]]), 6, 5) to [[Cell 7 (18)]]
+- completed swap, moved right->
+    - incremented index to 6
+    - state change: left(Some([[Cell 1 (34)]])->[[Cell 7 (18)]]) and right([[Cell 7 (18)]]->Some([[Cell 5 (89)]]))
+    - sent messages
+        - [[Cell 1 (34)]] ! NotifyOfSwap(5, R[[Cell 7 (18)]], 6, 5) (telling our old left neighbor its new right is the old right that this swapped with)
+- notified of right swap [[Cell 5 (89)]]->[[Cell 8 (29)]]
+- Clock ticked 6, initiating swapping with [[Cell 8 (29)]] (**midswap now** for tick=6)
+    - just sent BeginSwap(Some([[Cell 7 (18)]]), 6, 6) to [[Cell 8 (29)]]
+- notified of left swap, ==**forwarded**== to [[Cell 8 (29)]] (staying in midswap)
+- completed swap, moved right->
+    - incremented index to 7
+    - state change: left(Some([[Cell 1 (34)]])->[[Cell 8 (29)]]) and right([[Cell 8 (29)]]->Some([[Cell 5 (89)]]))
+    - sent messages
+        - [[Cell 1 (34)]] ! NotifyOfSwap(6, R[[Cell 8 (29)]], 6, 6) (telling our old left neighbor its new right is the old right that this swapped with)
+- notified of right swap [[Cell 5 (89)]]->[[Cell 9 (51)]]
+- clock ticked (7) but not swapping with right ([[Cell 9 (51)]])
+- notified of left swap [[Cell 8 (29)]]->[[Cell 1 (34)]]
+- clock ticked (8) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (9) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (10) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (11) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (12) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (13) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (14) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (15) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (16) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (17) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (18) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (19) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (20) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (21) but not swapping with right ([[Cell 9 (51)]])
+- clock ticked (22) but not swapping with right ([[Cell 9 (51)]])

@@ -1,0 +1,695 @@
+waiting to start...
+
+- 0 uninitialized
+- 0 uninitialized
+- env->0: DoSort
+- 0 initialized (x, 1)
+- 0->1: DoSort
+- 0 (x, 1) -> (x, 1); index 0 -> 0
+- 1 uninitialized
+- 1 uninitialized
+- 1 initialized (0, 2)
+- 1 (0, 2) -> (0, 2); index 1 -> 1
+- 2 uninitialized
+- 2 uninitialized
+- 2 initialized (1, 3)
+- 3 uninitialized
+- 3 uninitialized
+- 3 initialized (2, 4)
+- 4 uninitialized
+- 4 uninitialized
+- 4 initialized (3, 5)
+- 5 uninitialized
+- 5 uninitialized
+- 5 initialized (4, 6)
+- 6 uninitialized
+- 6 uninitialized
+- 6 initialized (5, 7)
+- 7 uninitialized
+- 7 uninitialized
+- 7 initialized (6, 8)
+- 8 uninitialized
+- 8 uninitialized
+- 8 initialized (7, 9)
+- 9 uninitialized
+- 9 uninitialized
+- 9 initialized (8, x)
+
+- ClockTick(0) List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+- 0->1: DoSort
+- 0 (x, 1) -> (x, 1); index 0 -> 0
+- 1->2: BeginSwap(newLeft=0)
+- 1 (0, 2) -> (0, 2); index 1 -> 1
+- 2 (1, 3) -> (1, 3); index 2 -> 2
+- 2->1: CompleteSwap(newRight=3)
+- 2->3: NotifyOfSwap(left(2)=1)
+- 2->1: DoSort
+- 2 (1, 3) -> (0, 1); index 2 -> 1
+- 3 (2, 4) -> (2, 4); index 3 -> 3
+- 3 (2, 4) -> (1, 4); index 3 -> 3
+- 4 (3, 5) -> (3, 5); index 4 -> 4
+- 5 (4, 6) -> (4, 6); index 5 -> 5
+- 6 (5, 7) -> (5, 7); index 6 -> 6
+- 7 (6, 8) -> (6, 8); index 7 -> 7
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 9 (8, x) -> (8, x); index 9 -> 9
+- 1->0: NotifyOfSwap(right(1)=2)
+- 1 (0, 2) -> (2, 3); index 1 -> 2
+- 0 (x, 1) -> (x, 2); index 0 -> 0
+
+- ClockTick(1) List(0, 2, 1, 3, 4, 5, 6, 7, 8, 9)
+- 0->2: BeginSwap(newLeft=x)
+- 0 (x, 2) -> (x, 2); index 0 -> 0
+- 1->3: BeginSwap(newLeft=2)
+- 1 (2, 3) -> (2, 3); index 2 -> 2
+- 2->1: DoSort
+- 2 (0, 1) -> (0, 1); index 1 -> 1
+- 2->0: CompleteSwap(newRight=1)
+- 0->1: NotifyOfSwap(left(1)=0)
+- 2->0: DoSort
+- 2 (0, 1) -> (x, 0); index 1 -> 0
+- 3 (1, 4) -> (1, 4); index 3 -> 3
+- 3->1: CompleteSwap(newRight=4)
+- 3->4: NotifyOfSwap(left(3)=1)
+- 3->1: DoSort
+- 3 (1, 4) -> (2, 1); index 3 -> 2
+- 4 (3, 5) -> (3, 5); index 4 -> 4
+- 4 (3, 5) -> (1, 5); index 4 -> 4
+- 5 (4, 6) -> (4, 6); index 5 -> 5
+- 6 (5, 7) -> (5, 7); index 6 -> 6
+- 7 (6, 8) -> (6, 8); index 7 -> 7
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 9 (8, x) -> (8, x); index 9 -> 9
+- 0->3: NotifyOfSwap(left(1)=0)
+- 1 (2, 3) -> (0, 3); index 2 -> 2
+- 1->0: NotifyOfSwap(right(2)=3)
+- 1 (0, 3) -> (3, 4); index 2 -> 3
+- 0->1: DoSort
+- 0 (x, 2) -> (2, 1); index 0 -> 1
+- 0 (2, 1) -> (2, 3); index 1 -> 1
+- 3->1: DoSort
+- 3 (2, 1) -> (0, 1); index 2 -> 2
+
+- ClockTick(2) List(2, 0, 3, 1, 4, 5, 6, 7, 8, 9)
+- 0->3: BeginSwap(newLeft=2)
+- 0 (2, 3) -> (2, 3); index 1 -> 1
+- 1->4: BeginSwap(newLeft=3)
+- 1 (3, 4) -> (3, 4); index 3 -> 3
+- 2->0: DoSort
+- 2 (x, 0) -> (x, 0); index 0 -> 0
+- 3->1: DoSort
+- 3 (0, 1) -> (0, 1); index 2 -> 2
+- 3->0: CompleteSwap(newRight=1)
+- 0->1: NotifyOfSwap(left(2)=0)
+- 3->2: NotifyOfSwap(right(1)=3)
+- 3->0: DoSort
+- 3 (0, 1) -> (2, 0); index 2 -> 1
+- 4 (1, 5) -> (1, 5); index 4 -> 4
+- 4->1: CompleteSwap(newRight=5)
+- 4->5: NotifyOfSwap(left(4)=1)
+- 4->1: DoSort
+- 4 (1, 5) -> (3, 1); index 4 -> 3
+- 5 (4, 6) -> (4, 6); index 5 -> 5
+- 5 (4, 6) -> (1, 6); index 5 -> 5
+- 6 (5, 7) -> (5, 7); index 6 -> 6
+- 7 (6, 8) -> (6, 8); index 7 -> 7
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 9 (8, x) -> (8, x); index 9 -> 9
+- 0->2: NotifyOfSwap(right(1)=3)
+- 0->1: DoSort
+- 0 (2, 3) -> (3, 1); index 1 -> 2
+- 0->4: NotifyOfSwap(left(2)=0)
+- 1 (3, 4) -> (0, 4); index 3 -> 3
+- 1->0: NotifyOfSwap(right(3)=4)
+- 1->5: DoSort
+- 1 (0, 4) -> (4, 5); index 3 -> 4
+- 2->3: DoSort
+- 2 (x, 0) -> (x, 3); index 0 -> 0
+- 2->3: DoSort
+- 2 (x, 3) -> (x, 3); index 0 -> 0
+- 4->1: DoSort
+- 4 (3, 1) -> (0, 1); index 3 -> 3
+- 0 (3, 1) -> (3, 4); index 2 -> 2
+- 5 (1, 6) -> (1, 6); index 5 -> 5
+
+- ClockTick(3) List(2, 3, 0, 4, 1, 5, 6, 7, 8, 9)
+- 0->4: BeginSwap(newLeft=3)
+- 0 (3, 4) -> (3, 4); index 2 -> 2
+- 1->5: DoSort
+- 1 (4, 5) -> (4, 5); index 4 -> 4
+- 2->3: DoSort
+- 2 (x, 3) -> (x, 3); index 0 -> 0
+- 3->0: DoSort
+- 3 (2, 0) -> (2, 0); index 1 -> 1
+- 4->1: DoSort
+- 4 (0, 1) -> (0, 1); index 3 -> 3
+- 4->0: CompleteSwap(newRight=1)
+- 0->1: NotifyOfSwap(left(3)=0)
+- 4->3: NotifyOfSwap(right(2)=4)
+- 4->0: DoSort
+- 4 (0, 1) -> (3, 0); index 3 -> 2
+- 5->6: BeginSwap(newLeft=1)
+- 5 (1, 6) -> (1, 6); index 5 -> 5
+- 6 (5, 7) -> (5, 7); index 6 -> 6
+- 6->5: CompleteSwap(newRight=7)
+- 6->7: NotifyOfSwap(left(6)=5)
+- 6->5: DoSort
+- 6 (5, 7) -> (1, 5); index 6 -> 5
+- 7 (6, 8) -> (6, 8); index 7 -> 7
+- 7 (6, 8) -> (5, 8); index 7 -> 7
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 9 (8, x) -> (8, x); index 9 -> 9
+- 0->3: NotifyOfSwap(right(2)=4)
+- 0->1: DoSort
+- 0 (3, 4) -> (4, 1); index 2 -> 3
+- 1->5: DoSort
+- 1 (4, 5) -> (0, 5); index 4 -> 4
+- 3 (2, 0) -> (2, 4); index 1 -> 1
+- 3 (2, 4) -> (2, 4); index 1 -> 1
+- 5->1: NotifyOfSwap(right(5)=6)
+- 5 (1, 6) -> (6, 7); index 5 -> 6
+- 1->6: DoSort
+- 1 (0, 5) -> (0, 6); index 4 -> 4
+
+- ClockTick(4) List(2, 3, 4, 0, 1, 6, 5, 7, 8, 9)
+- 0->1: DoSort
+- 0 (4, 1) -> (4, 1); index 3 -> 3
+- 1->6: DoSort
+- 1 (0, 6) -> (0, 6); index 4 -> 4
+- 2->3: DoSort
+- 2 (x, 3) -> (x, 3); index 0 -> 0
+- 3->4: BeginSwap(newLeft=2)
+- 3 (2, 4) -> (2, 4); index 1 -> 1
+- 4->0: DoSort
+- 4 (3, 0) -> (3, 0); index 2 -> 2
+- 4->3: CompleteSwap(newRight=0)
+- 3->0: NotifyOfSwap(left(2)=3)
+- 4->2: NotifyOfSwap(right(1)=4)
+- 4->3: DoSort
+- 4 (3, 0) -> (2, 3); index 2 -> 1
+- 5->7: BeginSwap(newLeft=6)
+- 5 (6, 7) -> (6, 7); index 6 -> 6
+- 6->5: DoSort
+- 6 (1, 5) -> (1, 5); index 5 -> 5
+- 7 (5, 8) -> (5, 8); index 7 -> 7
+- 7->5: CompleteSwap(newRight=8)
+- 7->8: NotifyOfSwap(left(7)=5)
+- 7->5: DoSort
+- 7 (5, 8) -> (6, 5); index 7 -> 6
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 8 (7, 9) -> (5, 9); index 8 -> 8
+- 9 (8, x) -> (8, x); index 9 -> 9
+- 0->1: DoSort
+- 0 (4, 1) -> (3, 1); index 3 -> 3
+- 3->2: NotifyOfSwap(right(1)=4)
+- 3->0: DoSort
+- 3 (2, 4) -> (4, 0); index 1 -> 2
+- 2->4: DoSort
+- 2 (x, 3) -> (x, 4); index 0 -> 0
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 5->6: NotifyOfSwap(right(6)=7)
+- 5 (6, 7) -> (7, 8); index 6 -> 7
+- 6 (1, 5) -> (1, 7); index 5 -> 5
+
+- ClockTick(5) List(2, 4, 3, 0, 1, 6, 7, 5, 8, 9)
+- 0->1: DoSort
+- 0 (3, 1) -> (3, 1); index 3 -> 3
+- 1->6: DoSort
+- 1 (0, 6) -> (0, 6); index 4 -> 4
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (4, 0) -> (4, 0); index 2 -> 2
+- 4->3: DoSort
+- 4 (2, 3) -> (2, 3); index 1 -> 1
+- 5->8: BeginSwap(newLeft=7)
+- 5 (7, 8) -> (7, 8); index 7 -> 7
+- 6->7: BeginSwap(newLeft=1)
+- 6 (1, 7) -> (1, 7); index 5 -> 5
+- 7->5: DoSort
+- 7 (6, 5) -> (6, 5); index 6 -> 6
+- 7->6: CompleteSwap(newRight=5)
+- 6->5: NotifyOfSwap(left(6)=6)
+- 7->1: NotifyOfSwap(right(5)=7)
+- 7->6: DoSort
+- 7 (6, 5) -> (1, 6); index 6 -> 5
+- 8 (5, 9) -> (5, 9); index 8 -> 8
+- 8->5: CompleteSwap(newRight=9)
+- 8->9: NotifyOfSwap(left(8)=5)
+- 8->5: DoSort
+- 8 (5, 9) -> (7, 5); index 8 -> 7
+- 9 (8, x) -> (8, x); index 9 -> 9
+- 9 (8, x) -> (5, x); index 9 -> 9
+- 6->8: NotifyOfSwap(left(6)=6)
+- 5 (7, 8) -> (6, 8); index 7 -> 7
+- 5->6: NotifyOfSwap(right(7)=8)
+- 5 (6, 8) -> (8, 9); index 7 -> 8
+- 6->1: NotifyOfSwap(right(5)=7)
+- 6->5: DoSort
+- 6 (1, 7) -> (7, 5); index 5 -> 6
+- 6 (7, 5) -> (7, 8); index 6 -> 6
+- 1 (0, 6) -> (0, 7); index 4 -> 4
+- 1 (0, 7) -> (0, 7); index 4 -> 4
+- 8->5: DoSort
+- 8 (7, 5) -> (6, 5); index 7 -> 7
+
+- ClockTick(6) List(2, 4, 3, 0, 1, 7, 6, 8, 5, 9)
+- 0->1: DoSort
+- 0 (3, 1) -> (3, 1); index 3 -> 3
+- 1->7: BeginSwap(newLeft=0)
+- 1 (0, 7) -> (0, 7); index 4 -> 4
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (4, 0) -> (4, 0); index 2 -> 2
+- 4->3: DoSort
+- 4 (2, 3) -> (2, 3); index 1 -> 1
+- 5->9: BeginSwap(newLeft=8)
+- 5 (8, 9) -> (8, 9); index 8 -> 8
+- 6->8: BeginSwap(newLeft=7)
+- 6 (7, 8) -> (7, 8); index 6 -> 6
+- 7->6: DoSort
+- 7 (1, 6) -> (1, 6); index 5 -> 5
+- 7->1: CompleteSwap(newRight=6)
+- 1->6: NotifyOfSwap(left(5)=1)
+- 7->0: NotifyOfSwap(right(4)=7)
+- 7->1: DoSort
+- 7 (1, 6) -> (0, 1); index 5 -> 4
+- 8->5: DoSort
+- 8 (6, 5) -> (6, 5); index 7 -> 7
+- 8->6: CompleteSwap(newRight=5)
+- 6->5: NotifyOfSwap(left(7)=6)
+- 8->7: NotifyOfSwap(right(6)=8)
+- 8->6: DoSort
+- 8 (6, 5) -> (7, 6); index 7 -> 6
+- 9 (5, x) -> (5, x); index 9 -> 9
+- 9->5: CompleteSwap(newRight=x)
+- 9->5: DoSort
+- 9 (5, x) -> (8, 5); index 9 -> 8
+- 0 (3, 1) -> (3, 7); index 3 -> 3
+- 1->8: NotifyOfSwap(left(5)=1)
+- 6 (7, 8) -> (1, 8); index 6 -> 6
+- 6->1: NotifyOfSwap(right(6)=8)
+- 6->5: DoSort
+- 6 (1, 8) -> (8, 5); index 6 -> 7
+- 1->0: NotifyOfSwap(right(4)=7)
+- 1->6: DoSort
+- 1 (0, 7) -> (7, 6); index 4 -> 5
+- 1 (7, 6) -> (7, 8); index 5 -> 5
+- 6->9: NotifyOfSwap(left(7)=6)
+- 5 (8, 9) -> (6, 9); index 8 -> 8
+- 5->6: NotifyOfSwap(right(8)=9)
+- 5 (6, 9) -> (9, x); index 8 -> 9
+- 8->1: NotifyOfSwap(right(6)=8)
+- 7->1: DoSort
+- 7 (0, 1) -> (0, 1); index 4 -> 4
+- 8->6: DoSort
+- 8 (7, 6) -> (1, 6); index 6 -> 6
+- 0 (3, 7) -> (3, 7); index 3 -> 3
+- 6->9: DoSort
+- 6 (8, 5) -> (8, 9); index 7 -> 7
+- 9->5: DoSort
+- 9 (8, 5) -> (6, 5); index 8 -> 8
+- 1 (7, 8) -> (7, 8); index 5 -> 5
+
+- ClockTick(7) List(2, 4, 3, 0, 7, 1, 8, 6, 9, 5)
+- 0->7: BeginSwap(newLeft=3)
+- 0 (3, 7) -> (3, 7); index 3 -> 3
+- 1->8: BeginSwap(newLeft=7)
+- 1 (7, 8) -> (7, 8); index 5 -> 5
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (4, 0) -> (4, 0); index 2 -> 2
+- 4->3: DoSort
+- 4 (2, 3) -> (2, 3); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (8, 9) -> (8, 9); index 7 -> 7
+- 7->1: DoSort
+- 7 (0, 1) -> (0, 1); index 4 -> 4
+- 7->0: CompleteSwap(newRight=1)
+- 0->1: NotifyOfSwap(left(4)=0)
+- 7->3: NotifyOfSwap(right(3)=7)
+- 7->0: DoSort
+- 7 (0, 1) -> (3, 0); index 4 -> 3
+- 8->6: DoSort
+- 8 (1, 6) -> (1, 6); index 6 -> 6
+- 8->1: CompleteSwap(newRight=6)
+- 1->6: NotifyOfSwap(left(6)=1)
+- 8->7: NotifyOfSwap(right(5)=8)
+- 8->1: DoSort
+- 8 (1, 6) -> (7, 1); index 6 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+- 0->3: NotifyOfSwap(right(3)=7)
+- 0->1: DoSort
+- 0 (3, 7) -> (7, 1); index 3 -> 4
+- 3 (4, 0) -> (4, 7); index 2 -> 2
+- 3 (4, 7) -> (4, 7); index 2 -> 2
+- 0->8: NotifyOfSwap(left(4)=0)
+- 1 (7, 8) -> (0, 8); index 5 -> 5
+- 1->0: NotifyOfSwap(right(5)=8)
+- 1->6: DoSort
+- 1 (0, 8) -> (8, 6); index 5 -> 6
+- 6->9: DoSort
+- 6 (8, 9) -> (1, 9); index 7 -> 7
+- 8->0: NotifyOfSwap(right(5)=8)
+- 7->0: DoSort
+- 7 (3, 0) -> (3, 0); index 3 -> 3
+- 8->1: DoSort
+- 8 (7, 1) -> (0, 1); index 5 -> 5
+- 0->8: DoSort
+- 0 (7, 1) -> (7, 8); index 4 -> 4
+- 0->8: DoSort
+- 0 (7, 8) -> (7, 8); index 4 -> 4
+
+- ClockTick(8) List(2, 4, 3, 7, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (7, 8) -> (7, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->7: BeginSwap(newLeft=4)
+- 3 (4, 7) -> (4, 7); index 2 -> 2
+- 4->3: DoSort
+- 4 (2, 3) -> (2, 3); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->0: DoSort
+- 7 (3, 0) -> (3, 0); index 3 -> 3
+- 7->3: CompleteSwap(newRight=0)
+- 3->0: NotifyOfSwap(left(3)=3)
+- 7->4: NotifyOfSwap(right(2)=7)
+- 7->3: DoSort
+- 7 (3, 0) -> (4, 3); index 3 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+- 3->4: NotifyOfSwap(right(2)=7)
+- 3->0: DoSort
+- 3 (4, 7) -> (7, 0); index 2 -> 3
+- 0->8: DoSort
+- 0 (7, 8) -> (3, 8); index 4 -> 4
+- 4->7: DoSort
+- 4 (2, 3) -> (2, 7); index 1 -> 1
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+
+- ClockTick(9) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(10) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(11) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(12) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(13) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(14) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(15) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(16) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(17) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(18) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(19) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(20) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(21) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8
+
+- ClockTick(22) List(2, 4, 7, 3, 0, 8, 1, 6, 9, 5)
+- 0->8: DoSort
+- 0 (3, 8) -> (3, 8); index 4 -> 4
+- 1->6: DoSort
+- 1 (8, 6) -> (8, 6); index 6 -> 6
+- 2->4: DoSort
+- 2 (x, 4) -> (x, 4); index 0 -> 0
+- 3->0: DoSort
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 4->7: DoSort
+- 4 (2, 7) -> (2, 7); index 1 -> 1
+- 5 (9, x) -> (9, x); index 9 -> 9
+- 6->9: DoSort
+- 6 (1, 9) -> (1, 9); index 7 -> 7
+- 7->3: DoSort
+- 7 (4, 3) -> (4, 3); index 2 -> 2
+- 8->1: DoSort
+- 8 (0, 1) -> (0, 1); index 5 -> 5
+- 9->5: DoSort
+- 9 (6, 5) -> (6, 5); index 8 -> 8

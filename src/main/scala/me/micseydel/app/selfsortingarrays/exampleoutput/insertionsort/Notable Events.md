@@ -1,0 +1,123 @@
+waiting to start...
+
+- env->0: DoSort
+- 1 initialized (0, 2)
+- 2 initialized (1, 3)
+- 3 initialized (2, 4)
+- 4 initialized (3, 5)
+- 5 initialized (4, 6)
+- 6 initialized (5, 7)
+- 7 initialized (6, 8)
+- 8 initialized (7, 9)
+- 9 initialized (8, x)
+- 0 initialized (x, 1)
+- env->1: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28/$$a-adapter))
+- 0 (x, 1) -> (x, 1); index 0 -> 0
+- env->2: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34/$$a-adapter))
+- 1 (0, 2) -> (0, 2); index 1 -> 1
+- env->3: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6/$$a-adapter))
+- 2 (1, 3) -> (1, 3); index 2 -> 2
+- env->4: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20/$$a-adapter))
+- 3 (2, 4) -> (2, 4); index 3 -> 3
+- env->5: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7/$$a-adapter))
+- 4 (3, 5) -> (3, 5); index 4 -> 4
+- env->6: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89/$$a-adapter))
+- 5 (4, 6) -> (4, 6); index 5 -> 5
+- env->7: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34/$$a-adapter))
+- 6 (5, 7) -> (5, 7); index 6 -> 6
+- env->8: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18/$$a-adapter))
+- 7 (6, 8) -> (6, 8); index 7 -> 7
+- env->9: RequestSortedContents(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29/$$a-adapter))
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 8 (7, 9) -> (7, 9); index 8 -> 8
+- 7 (6, 8) -> (6, 8); index 7 -> 7
+- env->7: NewLeft(CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89)))
+- env->5: NewRight(Some(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18))))
+- env->8: NewRight(Some(CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34))))
+- env->9: NewLeft(CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)))
+- env->8: ReceiveSortedDownstream(NonEmptyList(CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51))))
+- 6 (5, 7) -> (8, 9); index 6 -> 6
+- 7 (6, 8) -> (5, 8); index 7 -> 7
+- 5 (4, 6) -> (4, 7); index 5 -> 5
+- 8 (7, 9) -> (7, 6); index 8 -> 8
+- env->7: ReceiveSortedDownstream(NonEmptyList(CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51))))
+- 8 (7, 6) -> (7, 6); index 8 -> 8
+- 9 (8, x) -> (6, x); index 9 -> 9
+- env->5: ReceiveSortedDownstream(NonEmptyList(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51))))
+- 7 (5, 8) -> (5, 8); index 7 -> 7
+- env->7: NewLeft(CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)))
+- env->4: NewRight(Some(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18))))
+- env->9: NewRight(Some(CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- env->9: ReceiveSortedDownstream(NonEmptyList(CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 5 (4, 7) -> (9, x); index 5 -> 5
+- 7 (5, 8) -> (4, 8); index 7 -> 7
+- 4 (3, 5) -> (3, 7); index 4 -> 4
+- 9 (6, x) -> (6, 5); index 9 -> 9
+- env->6: ReceiveSortedDownstream(NonEmptyList(CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 9 (6, 5) -> (6, 5); index 9 -> 9
+- env->8: ReceiveSortedDownstream(NonEmptyList(CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 6 (8, 9) -> (8, 9); index 6 -> 6
+- env->7: ReceiveSortedDownstream(NonEmptyList(CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 8 (7, 6) -> (7, 6); index 8 -> 8
+- env->4: ReceiveSortedDownstream(NonEmptyList(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 7 (4, 8) -> (4, 8); index 7 -> 7
+- 4 (3, 7) -> (3, 7); index 4 -> 4
+- env->4: NewLeft(CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6)))
+- env->2: NewRight(Some(CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7))))
+- env->7: NewRight(Some(CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20))))
+- env->8: NewLeft(CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)))
+- env->7: ReceiveSortedDownstream(NonEmptyList(CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 3 (2, 4) -> (7, 8); index 3 -> 3
+- 4 (3, 7) -> (2, 7); index 4 -> 4
+- 2 (1, 3) -> (1, 4); index 2 -> 2
+- 7 (4, 8) -> (4, 3); index 7 -> 7
+- env->4: ReceiveSortedDownstream(NonEmptyList(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 7 (4, 3) -> (4, 3); index 7 -> 7
+- 8 (7, 6) -> (3, 6); index 8 -> 8
+- env->2: ReceiveSortedDownstream(NonEmptyList(CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 4 (2, 7) -> (2, 7); index 4 -> 4
+- 2 (1, 4) -> (1, 4); index 2 -> 2
+- env->2: NewLeft(CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)))
+- env->0: NewRight(Some(CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6))))
+- env->8: NewRight(Some(CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34))))
+- env->6: NewLeft(CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)))
+- env->8: ReceiveSortedDownstream(NonEmptyList(CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 1 (0, 2) -> (8, 6); index 1 -> 1
+- 2 (1, 4) -> (0, 4); index 2 -> 2
+- 0 (x, 1) -> (x, 2); index 0 -> 0
+- 8 (3, 6) -> (3, 1); index 8 -> 8
+- env->3: ReceiveSortedDownstream(NonEmptyList(CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 8 (3, 1) -> (3, 1); index 8 -> 8
+- 6 (8, 9) -> (1, 9); index 6 -> 6
+- env->7: ReceiveSortedDownstream(NonEmptyList(CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 3 (7, 8) -> (7, 8); index 3 -> 3
+- env->4: ReceiveSortedDownstream(NonEmptyList(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 7 (4, 3) -> (4, 3); index 7 -> 7
+- env->2: ReceiveSortedDownstream(NonEmptyList(CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 4 (2, 7) -> (2, 7); index 4 -> 4
+- env->0: ReceiveSortedDownstream(NonEmptyList(CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6)), CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 2 (0, 4) -> (0, 4); index 2 -> 2
+- env->2: NewReplyTo(SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28/$$a-adapter))
+- env->3: NewRight(Some(CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28))))
+- env->8: NewLeft(CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)))
+- env->3: ReceiveSortedDownstream(NonEmptyList(CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 0 (x, 2) -> (3, 8); index 0 -> 0
+- 2 (0, 4) -> (x, 4); index 2 -> 2
+- 3 (7, 8) -> (7, 0); index 3 -> 3
+- env->7: ReceiveSortedDownstream(NonEmptyList(CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- 8 (3, 1) -> (0, 1); index 8 -> 8
+- env->4: ReceiveSortedDownstream(NonEmptyList(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 7 (4, 3) -> (4, 3); index 7 -> 7
+- env->2: ReceiveSortedDownstream(NonEmptyList(CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 4 (2, 7) -> (2, 7); index 4 -> 4
+- 2 (x, 4) -> (x, 4); index 2 -> 2
+- env->3: ReceiveSortedDownstream(NonEmptyList(CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6)), CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 0 (3, 8) -> (3, 8); index 0 -> 0
+- env->7: ReceiveSortedDownstream(NonEmptyList(CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6)), CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 3 (7, 0) -> (7, 0); index 3 -> 3
+- env->4: ReceiveSortedDownstream(NonEmptyList(CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6)), CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 7 (4, 3) -> (4, 3); index 7 -> 7
+- env->2: ReceiveSortedDownstream(NonEmptyList(CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(2,6,Cell 2 (6),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_2_6)), CellWrapper(4,7,Cell 4 (7),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_4_7)), CellWrapper(7,18,Cell 7 (18),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_7_18)), CellWrapper(3,20,Cell 3 (20),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_3_20)), CellWrapper(0,28,Cell 0 (28),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_0_28)), CellWrapper(8,29,Cell 8 (29),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_8_29)), CellWrapper(1,34,Cell 1 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_1_34)), CellWrapper(6,34,Cell 6 (34),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_6_34)), CellWrapper(9,51,Cell 9 (51),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_9_51)), CellWrapper(5,89,Cell 5 (89),SpiritRef(akka://AkkaActor/system/TinkerCast/Applications/Cell_5_89))))
+- 4 (2, 7) -> (2, 7); index 4 -> 4
+- 2 (x, 4) -> (x, 4); index 2 -> 2

@@ -1,0 +1,33 @@
+# History
+
+- initializing
+- initialized
+- ignored ClockTick(0)
+- ignored ClockTick(1)
+- ignored ClockTick(2)
+- ignored ClockTick(3)
+- ignored ClockTick(4)
+- ignored ClockTick(5)
+- notified of swap by left neighbor [[Cell 8 (29)]]->[[Cell 5 (89)]] (maintaining right neighbor None)
+- ignored ClockTick(6)
+- 5 has initiated a swap; index decrementing to 8
+    - state change: left([[Cell 5 (89)]]->[[Cell 8 (29)]]) and right(None->[[Cell 5 (89)]])
+    - sent messages:
+        - [[Cell 5 (89)]] ! CompleteSwap(Right(None), 9, 6) (telling initiator(o=5) to finish it)
+- notified of left swap [[Cell 8 (29)]]->[[Cell 6 (34)]]
+- clock ticked (7) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (8) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (9) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (10) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (11) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (12) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (13) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (14) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (15) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (16) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (17) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (18) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (19) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (20) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (21) but not swapping with right ([[Cell 5 (89)]])
+- clock ticked (22) but not swapping with right ([[Cell 5 (89)]])

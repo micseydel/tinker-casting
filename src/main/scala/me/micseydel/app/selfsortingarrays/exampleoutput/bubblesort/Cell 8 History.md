@@ -1,0 +1,50 @@
+# History
+
+- initializing
+- initialized
+- ignored ClockTick(0)
+- ignored ClockTick(1)
+- ignored ClockTick(2)
+- ignored ClockTick(3)
+- ignored ClockTick(4)
+- notified of swap by left neighbor [[Cell 7 (18)]]->[[Cell 5 (89)]] (maintaining right neighbor Some([[Cell 9 (51)]]))
+- ignored ClockTick(5)
+- 5 has initiated a swap; index decrementing to 7
+    - state change: left([[Cell 5 (89)]]->[[Cell 7 (18)]]) and right(Some([[Cell 9 (51)]])->[[Cell 5 (89)]])
+    - sent messages:
+        - [[Cell 5 (89)]] ! CompleteSwap(Right(Some([[Cell 9 (51)]])), 8, 5) (telling initiator(o=5) to finish it)
+        - [[Cell 9 (51)]] ! NotifyOfSwap(8, L[[Cell 5 (89)]], 8, 5)
+- notified of left swap [[Cell 7 (18)]]->[[Cell 6 (34)]]
+- clock ticked (6) but not swapping with right ([[Cell 5 (89)]])
+- 6 triggered swap
+    - decremented index to 6
+    - State change: left([[Cell 6 (34)]]->Some([[Cell 7 (18)]])) and right(Some([[Cell 5 (89)]])->[[Cell 6 (34)]])
+    - sent 3 msgs:
+        - [[Cell 6 (34)]] ! CompleteSwap(Right(Some([[Cell 5 (89)]])), 8, 6) (told old left neighbor to complete the swap with its new right neighbor from my old right neighbor)
+        - [[Cell 5 (89)]] ! NotifyOfSwap(7, L[[Cell 6 (34)]], 6, 6) (told my old right neighbor its new left is my old left)
+        - [[Cell 7 (18)]] ! NotifyOfSwap(6, R[[Cell 8 (29)]], 8, 6) (told my new left that I'm its new right)
+- notified of left swap [[Cell 7 (18)]]->[[Cell 1 (34)]]
+- clock ticked (7) but not swapping with right ([[Cell 6 (34)]])
+- 1 triggered swap
+    - decremented index to 5
+    - State change: left([[Cell 1 (34)]]->Some([[Cell 7 (18)]])) and right(Some([[Cell 6 (34)]])->[[Cell 1 (34)]])
+    - sent 3 msgs:
+        - [[Cell 1 (34)]] ! CompleteSwap(Right(Some([[Cell 6 (34)]])), 8, 7) (told old left neighbor to complete the swap with its new right neighbor from my old right neighbor)
+        - [[Cell 6 (34)]] ! NotifyOfSwap(6, L[[Cell 1 (34)]], 1, 7) (told my old right neighbor its new left is my old left)
+        - [[Cell 7 (18)]] ! NotifyOfSwap(5, R[[Cell 8 (29)]], 8, 7) (told my new left that I'm its new right)
+- notified of left swap [[Cell 7 (18)]]->[[Cell 0 (28)]]
+- clock ticked (8) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (9) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (10) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (11) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (12) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (13) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (14) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (15) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (16) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (17) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (18) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (19) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (20) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (21) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (22) but not swapping with right ([[Cell 1 (34)]])

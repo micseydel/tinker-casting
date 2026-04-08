@@ -1,0 +1,60 @@
+# History
+
+- initializing
+- initialized
+- Ignored DoSort
+- clock ticked (0) but not swapping with right ([[Cell 1 (34)]])
+- notified of right swap [[Cell 1 (34)]]->[[Cell 2 (6)]]
+- Clock ticked 1, initiating swapping with [[Cell 2 (6)]] (**midswap now** for tick=1)
+    - just sent BeginSwap(None, 0, 1) to [[Cell 2 (6)]]
+- completed swap, moved right->
+    - incremented index to 1
+    - state change: left(None->[[Cell 2 (6)]]) and right([[Cell 2 (6)]]->Some([[Cell 1 (34)]]))
+    - sent messages
+- notified of right swap [[Cell 1 (34)]]->[[Cell 3 (20)]]
+- Clock ticked 2, initiating swapping with [[Cell 3 (20)]] (**midswap now** for tick=2)
+    - just sent BeginSwap(Some([[Cell 2 (6)]]), 0, 2) to [[Cell 3 (20)]]
+- completed swap, moved right->
+    - incremented index to 2
+    - state change: left(Some([[Cell 2 (6)]])->[[Cell 3 (20)]]) and right([[Cell 3 (20)]]->Some([[Cell 1 (34)]]))
+    - sent messages
+        - [[Cell 2 (6)]] ! NotifyOfSwap(1, R[[Cell 3 (20)]], 0, 2) (telling our old left neighbor its new right is the old right that this swapped with)
+- notified of right swap [[Cell 1 (34)]]->[[Cell 4 (7)]]
+- Clock ticked 3, initiating swapping with [[Cell 4 (7)]] (**midswap now** for tick=3)
+    - just sent BeginSwap(Some([[Cell 3 (20)]]), 0, 3) to [[Cell 4 (7)]]
+- completed swap, moved right->
+    - incremented index to 3
+    - state change: left(Some([[Cell 3 (20)]])->[[Cell 4 (7)]]) and right([[Cell 4 (7)]]->Some([[Cell 1 (34)]]))
+    - sent messages
+        - [[Cell 3 (20)]] ! NotifyOfSwap(2, R[[Cell 4 (7)]], 0, 3) (telling our old left neighbor its new right is the old right that this swapped with)
+- clock ticked (4) but not swapping with right ([[Cell 1 (34)]])
+- notified of left swap [[Cell 4 (7)]]->[[Cell 3 (20)]]
+- clock ticked (5) but not swapping with right ([[Cell 1 (34)]])
+- clock ticked (6) but not swapping with right ([[Cell 1 (34)]])
+- notified of right swap [[Cell 1 (34)]]->[[Cell 7 (18)]]
+- notified of right swap [[Cell 7 (18)]]->[[Cell 7 (18)]]
+- Clock ticked 7, initiating swapping with [[Cell 7 (18)]] (**midswap now** for tick=7)
+    - just sent BeginSwap(Some([[Cell 3 (20)]]), 0, 7) to [[Cell 7 (18)]]
+- completed swap, moved right->
+    - incremented index to 4
+    - state change: left(Some([[Cell 3 (20)]])->[[Cell 7 (18)]]) and right([[Cell 7 (18)]]->Some([[Cell 1 (34)]]))
+    - sent messages
+        - [[Cell 3 (20)]] ! NotifyOfSwap(3, R[[Cell 7 (18)]], 0, 7) (telling our old left neighbor its new right is the old right that this swapped with)
+- notified of right swap [[Cell 1 (34)]]->[[Cell 8 (29)]]
+- notified of right swap [[Cell 8 (29)]]->[[Cell 8 (29)]]
+- clock ticked (8) but not swapping with right ([[Cell 8 (29)]])
+- notified of left swap [[Cell 7 (18)]]->[[Cell 3 (20)]]
+- clock ticked (9) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (10) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (11) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (12) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (13) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (14) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (15) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (16) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (17) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (18) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (19) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (20) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (21) but not swapping with right ([[Cell 8 (29)]])
+- clock ticked (22) but not swapping with right ([[Cell 8 (29)]])
