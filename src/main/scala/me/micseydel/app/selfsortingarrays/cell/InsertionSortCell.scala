@@ -3,7 +3,8 @@ package me.micseydel.app.selfsortingarrays.cell
 import cats.data.NonEmptyList
 import me.micseydel.NoOp
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
-import me.micseydel.app.selfsortingarrays.{Probe, SelfSortingArrays}
+import me.micseydel.app.selfsortingarrays.support.{CellState, CellWrapper, Probe}
+import me.micseydel.app.selfsortingarrays.SelfSortingArrays
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerColor, TinkerContext}
@@ -27,6 +28,8 @@ object InsertionSortCell {
   sealed trait Message
 
   final case class Initialize(leftNeighbor: Option[InsertionSortCellWrapper], rightNeighbor: Option[InsertionSortCellWrapper]) extends Message
+
+  case object DoSort extends Message
 
   sealed trait MessageToRespondTo extends Message {
     def replyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]]
@@ -62,11 +65,15 @@ object InsertionSortCell {
   private def initializing(id: Int, index: Int, noteName: String, value: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], probe: SpiritRef[Probe.Message]): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "📵") { (context, noteRef) =>
     implicit val self: InsertionSortCellWrapper = CellWrapper(id, value, noteName, context.self)
     implicit val nr: NoteRef = noteRef
+    implicit val tc: TinkerContext[?] = context
+
+    probe !! Probe.RegisterCell(id, value, noteName)
+
     Tinker.receiveMessage {
       case Initialize(leftNeighbor, maybeRightNeighbor) =>
         maybeRightNeighbor match {
           case Some(rightNeighbor) =>
-            waiting(InsertionCellStateForWaiting(index, leftNeighbor, rightNeighbor))
+            initialized(InsertionCellStateForWaiting(index, leftNeighbor, rightNeighbor))
           case None =>
             sorted(InsertionCellStateForSorted(index, leftNeighbor, None, Nil))
         }
@@ -75,7 +82,7 @@ object InsertionSortCell {
     }
   }
 
-  private def waiting(state: InsertionCellStateForWaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = {
+  private def initialized(state: InsertionCellStateForWaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = {
     if (state.maybeLeftNeighbor.contains(self)) {
       throw new RuntimeException(s"${state.maybeLeftNeighbor} contains self!")
     }
@@ -85,11 +92,11 @@ object InsertionSortCell {
 
     Tinker.setup { context =>
       implicit val tc: TinkerContext[?] = context
-//      Tinker.userExtension.probe !! state.probe
+      Tinker.userExtension.probe !! state.probe
 
       noteRef.setRaw(
         s"""---
-           |tags: [waiting]
+           |tags: [initialized, cell]
            |---
            |- start index: ${state.index}
            |
@@ -108,6 +115,11 @@ object InsertionSortCell {
           state.rightNeighbor !!! RequestSortedContents(context.messageAdapter(ReceiveSortedDownstream))
           awaitingSortedDownstream(InsertionCellStateForAwaitingAsHead(state.index, replyTo, state.maybeLeftNeighbor, state.rightNeighbor))
 
+        case DoSort =>
+          val replyTo = context.messageAdapter(ReceiveSortedDownstream)
+          state.rightNeighbor !!! RequestSortedContents(replyTo)
+          awaitingSortedDownstream(InsertionCellStateForAwaitingAsHead(state.index, replyTo, state.maybeLeftNeighbor, state.rightNeighbor))
+
         case ReceiveSortedDownstream(sortedDownstream) =>
           sorted(InsertionCellStateForSorted(state.index, state.maybeLeftNeighbor, Some(sortedDownstream.head), sortedDownstream.toList))
 
@@ -118,7 +130,7 @@ object InsertionSortCell {
 
   private def awaitingAggregation(state: InsertionCellStateForAwaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
-//    Tinker.userExtension.probe !! state.probe
+    Tinker.userExtension.probe !! state.probe
 
     val label: String = state match {
       case InsertionCellStateForAwaitingAsHead(_, replyTo, _, _) => s"$replyTo"
@@ -127,7 +139,7 @@ object InsertionSortCell {
 
     noteRef.setRaw(
       s"""---
-         |tags: [awaitingAggregation]
+         |tags: [awaitingAggregation, cell]
          |---
          |- start index: ${state.index}
          |- replyTo: $label
@@ -145,15 +157,15 @@ object InsertionSortCell {
           case InsertionCellStateForAwaitingAsNONHead(_, leftNeighbor, _) =>
             leftNeighbor !!! ReceiveSortedDownstream(aggregation.downstream.prepend(self))
         }
-        waiting(InsertionCellStateForWaiting(state.index, state.maybeLeftNeighbor, aggregation.downstream.head))
+        initialized(InsertionCellStateForWaiting(state.index, state.maybeLeftNeighbor, aggregation.downstream.head))
 
-      case _: GetDownstreamListContents | _: RequestSortedContents | _: NeighborChange | _: Initialize => ???
+      case _: GetDownstreamListContents | _: RequestSortedContents | _: NeighborChange | _: Initialize | DoSort => ???
     }
   }
 
   private def awaitingSortedDownstream(state: InsertionCellStateForAwaiting)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
-//    Tinker.userExtension.probe !! state.probe
+    Tinker.userExtension.probe !! state.probe
 
     val secondLine = state match {
       case InsertionCellStateForAwaitingAsHead(_, replyTo, _, _) => s"replyTo: $replyTo"
@@ -162,7 +174,7 @@ object InsertionSortCell {
 
     noteRef.setRaw(
       s"""---
-         |tags: [awaitingSortedDownstream]
+         |tags: [awaitingSortedDownstream, cell]
          |---
          |- start index: ${state.index}
          |- $secondLine
@@ -176,7 +188,7 @@ object InsertionSortCell {
 
     Tinker.receiveMessage {
       case ReceiveSortedDownstream(downstream) =>
-        Thread.sleep(SleepDurationMillis) // FIXME: gotta be a better way...
+        Thread.sleep(SleepDurationMillis) // FIXME: this should be replaced with something async
 
         if (self.value > downstream.head.value) {
           findNewDownstreamNeighbors(self.value, downstream) match {
@@ -233,17 +245,17 @@ object InsertionSortCell {
             awaitingSortedDownstream(InsertionCellStateForAwaitingAsHead(state.index, replyTo, None, state.rightNeighbor))
         }
 
-      case _: Initialize | _: GetDownstreamListContents | _: RequestSortedContents | _: ReceiveDownstream => ???
+      case _: Initialize | _: GetDownstreamListContents | _: RequestSortedContents | _: ReceiveDownstream | DoSort => ???
     }
   }
 
   private def sorted(state: InsertionCellStateForSorted)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: InsertionSortCellWrapper, noteRef: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
-//    Tinker.userExtension.probe !! state.probe
+    Tinker.userExtension.probe !! state.probe
 
     noteRef.setRaw(
       s"""---
-         |tags: [sorted]
+         |tags: [sorted, cell]
          |---
          |- start index: ${self.id}
          |- sortedDownstream: ${state.sortedDownstream.map(_.value)}
@@ -291,7 +303,7 @@ object InsertionSortCell {
             sorted(InsertionCellStateForSorted(state.index, state.maybeLeftNeighbor, None, Nil))
         }
 
-      case _: Initialize | _: ReceiveDownstream => ???
+      case _: Initialize | _: ReceiveDownstream | DoSort => ???
     }
   }
 
@@ -319,27 +331,21 @@ object InsertionSortCell {
   private sealed trait InsertionCellState {
     def index: Int
 
-//    def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest
+    def probe(implicit cw: InsertionSortCellWrapper): Probe.UpdatedState
   }
 
   private case class InsertionCellStateForWaiting(index: Int, maybeLeftNeighbor: Option[InsertionSortCellWrapper], rightNeighbor: InsertionSortCellWrapper) extends InsertionCellState {
-//    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
-//      id = cw.id,
-//      filename = SelfSortingArrays.filename(cw.id, cw.value),
-//      maybeLeft = maybeLeftNeighbor.map(_.noteName),
-//      maybeRight = Some(rightNeighbor.noteName),
-//      index
-//    )
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.UpdatedState = Probe.UpdatedState(
+      id = cw.id,
+      CellState(index, maybeLeftNeighbor, Some(rightNeighbor))
+    )
   }
 
   private case class InsertionCellStateForSorted(index: Int, maybeLeftNeighbor: Option[InsertionSortCellWrapper], maybeRightNeighbor: Option[InsertionSortCellWrapper], sortedDownstream: List[InsertionSortCellWrapper]) extends InsertionCellState {
-//    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
-//      id = cw.id,
-//      filename = SelfSortingArrays.filename(cw.id, cw.value),
-//      maybeLeft = maybeLeftNeighbor.map(_.noteName),
-//      maybeRight = maybeRightNeighbor.map(_.noteName),
-//      index
-//    )
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.UpdatedState = Probe.UpdatedState(
+      id = cw.id,
+      CellState(index, maybeLeftNeighbor, maybeRightNeighbor)
+    )
   }
 
   private sealed trait InsertionCellStateForAwaiting extends InsertionCellState {
@@ -349,23 +355,17 @@ object InsertionSortCell {
   }
 
   private case class InsertionCellStateForAwaitingAsHead(index: Int, replyTo: SpiritRef[NonEmptyList[InsertionSortCellWrapper]], maybeLeftNeighbor: Option[InsertionSortCellWrapper], rightNeighbor: InsertionSortCellWrapper) extends InsertionCellStateForAwaiting {
-//    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
-//      id = cw.id,
-//      filename = SelfSortingArrays.filename(cw.id, cw.value),
-//      maybeLeft = None,
-//      maybeRight = Some(rightNeighbor.noteName),
-//      index
-//    )
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.UpdatedState = Probe.UpdatedState(
+      id = cw.id,
+      CellState(index, maybeLeftNeighbor, Some(rightNeighbor))
+    )
   }
 
   private case class InsertionCellStateForAwaitingAsNONHead(index: Int, leftNeighbor: InsertionSortCellWrapper, rightNeighbor: InsertionSortCellWrapper) extends InsertionCellStateForAwaiting {
-//    override def probe(implicit cw: InsertionSortCellWrapper): Probe.RecordLatest = Probe.RecordLatest(
-//      id = cw.id,
-//      filename = SelfSortingArrays.filename(cw.id, cw.value),
-//      maybeLeft = None,
-//      maybeRight = Some(rightNeighbor.noteName),
-//      index
-//    )
+    override def probe(implicit cw: InsertionSortCellWrapper): Probe.UpdatedState = Probe.UpdatedState(
+      id = cw.id,
+      CellState(index, maybeLeftNeighbor, Some(rightNeighbor))
+    )
 
     override def maybeLeftNeighbor: Option[InsertionSortCellWrapper] = Some(leftNeighbor)
   }

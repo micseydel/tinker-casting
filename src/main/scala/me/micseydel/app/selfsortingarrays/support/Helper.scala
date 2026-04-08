@@ -1,19 +1,18 @@
-package me.micseydel.app.selfsortingarrays.cell.atom
+package me.micseydel.app.selfsortingarrays.support
 
 import me.micseydel.NoOp
-import me.micseydel.app.selfsortingarrays.Probe
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
-import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.{BubbleSortCellWrapper, Message}
+import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.Message
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.persistence.NoteRef
 
 import scala.util.{Failure, Success, Try}
 
 object Helper {
-  implicit class InsertionSortCellRichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def updateDocument(tag: String, state: InsertionSortCellState, historyToAdd: String)(implicit self: BubbleSortCellWrapper, historyNote: SpiritRef[CellHistoryNote.Message], tinkerContext: TinkerContext[?]): Try[NoOp.type] = {
+  implicit class CellRichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def updateDocument(tag: String, state: CellState, historyToAdd: String)(implicit self: CellWrapper[?], historyNote: SpiritRef[CellHistoryNote.Message], tinkerContext: TinkerContext[?]): Try[NoOp.type] = {
       historyNote !! CellHistoryNote.AddLines(List(historyToAdd))
 
       val newRaw =
@@ -34,7 +33,7 @@ object Helper {
     }
   }
 
-  def InvariantViolation(msg: String, finalState: InsertionSortCellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: BubbleSortCellWrapper, nr: NoteRef, historyHolder: SpiritRef[CellHistoryNote.Message]): Ability[Message] = Tinker.setup { context =>
+  def InvariantViolation(msg: String, finalState: CellState)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: CellWrapper[?], nr: NoteRef, historyHolder: SpiritRef[CellHistoryNote.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     nr.updateDocument("InvariantViolation", finalState, msg)
     Tinker.userExtension.probe !! Probe.FoundABug(msg)

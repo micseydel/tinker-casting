@@ -1,7 +1,7 @@
-package me.micseydel.app.selfsortingarrays
+package me.micseydel.app.selfsortingarrays.support
 
 import me.micseydel.NoOp
-import me.micseydel.app.selfsortingarrays.Probe.CellProbeState
+import me.micseydel.app.selfsortingarrays.support.Probe.CellProbeState
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor}

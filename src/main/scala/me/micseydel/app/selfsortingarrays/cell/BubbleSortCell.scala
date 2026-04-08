@@ -1,12 +1,10 @@
 package me.micseydel.app.selfsortingarrays.cell
 
 import me.micseydel.NoOp
-import me.micseydel.app.selfsortingarrays.cell.atom.Helper.InvariantViolation
-import me.micseydel.app.selfsortingarrays.Probe
-import me.micseydel.app.selfsortingarrays.Probe.UpdatedState
+import me.micseydel.app.selfsortingarrays.support.Probe.UpdatedState
 import me.micseydel.app.selfsortingarrays.SelfSortingArrays.SelfSortingArrayCentralCast
-import me.micseydel.app.selfsortingarrays.cell.atom.Helper.InsertionSortCellRichNoteRef
-import me.micseydel.app.selfsortingarrays.cell.atom.{CellHistoryNote, InsertionSortCellState}
+import me.micseydel.app.selfsortingarrays.support.Helper.{CellRichNoteRef, InvariantViolation}
+import me.micseydel.app.selfsortingarrays.support.{CellHistoryNote, CellState, CellWrapper, Probe}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{EnhancedTinker, SpiritRef, TinkerColor, TinkerContext}
@@ -64,7 +62,7 @@ object BubbleSortCell {
     implicit val probe: SpiritRef[Probe.Message] = Tinker.userExtension.probe
     Tinker.userExtension.probe !! Probe.RegisterCell(id, value, noteName)
 
-    Tinker.userExtension.probe !! UpdatedState(id, InsertionSortCellState(index, None, None))
+    Tinker.userExtension.probe !! UpdatedState(id, CellState(index, None, None))
 
     initializing(index)
   }
@@ -72,7 +70,7 @@ object BubbleSortCell {
   private def initializing(index: Int)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: BubbleSortCellWrapper, nr: NoteRef, probe: SpiritRef[Probe.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
-    val state = InsertionSortCellState(index, None, None)
+    val state = CellState(index, None, None)
     Tinker.userExtension.probe !! UpdatedState(self.id, state)
     implicit val historyHolder: SpiritRef[CellHistoryNote.Message] = context.cast(CellHistoryNote(self.id), "CellHistoryNote")
     nr.updateDocument("initializing", state, "- initializing")
@@ -89,7 +87,7 @@ object BubbleSortCell {
   private def inactive(index: Int, maybeLeftNeighbor: Option[BubbleSortCellWrapper], maybeRightNeighbor: Option[BubbleSortCellWrapper], latestClockTick: Int, summaryOfPriorSelflet: String)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: BubbleSortCellWrapper, nr: NoteRef, probe: SpiritRef[Probe.Message], historyHolder: SpiritRef[CellHistoryNote.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
-    val state = InsertionSortCellState(index, maybeLeftNeighbor, maybeRightNeighbor)
+    val state = CellState(index, maybeLeftNeighbor, maybeRightNeighbor)
     Tinker.userExtension.probe !! UpdatedState(self.id, state)
     nr.updateDocument("inactive", state, summaryOfPriorSelflet)
 
@@ -151,7 +149,7 @@ object BubbleSortCell {
       maybeRightNeighbor.foreach(_ !~! DoSort)
     }
 
-    val state = InsertionSortCellState(index, maybeLeftNeighbor, maybeRightNeighbor)
+    val state = CellState(index, maybeLeftNeighbor, maybeRightNeighbor)
     Tinker.userExtension.probe !! UpdatedState(self.id, state)
     nr.updateDocument("active", state,summaryOfPriorSelflet)
 
@@ -250,7 +248,7 @@ object BubbleSortCell {
   private def midswap(index: Int, maybeLeftNeighbor: Option[BubbleSortCellWrapper], oldRightNeighbor: BubbleSortCellWrapper, latestClockTick: Int, previously: String)(implicit Tinker: EnhancedTinker[SelfSortingArrayCentralCast], self: BubbleSortCellWrapper, nr: NoteRef, probe: SpiritRef[Probe.Message], historyHolder: SpiritRef[CellHistoryNote.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
-    val state = InsertionSortCellState(index, maybeLeftNeighbor, Some(oldRightNeighbor))
+    val state = CellState(index, maybeLeftNeighbor, Some(oldRightNeighbor))
     Tinker.userExtension.probe !! UpdatedState(self.id, state)
     nr.updateDocument("midswap", state, previously)
 

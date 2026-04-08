@@ -1,16 +1,14 @@
-package me.micseydel.app.selfsortingarrays
+package me.micseydel.app.selfsortingarrays.support
 
 import me.micseydel.NoOp
-import me.micseydel.app.selfsortingarrays.Environment.StopTheClock
-import me.micseydel.app.selfsortingarrays.cell.BubbleSortCell.BubbleSortCellWrapper
-import me.micseydel.app.selfsortingarrays.cell.atom.InsertionSortCellState
+import me.micseydel.app.selfsortingarrays.Container
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.util.FileSystemUtil
 import me.micseydel.vault.CanvasJsonFormats.canvasDataFormat
 import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.vault.{CanvasData, CanvasEdgeData, CanvasFileData}
+import me.micseydel.vault.{CanvasData, CanvasEdgeData, CanvasFileData, VaultPath}
 import spray.json.enrichAny
 
 import java.nio.file.Path
@@ -21,7 +19,7 @@ object Probe {
 
   final case class RegisterCell(id: Int, value: Int, filename: String) extends Message
 
-  final case class UpdatedState(id: Int, cellState: InsertionSortCellState) extends Message
+  final case class UpdatedState(id: Int, cellState: CellState) extends Message
 
   final case class MessageSend(senderId: Option[Int], recipientId: Int, msg: String) extends Message
 
@@ -29,21 +27,21 @@ object Probe {
 
   final case class FoundABug(details: String) extends Message
 
-  final case class RegisterEnvironment(environment: SpiritRef[Environment.Message]) extends Message
+  final case class RegisterEnvironment(environment: SpiritRef[Container.Message]) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Notable Events", TinkerColor.random(), "🎭") { (context, noteRef) =>
+  def apply(vaultPath: VaultPath)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Notable Events", TinkerColor.random(), "🎭") { (context, noteRef) =>
     implicit val nr: NoteRef = noteRef
     noteRef.setMarkdown("waiting to start...\n\n") match {
       case Failure(exception) => throw exception
       case Success(NoOp) =>
     }
     implicit val debugger: SpiritRef[SelfSortingArrayDebugger.Message] = context.cast(SelfSortingArrayDebugger(), "SelfSortingArrayDebugger")
-    behavior(Map.empty, None)
+    behavior(Map.empty, None, vaultPath)
   }
 
   case class ImmutableCellProbeState(id: Int, value: Int, filename: String)
 
-  case class CellProbeState(maybeLeft: Option[BubbleSortCellWrapper], maybeRight: Option[BubbleSortCellWrapper], index: Int, immutableCellProbeState: ImmutableCellProbeState) {
+  case class CellProbeState(maybeLeft: Option[CellWrapper[?]], maybeRight: Option[CellWrapper[?]], index: Int, immutableCellProbeState: ImmutableCellProbeState) {
 
     def id: Int = immutableCellProbeState.id
     def value: Int = immutableCellProbeState.value
@@ -51,7 +49,7 @@ object Probe {
     def simpleString = s"""[$index] ${maybeLeft.map(_.id).getOrElse("x")} <-> ${maybeRight.map(_.id).getOrElse("x")}"""
   }
 
-  private def behavior(state: Map[Int, CellProbeState], environment: Option[SpiritRef[Environment.Message]])(implicit Tinker: Tinker, noteRef: NoteRef, debugger: SpiritRef[SelfSortingArrayDebugger.Message]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(state: Map[Int, CellProbeState], environment: Option[SpiritRef[Container.Message]], vaultPath: VaultPath)(implicit Tinker: Tinker, noteRef: NoteRef, debugger: SpiritRef[SelfSortingArrayDebugger.Message]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     Tinker.receiveMessage {
       case RegisterCell(id, value, filename) =>
@@ -59,9 +57,9 @@ object Probe {
         val updatedState: Map[Int, CellProbeState] =
           state.updated(id, probeState)
         debugger !! SelfSortingArrayDebugger.UpdatedState(id, probeState)
-        behavior(updatedState, environment)
+        behavior(updatedState, environment, vaultPath)
 
-      case UpdatedState(id, InsertionSortCellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
+      case UpdatedState(id, CellState(newIndex, newLeftNeighbor, newRightNeighbor)) =>
         state.get(id) match {
           case Some(CellProbeState(None, None, oldIndex, _)) if newLeftNeighbor.isEmpty && newRightNeighbor.isEmpty && oldIndex == newIndex =>
             noteRef.appendLine2(s"""- $id uninitialized""") match {
@@ -76,7 +74,7 @@ object Probe {
               case Some(throwable) => throw throwable
               case None =>
             }
-            behavior(state.updated(id, updatedState), environment)
+            behavior(state.updated(id, updatedState), environment, vaultPath)
           case Some(oldCellState@CellProbeState(oldLeft, oldRight, oldIndex, _)) =>
             val updatedState = oldCellState.copy(index = newIndex, maybeLeft = newLeftNeighbor, maybeRight = newRightNeighbor)
             debugger !! SelfSortingArrayDebugger.UpdatedState(id, updatedState)
@@ -84,13 +82,13 @@ object Probe {
               case Some(throwable) => throw throwable
               case None =>
             }
-            behavior(state.updated(id, updatedState), environment)
+            behavior(state.updated(id, updatedState), environment, vaultPath)
           case None => ???
         }
       case MessageSend(senderId, recipientId, msg) =>
         debugger !! SelfSortingArrayDebugger.MessageSend(senderId, recipientId, msg)
         val sender = senderId.map(_.toString).getOrElse("env")
-        noteRef.appendLine2(s"- $sender->$recipientId: $msg") match {
+        noteRef.appendLine2(s"""- $sender->$recipientId: ${msg.replace("$$", "\\$$")}""") match {
           case Some(throwable) => throw throwable
           case None =>
         }
@@ -175,7 +173,7 @@ object Probe {
         val canvas = CanvasData(latestNodes.map(_._1), withMutualEdgesDeduped)
         FileSystemUtil.writeToPath(
           // FIXME: call probe?
-          Path.of("/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/self_sorting_arrays/Self Sorting Lists.canvas"),
+          vaultPath.resolve("Self Sorting Lists.canvas"),
           canvas.toJson.prettyPrint
         )
         Tinker.steadily
@@ -183,12 +181,11 @@ object Probe {
       case FoundABug(details) =>
         debugger !! SelfSortingArrayDebugger.FoundABug(details)
         context.actorContext.log.warn(s"bug, stopping the clock $environment")
-        environment.foreach(_ !! StopTheClock)
         Tinker.steadily
 
       case RegisterEnvironment(newEnvironment) =>
         context.actorContext.log.debug(s"new env $newEnvironment")
-        behavior(state, Some(newEnvironment))
+        behavior(state, Some(newEnvironment), vaultPath)
     }
   }
 
@@ -255,7 +252,7 @@ object Probe {
     }
   }
 
-  def getOptionalInsertionSortCellWrapperIdOrX(t: Option[BubbleSortCellWrapper]): String = t.map(_.id.toString).getOrElse("x")
+  def getOptionalInsertionSortCellWrapperIdOrX(t: Option[CellWrapper[?]]): String = t.map(_.id.toString).getOrElse("x")
 
   def currentOrder(state: Map[Int, CellProbeState]): List[Int] = state.toList.sortBy(_._2.index).map(_._1)
 }

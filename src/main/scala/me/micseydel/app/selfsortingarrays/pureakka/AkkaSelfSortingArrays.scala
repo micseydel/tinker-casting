@@ -95,14 +95,14 @@ object AkkaCell {
     implicit val self: AkkaCellWrapper = AkkaCellWrapper(id, value, noteName, context.self)
     remaining match {
       case Nil =>
-        waiting(CellState(index, leftNeighbor, None))
+        waiting(AkkaCellState(index, leftNeighbor, None))
       case (nextId, nextNoteName, nextValue) :: tail =>
         val rightNeighbor = context.spawn(AkkaCell.setup(nextId, index+1, nextNoteName, nextValue, tail, leftNeighbor = Some(self)), nextNoteName.replace(" ", "_").replace("(", "").replace(")", ""))
-        waiting(CellState(index, leftNeighbor, Some(AkkaCellWrapper(nextId, nextValue, nextNoteName, rightNeighbor))))
+        waiting(AkkaCellState(index, leftNeighbor, Some(AkkaCellWrapper(nextId, nextValue, nextNoteName, rightNeighbor))))
     }
   }
 
-  private def waiting(state: CellState)(implicit self: AkkaCellWrapper): Behavior[Message] = {
+  private def waiting(state: AkkaCellState)(implicit self: AkkaCellWrapper): Behavior[Message] = {
     if (state.maybeLeftNeighbor.contains(self)) {
       throw new RuntimeException(s"${state.maybeLeftNeighbor} contains self!")
     }
@@ -140,7 +140,7 @@ object AkkaCell {
     }
   }
 
-  private def awaitingAggregation(state: CellState, replyTo: ActorRef[NonEmptyList[AkkaCellWrapper]])(implicit self: AkkaCellWrapper): Behavior[Message] = Behaviors.receiveMessage {
+  private def awaitingAggregation(state: AkkaCellState, replyTo: ActorRef[NonEmptyList[AkkaCellWrapper]])(implicit self: AkkaCellWrapper): Behavior[Message] = Behaviors.receiveMessage {
     case ReceiveSortedDownstream(downstream) =>
       replyTo ! downstream.prepend(self)
       waiting(state)
@@ -150,7 +150,7 @@ object AkkaCell {
     case NewNeighbor(_, _, _) => ???
   }
 
-  private def awaitingSortedDownstream(state: CellState, maybeCallerReplyTo: Option[ActorRef[NonEmptyList[AkkaCellWrapper]]])(implicit self: AkkaCellWrapper): Behavior[Message] = Behaviors.receiveMessage {
+  private def awaitingSortedDownstream(state: AkkaCellState, maybeCallerReplyTo: Option[ActorRef[NonEmptyList[AkkaCellWrapper]]])(implicit self: AkkaCellWrapper): Behavior[Message] = Behaviors.receiveMessage {
     case ReceiveSortedDownstream(downstream) =>
       val justNums = downstream.map(_.value).toList
       if (justNums != justNums.sorted) {
@@ -211,7 +211,7 @@ object AkkaCell {
     case RequestSortedContents(_) => ???
   }
 
-  private def sorted(state: CellState, sortedDownstream: List[AkkaCellWrapper])(implicit self: AkkaCellWrapper): Behavior[Message] = Behaviors.setup { context =>
+  private def sorted(state: AkkaCellState, sortedDownstream: List[AkkaCellWrapper])(implicit self: AkkaCellWrapper): Behavior[Message] = Behaviors.setup { context =>
     Behaviors.receiveMessage {
       case message: MessageToRespondTo =>
         message.replyTo ! NonEmptyList(self, sortedDownstream)
@@ -275,9 +275,9 @@ object AkkaCell {
 
   //
 
-  private case class CellState(index: Int, maybeLeftNeighbor: Option[AkkaCellWrapper], maybeRightNeighbor: Option[AkkaCellWrapper]) {
-    def withUpdatedRight(newRight:  Option[AkkaCellWrapper]): CellState = this.copy(maybeRightNeighbor = newRight)
-    def withUpdatedLeft(newLeft:  Option[AkkaCellWrapper]): CellState = this.copy(maybeLeftNeighbor = newLeft)
+  private case class AkkaCellState(index: Int, maybeLeftNeighbor: Option[AkkaCellWrapper], maybeRightNeighbor: Option[AkkaCellWrapper]) {
+    def withUpdatedRight(newRight:  Option[AkkaCellWrapper]): AkkaCellState = this.copy(maybeRightNeighbor = newRight)
+    def withUpdatedLeft(newLeft:  Option[AkkaCellWrapper]): AkkaCellState = this.copy(maybeLeftNeighbor = newLeft)
   }
 
   // convenience, makes simple comparisons less async
