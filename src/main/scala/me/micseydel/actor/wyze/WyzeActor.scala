@@ -57,9 +57,15 @@ object WyzeActor {
         Tinker.steadily
 
       case ReceiveDeviceList(wyzePlugAPIResponse) =>
-        val plugs = wyzePlugAPIResponse.getPlugsOrThrow
-        noteRef.updateMarkdown(context.system.clock.now(), plugs)
-        initialized(genIsOnMap(plugs))(Tinker, noteRef, api)
+        wyzePlugAPIResponse match {
+          case WyzePlugModel.WyzePlugAPIResult(plugs) =>
+            noteRef.updateMarkdown(context.system.clock.now(), plugs)
+            initialized(genIsOnMap(plugs))(Tinker, noteRef, api)
+
+          case WyzePlugModel.WyzePlugAPIResponseFailed(throwable) =>
+            context.actorContext.log.warn(s"Failure getting Wyze plugs (device list API)", throwable)
+            Tinker.steadily
+        }
     }
   }
 
@@ -125,9 +131,15 @@ object WyzeActor {
         Tinker.steadily
 
       case ReceiveDeviceList(wyzePlugAPIResponse) =>
-        val plugs = wyzePlugAPIResponse.getPlugsOrThrow
-        noteRef.updateMarkdown(context.system.clock.now(), plugs)
-        initialized(genIsOnMap(plugs))(Tinker, noteRef, api)
+        wyzePlugAPIResponse match {
+          case WyzePlugModel.WyzePlugAPIResult(plugs) =>
+            noteRef.updateMarkdown(context.system.clock.now(), plugs)
+            initialized(genIsOnMap(plugs))(Tinker, noteRef, api)
+
+          case WyzePlugModel.WyzePlugAPIResponseFailed(throwable) =>
+            context.actorContext.log.warn(s"Failure getting Wyze plugs (device list API)", throwable)
+            Tinker.steadily
+        }
     }
   }
 
