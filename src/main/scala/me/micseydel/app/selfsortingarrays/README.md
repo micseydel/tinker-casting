@@ -1,10 +1,10 @@
-This is my own take on [Classical Sorting Algorithms as a Model of Morphogenesis: self-sorting arrays reveal unexpected competencies in a minimal model of basal intelligence](https://arxiv.org/pdf/2401.05375) ([github](https://github.com/Zhangtaining/cell_research/)) using the actor model (Akka) and my wrapper for it, enabling easy integration with [Obsidian](https://obsidian.md). I do not have a complete mixed-agent implementation (and [couldn't find theirs](https://github.com/Zhangtaining/cell_research/issues/1)) but have tinkered with two algorithms:
+This is my own take on [Classical Sorting Algorithms as a Model of Morphogenesis: self-sorting arrays reveal unexpected competencies in a minimal model of basal intelligence](https://arxiv.org/pdf/2401.05375) ([github](https://github.com/Zhangtaining/cell_research/)) using the **actor model (Akka)** and my wrapper for it, enabling easy integration with [Obsidian](https://obsidian.md). I do not have a complete mixed-agent implementation (and [couldn't find theirs](https://github.com/Zhangtaining/cell_research/issues/1)) but have tinkered with two algorithms:
 
-Bubble sort:
+**Bubble sort:**
 
 https://github.com/user-attachments/assets/8b5dc4a2-12c3-4308-b391-42ad525086ae
 
-Insertion sort:
+**Insertion sort:**
 
 https://github.com/user-attachments/assets/202fbb73-1b54-4fac-919b-380f611a712d
 
@@ -28,8 +28,8 @@ Algotypes
 
 Various notes
 - Each cell has a respective Obsidian note containing:
-  - ...wikilinks to neighbors (allowing Obsidian to visualize the network)
-  - ...a history of decisions by that cell
+  - ...wikilinks to neighbors (allowing Obsidian to visualize the network) e.g. [Cell 0](exampleoutput/bubblesort/Cell%200%20(28).md)
+  - ...a history of decisions by that cell e.g. [Cell 0 History](exampleoutput/bubblesort/Cell%200%20History.md)
 - [[SelfSortingArrayDebugger]] contains a sequence diagram of inter-cell communication
 - [[Self Sorting Lists.canvas]] Ordered Obsidian Canvas of the cells
   - better than the graph view for manual tinkering
