@@ -12,6 +12,7 @@ import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.IntSeries
 import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import spray.json.*
@@ -140,17 +141,19 @@ object AranetActor {
 
   private object DailyMarkdown {
     def apply(items: List[AranetResults], clock: TinkerClock): String = {
-      val (a29655results, a29686results, a24DBEresults) = split(items)
+      val (a29655results, a29686results, a24DBEresults) = split(items.sortBy(_.meta.captureTime))
 
       val a29655resultsSeries = IntSeries("a29655", a29655results)
       val a29686resultsSeries = IntSeries("a29686", a29686results)
       val a24DBEresultsSeries = IntSeries("a24DBE", a24DBEresults)
 
-      val superimposed = ObsidianCharts.chart(List.fill(items.size)(""), List(
-        a29655resultsSeries,
-        a29686resultsSeries,
-        a24DBEresultsSeries
-      ))
+      val superimposed = ObsidianCharts.chart(
+        items.map(_.meta.captureTime).map(TimeUtil.zonedDateTimeToHourMinWithinDay),
+        List(
+          a29655resultsSeries,
+          a29686resultsSeries,
+          a24DBEresultsSeries
+        ))
 
       s"""# Superimposed
          |

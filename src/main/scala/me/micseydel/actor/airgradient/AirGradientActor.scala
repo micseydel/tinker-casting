@@ -21,6 +21,7 @@ object AirGradientActor {
   sealed trait Message
 
   final case class Subscribe(subscriber: SpiritRef[AirGradientSensorResult]) extends Message
+
   final case class DoFetchNow() extends Message
 
   private case class ReceivePing(ping: Ping) extends Message
@@ -71,10 +72,10 @@ object AirGradientActor {
   }
 
   private def behavior(pollingIntervalMinutes: Long, subscribers: Set[SpiritRef[AirGradientSensorResult]])(implicit Tinker: Tinker, noteRef: NoteRef,
-                                                     dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
-                                                     api: SpiritRef[AirGradientApiActor.Message],
-                                                     timeKeeper: SpiritRef[TimeKeeper.Message],
-                                                     dailyNoteName: LocalDate => String): Ability[Message] = Tinker.receive { (context, message) =>
+                                                                                                           dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[AirGradientSensorData]]],
+                                                                                                           api: SpiritRef[AirGradientApiActor.Message],
+                                                                                                           timeKeeper: SpiritRef[TimeKeeper.Message],
+                                                                                                           dailyNoteName: LocalDate => String): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[?] = context
     message match {
       case DoFetchNow() =>
@@ -146,9 +147,9 @@ object AirGradientActor {
           subscriber !! AirGradientSensorResult(noteRef.noteId, data)
         }
 
-//        val subscriberList = subscribers.map { s =>
-//          s"  - `${s.path.toString.drop(24).takeWhile(_ != '$')}`"
-//        }.mkString("\n")
+        //        val subscriberList = subscribers.map { s =>
+        //          s"  - `${s.path.toString.drop(24).takeWhile(_ != '$')}`"
+        //        }.mkString("\n")
 
         val frontmatter: Map[String, Object] = Map(
           "polling_interval_minutes" -> pollingIntervalMinutes.asInstanceOf[Object]
@@ -199,16 +200,18 @@ private object AirGradientDailyMarkdown {
     val pm02CountsSeries = IntSeries("pm02Counts", pm02Counts.map(_.toInt).map(Math.min(_, 200)))
     val pm10CountsSeries = DoubleSeries("pm10Counts", pm10Counts)
     val pm02CompensatedsSeries = IntSeries("pm02Compensateds", pm02Compensateds.map(_.toInt).map(Math.min(_, 200)))
-    val rco2sSeries = IntSeries("rco2s-350", rco2s.map(_.toInt-350))
+    val rco2sSeries = IntSeries("rco2s-350", rco2s.map(_.toInt - 350))
     val tvocIndexsSeries = DoubleSeries("tvocIndexs", tvocIndexs)
 
-    val superimposed = ObsidianCharts.chart(List.fill(items.size)(""), List(
-      pm02CountsSeries,
-      pm10CountsSeries,
-      pm02CompensatedsSeries,
-      rco2sSeries,
-      tvocIndexsSeries
-    ))
+    val superimposed = ObsidianCharts.chart(
+      List.fill(items.size)(""), // FIXME: timestamps; backwards-incompatible, need to wrap :(
+      List(
+        pm02CountsSeries,
+        pm10CountsSeries,
+        pm02CompensatedsSeries,
+        rco2sSeries,
+        tvocIndexsSeries
+      ))
 
     s"""# Superimposed
        |

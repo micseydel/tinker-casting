@@ -183,8 +183,11 @@ object PurpleAirActor {
         case Nil =>
           "No measurements\n"
         case _ =>
-          val measurements = items.sortBy(_.zonedDatetime).map(_.pm2_5_aqi)
-          val chart = ObsidianCharts.chart(List.fill(measurements.size)(""), List(IntSeries("aqi", measurements)))
+          val measurements = items.sortBy(_.zonedDatetime)
+          val chart = ObsidianCharts.chart(
+            measurements.map(_.zonedDatetime).map(TimeUtil.zonedDateTimeToHourMinWithinDay),
+            List(IntSeries("aqi", measurements.map(_.pm2_5_aqi)))
+          )
 
           val latest = items.last
 
