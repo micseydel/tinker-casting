@@ -34,6 +34,11 @@ def float_to_hour_minute_second(seconds: float) -> str:
         i = int(seconds)
         return f"{i // 3600:02}:{(i % 3600) // 60:02}:{i % 60:02}"
 
+def zip_with_segment_blockids(segments):
+    digits = len(str(len(segments)))
+    print("digits", digits)
+    return ((segment, f"seg-{str(i).zfill(digits)}") for i, segment in enumerate(segments))
+
 def segments_to_markdown(segments, audio_path: str) -> str:
     def generate_bookmarks():
         return [
@@ -51,7 +56,11 @@ def segments_to_markdown(segments, audio_path: str) -> str:
         )
 
     def generate_text_segments():
-        return "\n".join(f"- \\[{float_to_hour_minute_second(segment['start'])}\\] {segment['text']}" for segment in segments)
+        return "\n".join(
+            f"- \\[{float_to_hour_minute_second(segment['start'])}\\] {segment['text']} ^{blockId}" 
+            for (segment, blockId) 
+            in zip_with_segment_blockids(segments)
+        )
 
     return f"""\
 ![[{os.path.split(audio_path)[-1]}]]
