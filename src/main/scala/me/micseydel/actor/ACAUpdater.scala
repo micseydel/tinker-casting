@@ -57,7 +57,7 @@ object ACAUpdater {
               case Some(emailMatch: EmailMatch) =>
                 noteRef.writeMatchingEmailToDisk(emailMatch) match {
                   case Failure(exception) => context.actorContext.log.warn(s"Failed to write matching email to disk! ${emailMatch.title}", exception)
-                  case Success(NoOp) =>
+                  case Success(markdown) => //FIXME
                 }
               case None => // ignore
             }
@@ -101,7 +101,10 @@ object ACAUpdater {
                 context.actorContext.log.info(s"Match for $title! Updating slide...")
                 noteRef.writeMatchingEmailToDisk(emailMatch) match {
                   case Failure(exception) => context.actorContext.log.warn(s"Failed to write matching email to disk! ${emailMatch.title}", exception)
-                  case Success(NoOp) =>
+                  case Success(markdown) =>
+                  //FIXME
+                  // - ACAMatch(threadId, title)
+                  // - RequestACADetails(threadId) -> ReceiveACADetails(threadId, wikilink /*title*/, markdown /*or case class*/)
                 }
                 slidesActor !! GoogleSlideUpdater.ReplaceText(config.presentationId, List(
                   Replacement(config.replacements.title, title, fontSize = 38, italics = false),
@@ -202,15 +205,13 @@ object ACAUpdater {
       }
     }
 
-    def writeMatchingEmailToDisk(matching: EmailMatch)(implicit context: TinkerContext[?]): Try[NoOp.type] = {
+    def writeMatchingEmailToDisk(matching: EmailMatch)(implicit context: TinkerContext[?]): Try[String] = {
       val provenance = matching.maybeGmailHyperlink
         .map(link => s"    - (via [gmail]($link))\n")
         .getOrElse("")
 
-      noteRef.setMarkdown(
-        s"""- Generated: ${context.system.clock.now()}
-           |$provenance
-           |# ${matching.title}
+      val markdownWithoutProvenance =
+        s"""# ${matching.title}
            |
            |**${matching.brb}**
            |
@@ -218,9 +219,14 @@ object ACAUpdater {
            |${matching.body}
            |
            |
-           |*${matching.footer}*
+           |*${matching.footer}*""".stripMargin
+
+      noteRef.setMarkdown(
+        s"""- Generated: ${context.system.clock.now()}
+           |$provenance
+           |$markdownWithoutProvenance
            |""".stripMargin
-      )
+      ).map(_ => markdownWithoutProvenance)
     }
   }
 
