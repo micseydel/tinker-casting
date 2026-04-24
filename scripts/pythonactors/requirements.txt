@@ -1,0 +1,5 @@
+setproctitle
+paho-mqtt
+
+# anticipated
+pyyaml>=5.4

@@ -34,7 +34,7 @@ object TranscriptionNoteWrapper {
 
         noteRef.setStub(capture) match {
           case Failure(exception) => throw exception
-          case Success(value) => context.actorContext.log.info(s"wrote $value")
+          case Success(value) => // context.actorContext.log.info(s"wrote $value")
         }
 
         behavior(capture, noteRef, jsonlRef)(Tinker, listener)

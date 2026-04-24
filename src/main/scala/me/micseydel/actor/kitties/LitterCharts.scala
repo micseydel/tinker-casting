@@ -3,10 +3,12 @@ package me.micseydel.actor.kitties
 import me.micseydel.NoOp
 import me.micseydel.actor.MonthlyNotesRouter
 import me.micseydel.actor.MonthlyNotesRouter.Month
-import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, LitterSummaryForDay}
+import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, LitterReportForDay, LitterSummaryForDay}
+import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.dsl.*
+import me.micseydel.model.LitterSiftedEventJsonProtocol.SiftedContentsFormat
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
 import me.micseydel.vault.Note
@@ -28,6 +30,10 @@ object LitterCharts {
   case object HasInbox extends AuditStatus
 
   case class LitterSummaryForDay(forDay: LocalDate, peeClumps: Int, poops: Int, auditStatus: AuditStatus)
+
+  case class LitterReportForDay(forDay: LocalDate, report: Report) {
+    def toSummary: LitterSummaryForDay = report.toSummary(forDay)
+  }
 
   implicit object AuditStatusFormat extends JsonFormat[AuditStatus] {
     def write(obj: AuditStatus): JsValue = JsString(obj.toString)
@@ -125,7 +131,7 @@ private object LitterGraphHelper {
     }
   }
 
-  private object DocumentJsonProtocol extends DefaultJsonProtocol {
+  object DocumentJsonProtocol extends DefaultJsonProtocol {
 
     import me.micseydel.util.JsonUtil.CommonJsonProtocol.LocalDateTypeJsonFormat
 
@@ -133,6 +139,12 @@ private object LitterGraphHelper {
     implicit val documentMapFormat: RootJsonFormat[Map[LocalDate, LitterCharts.LitterSummaryForDay]] = mapFormat[LocalDate, LitterSummaryForDay]
 
     implicit val documentJsonFormat: RootJsonFormat[Document] = jsonFormat1(Document)
+
+    import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
+    import me.micseydel.vault.LinkIdJsonProtocol.noteIdFormat
+    implicit val DataPointJsonFormat: JsonFormat[DataPoint] = jsonFormat4(DataPoint)
+    implicit val reportJsonFormat: JsonFormat[MarkdownWithoutJsonExperiment.Report] = jsonFormat2(MarkdownWithoutJsonExperiment.Report(_, _))
+    implicit val litterReportForDayJsonFormat: JsonFormat[LitterReportForDay] = jsonFormat2(LitterReportForDay)
   }
 
   implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
@@ -226,7 +238,7 @@ object Last30DaysLitterGraphActor {
 
   import LitterGraphHelper.RichNoteRef
 
-  def apply()(implicit Tinker: Tinker): Ability[LitterSummaryForDay] = {
+  def apply()(implicit Tinker: Tinker): Ability[LitterReportForDay] = {
     val noteName = "Litter Sifting Chart (last 30 days)"
     NoteMakingTinkerer(noteName, TinkerColor.random(), "~") { case (context, noteRef) =>
       implicit val l: Logger = context.actorContext.log
@@ -242,7 +254,13 @@ object Last30DaysLitterGraphActor {
           }
       }
 
-      Tinker.receiveMessage { summary: LitterSummaryForDay =>
+      Tinker.receiveMessage { report: LitterReportForDay =>
+        import me.micseydel.actor.kitties.LitterGraphHelper.DocumentJsonProtocol.litterReportForDayJsonFormat
+        val OutTopic = s"${noteRef.noteId}/publish/LitterReportForDay"
+        context.actorContext.log.debug(s"publishing to $OutTopic")
+        context.system.mqtt ! TypedMqtt.Publish(OutTopic, report.toJson.compactPrint.getBytes)
+
+        val summary: LitterSummaryForDay = report.toSummary
         noteRef.readDocument().flatMap {
           case Some(document) =>
             document.integrate(summary) match {
