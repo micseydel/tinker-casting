@@ -8,11 +8,12 @@ import com.google.api.client.auth.oauth2.{Credential, TokenResponseException}
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.gmail.Gmail
-import com.google.api.services.gmail.model.MessagePart
+import com.google.api.services.gmail.model.{Message, MessagePart, ModifyMessageRequest}
 import me.micseydel.Common
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GmailActor.Email
 import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
+import me.micseydel.actor.google.TinkerGmailService.{InboxLabel, UnreadLabel}
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
@@ -24,6 +25,7 @@ import org.slf4j.Logger
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{ZoneId, ZonedDateTime}
+import java.util
 import java.util.Base64
 import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -34,6 +36,9 @@ object GmailActor {
   sealed trait Message
 
   case class Subscribe(subscriber: SpiritRef[Seq[Email]]) extends Message
+
+  // FIXME: NEEDS TESTING
+  case class ArchiveEmail(userId: String, messageId: String) extends Message
 
   private case object HeartBeat extends Message
 
@@ -154,6 +159,17 @@ object GmailActor {
         }
 
         Behaviors.same
+
+      case ArchiveEmail(userId, messageId) =>
+        val modifyMessageRequest = new ModifyMessageRequest().setRemoveLabelIds(List(UnreadLabel, InboxLabel).asJava)
+        gmailService
+          .users()
+          .messages()
+          .modify(userId, messageId, modifyMessageRequest)
+          .execute()
+        // FIXME: response?
+
+        Tinker.steadily
     }
   }
 
@@ -197,6 +213,9 @@ private object TinkerGmailService {
   private[google] val MaxThreadResults = 30
   private[google] val MaxMessageResults = 30
 
+  val InboxLabel = "INBOX"
+  val UnreadLabel = "UNREAD"
+
   def createGmailService(credential: Credential): Gmail = {
     new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance, credential)
       .setApplicationName(GoogleApplicationName)
@@ -205,9 +224,9 @@ private object TinkerGmailService {
 
   def fetchEmails(gmailService: Gmail)(implicit executionContextExecutor: ExecutionContextExecutor, log: Logger): Future[Seq[Email]] = (Future {
     val messages: List[com.google.api.services.gmail.model.Message] = {
-      val rawMessages = gmailService.users().messages().list("me")
+      val rawMessages: util.List[Message] = gmailService.users().messages().list("me")
         // FIXME
-        .setLabelIds(List("INBOX").asJava)
+        .setLabelIds(List(InboxLabel).asJava)
         .setQ("is:unread")
         .setMaxResults(MaxResults).execute().getMessages
 
