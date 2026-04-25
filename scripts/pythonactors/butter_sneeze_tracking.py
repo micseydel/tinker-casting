@@ -8,6 +8,7 @@ import traceback
 import pathlib
 import random
 import logging
+import datetime
 
 from urllib.error import URLError
 from typing import Optional, Tuple
@@ -54,9 +55,16 @@ class PythonActor:
             lowered_text = incoming_data["capture"]["whisperResult"]["whisperResultContent"]["text"].lower()
             if "sneez" in lowered_text:
                 
-                # FIXME  
-                print_with_time(f"Noticed a sneeze! (sending a broken ack)", lowered_text)
-                msg = json.dumps({}) #ListenerAcknowledgement(noteId: NoteId, noteCreationDate: LocalDate, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState])
+                captureTime = incoming_data["capture"]["captureTime"]
+
+                print_with_time(f"Noticed a sneeze!", lowered_text)
+                msg = json.dumps({
+                    "noteId": incoming_data["noteId"],
+                    "noteCreationDate": captureTime[:10],
+                    "timeOfAck": datetime.datetime.now().astimezone().isoformat(),
+                    "details": "sneez detected ([[Butter Sneeze Tracking|ref]])",
+                    "setNoteState": "AutomaticallyIntegrated",
+                })
                 
                 self.mqtt_client.publish("[[Chronicler]]", msg)
             else:
