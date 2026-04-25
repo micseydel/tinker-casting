@@ -8,15 +8,18 @@ import me.micseydel.actor.AudioNoteCapturer.NoticedAudioNote
 import me.micseydel.actor.transcription.TranscriptionNoteWrapper
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TinkerColor.rgb
+import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.chronicler.Chronicler.ChroniclerJsonProtocol
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{AutomaticallyIntegrated, NoteState, TranscribedMobileNoteEntry}
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext, TypedMqtt}
 import me.micseydel.model.*
 import me.micseydel.util.StringImplicits.RichString
 import me.micseydel.vault.*
 import me.micseydel.{Common, NoOp}
-
+import spray.json.*
+import ChroniclerJsonProtocol.listenerAcknowledgementJsonFormat
 import java.nio.file.Path
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, LocalDateTime, ZoneId, ZonedDateTime}
@@ -39,14 +42,22 @@ object Chronicler {
 
   final case class ReceiveNotePing(ping: Ping) extends Message
 
+  private case class ReceiveMqtt(mqttMessage: TypedMqtt.MqttMessage) extends Message
+
 
   def apply(vaultRoot: VaultPath, gossiper: SpiritRef[Gossiper.Message])(implicit Tinker: Tinker): Ability[Message] =
     initializing(vaultRoot, gossiper)
 
+  private val NoteName = "Chronicler"
+  private val Topic = s"[[$NoteName]]"
+
   private def initializing(
                         vaultRoot: VaultPath,
                         gossiper: SpiritRef[Gossiper.Message]
-                      )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Chronicler", rgb(135, 206, 235), "✍️", ReceiveNotePing, Some("_actor_notes")) { case (context, noteRef) =>
+                      )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(135, 206, 235), "✍️", ReceiveNotePing, Some("_actor_notes")) { case (context, noteRef) =>
+
+    context.system.mqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
+
     // FIXME: remove noteref if it stays unused
     implicit val tc: TinkerContext[_] = context
     context.self !! ReceiveNotePing(NoOp) // bootstrap
@@ -155,8 +166,30 @@ object Chronicler {
 //        case ReceiveWavFile(filename, bytes) =>
 //          audioNoteCapturer ! AudioNoteCapturer.ReceiveWavFile(filename, bytes)
 //          Tinker.steadily
+
+        case ReceiveMqtt(MqttMessage(Topic, payload)) =>
+          Try(new String(payload).parseJson.convertTo[ListenerAcknowledgement]) match {
+            case Failure(exception) => context.actorContext.log.warn(s"mqtt message deserialization failed of size ${payload.length}", exception)
+            case Success(listenerAcknowledgement: ListenerAcknowledgement) =>
+              context.actorContext.log.info(s"received a ListenerAcknowledgement via mqtt, forwarding to self now...")
+              context.self !! listenerAcknowledgement
+          }
+
+          Tinker.steadily
+
+        case ReceiveMqtt(MqttMessage(unexpectedTopic, payload)) =>
+          context.actorContext.log.warn(s"Received mqtt message on unexpected topic $unexpectedTopic, payload size ${payload.length}")
+          Tinker.steadily
       }
     }
+  }
+
+  object ChroniclerJsonProtocol extends DefaultJsonProtocol {
+    import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.NoteStateJsonFormat
+    import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
+    import me.micseydel.vault.LinkIdJsonProtocol.noteIdFormat
+    import me.micseydel.util.JsonUtil.CommonJsonProtocol.LocalDateTypeJsonFormat
+    implicit val listenerAcknowledgementJsonFormat: JsonFormat[ListenerAcknowledgement] = jsonFormat5(ListenerAcknowledgement(_, _, _, _, _))
   }
 
   // util
@@ -201,6 +234,4 @@ object Chronicler {
       ListenerAcknowledgement(noteId, forDay, tinkerContext.system.clock.now(), details, Some(AutomaticallyIntegrated))
     }
   }
-
-  case class ChroniclerConfig(vaultRoot: VaultPath, eventReceiverHost: String, eventReceiverPort: Int)
 }

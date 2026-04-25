@@ -4,8 +4,9 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerContext}
 import me.micseydel.util.TimeUtil
 import me.micseydel.vault.NoteId
+import spray.json.{DeserializationException, JsNumber, JsString, JsValue, RootJsonFormat}
 
-import java.time.{LocalDate, ZonedDateTime}
+import java.time.{DateTimeException, LocalDate, ZonedDateTime}
 
 object ChroniclerMOC {
 
@@ -72,4 +73,17 @@ object ChroniclerMOC {
     }
 
   final case class TranscribedMobileNoteEntry(time: ZonedDateTime, ref: NoteId, wordCount: Int)
+
+  implicit object NoteStateJsonFormat extends RootJsonFormat[NoteState] {
+    def write(t: NoteState): JsString = JsString(t.toString)
+
+    def read(value: JsValue): NoteState = value match {
+      case JsString("NeedsAttention" | "needsattention" | "needs_attention") =>
+        NeedsAttention
+      case JsString("AutomaticallyIntegrated" | "automaticallyintegrated" | "automatically_integrated") =>
+        AutomaticallyIntegrated
+      case _ =>
+        throw DeserializationException("Expected a string or epoch number")
+    }
+  }
 }

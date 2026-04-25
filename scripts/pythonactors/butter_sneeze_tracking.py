@@ -7,6 +7,7 @@ import base64
 import traceback
 import pathlib
 import random
+import logging
 
 from urllib.error import URLError
 from typing import Optional, Tuple
@@ -23,22 +24,45 @@ NoteName = "Butter Sneeze Tracker"
 ReceivingTopicGossiper = "[[Gossiper]]/publish/WhisperLarge"
 ReceivingTopicLitterSiftings = "[[Litter Sifting Chart (last 30 days)]]/publish/LitterReportForDay"
 
+ReceivingTopics = [ReceivingTopicGossiper, ReceivingTopicLitterSiftings]
+
 def print_with_time(s, *args, **kwargs) -> None:
     print(f"[{time.ctime()}] {s}", *args, **kwargs)
 
 
 class PythonActor:
     def __init__(self, vault_root):
-        self.vault_root = vault_root
+        self.path = os.path.join(vault_root, NoteName)
 
     def connect_mqtt(self, client):
         self.mqtt_client = client # will need this for ack'ing transcriptions, voting, etc
 
     def on_message(self, client, userdata, msg):
         incoming_topic = msg.topic
-        incoming_data = json.loads(msg.payload.decode())
+        logging.info("Received message on topic %s with size %s bytes", incoming_topic, len(msg.payload))
+        if incoming_topic not in ReceivingTopics:
+            logging.warn(f"Unexpected topic {incoming_topic}, ignoring {len(msg.payload)} bytes")
+            return
 
-        print(f"Received on topic {incoming_topic} data {incoming_data}")
+        try:
+            incoming_data = json.loads(msg.payload.decode())
+        except Exception as e:
+            logging.exception("Decoding or parsing JSON failed ({%s})", e)
+            return
+
+        if incoming_topic == ReceivingTopicGossiper:
+            lowered_text = incoming_data["capture"]["whisperResult"]["whisperResultContent"]["text"].lower()
+            if "sneez" in lowered_text:
+                
+                # FIXME  
+                print_with_time(f"Noticed a sneeze! (sending a broken ack)", lowered_text)
+                msg = json.dumps({}) #ListenerAcknowledgement(noteId: NoteId, noteCreationDate: LocalDate, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState])
+                
+                self.mqtt_client.publish("[[Chronicler]]", msg)
+            else:
+                print_with_time(f"Ignoring:", lowered_text)
+        elif incoming_topic == ReceivingTopicLitterSiftings:
+            print_with_time(f"Received litter report for day {incoming_data['forDay']}, {len(incoming_data['report']['dataPoints'])} events")
 
 
 def run():
