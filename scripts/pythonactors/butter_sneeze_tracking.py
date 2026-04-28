@@ -27,6 +27,7 @@ ReceivingTopicLitterSiftings = "[[Litter Sifting Chart (last 30 days)]]/publish/
 
 ReceivingTopics = [ReceivingTopicGossiper, ReceivingTopicLitterSiftings]
 
+
 def print_with_time(s, *args, **kwargs) -> None:
     print(f"[{time.ctime()}] {s}", *args, **kwargs)
 
@@ -55,29 +56,42 @@ class PythonActor:
             if incoming_topic == ReceivingTopicGossiper:
                 lowered_text = incoming_data["capture"]["whisperResult"]["whisperResultContent"]["text"].lower()
                 if "sneez" in lowered_text:
-                    self.document.appendToInbox(f"- Noticed a sneeze! {lowered_text}\n")
+                    print_with_time("Sneez* detected")
+                    captureTime = incoming_data["capture"]["captureTime"]
+                    noteId = incoming_data["noteId"]
+                    self.document.appendToInbox(f"- \\[{datetime.datetime.now().isoformat()[:19]}] Noticed a sneeze! {lowered_text} ([[{noteId['id']}|ref]])\n")
+                    print_with_time("Appended to inbox, publishing ack now...")
                     self.mqtt_client.publish("[[Chronicler]]", json.dumps({
-                        "noteId": incoming_data["capture"]["captureTime"]["noteId"],
+                        "noteId": noteId,
                         "noteCreationDate": captureTime[:10],
                         "timeOfAck": datetime.datetime.now().astimezone().isoformat(),
-                        "details": "sneez detected ([[Butter Sneeze Tracking|ref]])",
+                        "details": f"sneez detected ([[{NoteName}|ref]])",
                         "setNoteState": "AutomaticallyIntegrated",
                     }))
                 else:
-                    logging.info("Ignoring: %s", lowered_text)
+                    logging.info("Ignoring: %s", lowered_text) # FIXME remove
             elif incoming_topic == ReceivingTopicLitterSiftings:
-                self.document.add_sifting(incoming_data['forDay'], incoming_data['report'])
-                self.document.appendToInbox(f"- Received litter report for day {incoming_data['forDay']}, {len(incoming_data['report']['datapoints'])} events\n")
+                print_with_time("Litter sifting detected")
+                for_day = incoming_data['forDay']
+                self.document.add_sifting(for_day, incoming_data['report'])
+                self.document.appendToInbox(f"- \\[{datetime.datetime.now().isoformat()[:19]}] Received litter report for day {incoming_data['forDay']}, {len(incoming_data['report']['datapoints'])} events ([[Litter boxes sifting ({for_day})|ref]])\n")
+            else:
+                logging.warn("Unexpected topic %s (should have been impossible here)", incoming_topic)
         except Exception as e:
             logging.exception("Something went wrong ({%s})", e)
 
+
 class Document:
-    def __init__(self, markdownf, jsonf):
-        self.markdownf = markdownf
-        self.jsonf = jsonf
+    def __init__(self, markdown_path, json_path):
+        self.markdown_path = markdown_path
+
+        # FIXME: need to have SIFTINGS key and... what's the HITL for sneezes? or empty siftings?
+
+        self.json_path = json_path
         self.siftings = {}
         try:
-            self.siftings = json.load(jsonf)
+            with open(self.json_path) as jsonf:
+                self.siftings = json.load(jsonf)
         except Exception as e:
             logging.exception(f"failed to load siftings from disk ({e})")
 
@@ -88,9 +102,10 @@ class Document:
         self.siftings[for_day] = sifting
         self.update_chart()
 
-        self.jsonf.truncate(0)
-        json.dump(self.siftings, self.jsonf, indent=4)
-        self.jsonf.flush() #FIXME delete?
+        # self.jsonf.truncate(0)
+        with open(self.json_path, 'w') as jsonf:
+            json.dump(self.siftings, jsonf, indent=4)
+        # self.jsonf.flush() #FIXME delete?
 
     def update_chart(self):
         tuples = [(for_day, len(sifting["datapoints"])) for (for_day, sifting) in self.siftings.items()]
@@ -109,25 +124,29 @@ class Document:
             ],
         }
 
-        self.markdownf.seek(0)
+        # self.markdownf.seek(0)
         new_lines = []
-        for line in self.markdownf:
-            new_lines.append(line)
-            if line == "```chart\n":
-                break
-        next(self.markdownf)  # discard the old chart; naive, assumes one line of json (rather than yaml)
-        new_lines.append(json.dumps(chart))
-        new_lines.append("\n")
-        new_lines.extend(self.markdownf)
+        with open(self.markdown_path) as markdownfr:
+            for line in markdownfr:
+                new_lines.append(line)
+                if line == "```chart\n":
+                    break
+            next(markdownfr)  # discard the old chart; naive, assumes one line of json (rather than yaml)
+            new_lines.append(json.dumps(chart))
+            new_lines.append("\n")
+            new_lines.extend(markdownfr)
 
-        self.markdownf.truncate(0)
-        self.markdownf.write("".join(new_lines))
-        self.markdownf.flush()
+        # self.markdownf.truncate(0)
+        with open(self.markdown_path, 'w') as markdownfw:
+            markdownfw.write("".join(new_lines))
+        # self.markdownf.flush()
 
     def appendToInbox(self, line):
-        self.markdownf.read() # lazy-coded seek to the end
-        self.markdownf.write(line)
-        self.markdownf.flush()
+        # self.markdownf.read() # lazy-coded seek to the end
+        # 
+        # self.markdownf.flush()
+        with open(self.markdown_path, 'a') as markdownf:
+            markdownf.write(line)
 
 
 def run():
@@ -145,31 +164,32 @@ def run():
 
     markdown_path = os.path.join(vault_root, f"{NoteName}.md")
     json_path = os.path.join(vault_root, "json", f"{NoteName.lower().replace(' ', '_')}.json")
-    with open(markdown_path, 'r+') as markdownf, open(json_path, 'r+') as jsonf:
-        document = Document(markdownf, jsonf)
-        document.update_chart()
-        actor = PythonActor(document)
-        
-        print_with_time(f"pid {os.getpid()}, client {client_id} connecting now...")
 
-        client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id)
-        actor.connect_mqtt(client)
-        client.username_pw_set(username, password)
-        subscription_topics = [ReceivingTopicGossiper, ReceivingTopicLitterSiftings]
-        def on_connect(client, userdata, flags, reason_code, properties):
-            client.on_message = actor.on_message
-            print_with_time(f"Subscribing to {subscription_topics}")
-            for topic in subscription_topics:
-                client.subscribe(topic)
+    document = Document(markdown_path, json_path)
+    document.update_chart()
+    actor = PythonActor(document)
+    
+    print_with_time(f"pid {os.getpid()}, client {client_id} connecting now...")
 
-        client.on_connect = on_connect
-        client.connect(broker, port)
-        
+    client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id)
+    actor.connect_mqtt(client)
+    client.username_pw_set(username, password)
+    subscription_topics = [ReceivingTopicGossiper, ReceivingTopicLitterSiftings]
+    def on_connect(client, userdata, flags, reason_code, properties):
+        client.on_message = actor.on_message
+        print_with_time(f"Subscribing to {subscription_topics}")
+        for topic in subscription_topics:
+            client.subscribe(topic)
 
-        try:
-            client.loop_forever()
-        except KeyboardInterrupt:
-            print_with_time("(KeyboardInterrupt) Done")
+    client.on_connect = on_connect
+    client.connect(broker, port)
+
+    try:
+        client.loop_forever()
+    except KeyboardInterrupt:
+        print_with_time("(KeyboardInterrupt) Done")
+    else:
+        client.disconnect()
 
 
 if __name__ == '__main__':
