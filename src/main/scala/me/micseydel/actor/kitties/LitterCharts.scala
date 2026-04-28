@@ -10,7 +10,7 @@ import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.*
 import me.micseydel.model.LitterSiftedEventJsonProtocol.SiftedContentsFormat
 import me.micseydel.prototyping.ObsidianCharts
-import me.micseydel.prototyping.ObsidianCharts.{IntSeries, Series}
+import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries, Series}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
@@ -80,9 +80,9 @@ private object LitterGraphHelper {
 
       val series: List[Series[_]] = List(
         IntSeries("#1", number1s.takeRight(limitDays)),
-        IntSeries("#2", number2s.takeRight(limitDays)) //,
-        //        DoubleSeries("avg #1", runningAverage(number1s).takeRight(limitDays)),
-        //        DoubleSeries("avg #2", runningAverage(number2s).takeRight(limitDays))
+        IntSeries("#2", number2s.takeRight(limitDays)),
+        DoubleSeries("avg #1", runningAverage(number1s).takeRight(limitDays)),
+        DoubleSeries("avg #2", runningAverage(number2s).takeRight(limitDays))
       )
 
       val chart = ObsidianCharts.chart(labels, series)
@@ -125,6 +125,7 @@ private object LitterGraphHelper {
 
     private def runningAverage(elements: List[Int], lookback: Int = 7): List[Double] = {
       elements.indices.map { i =>
+        // FIXME: the max(0, index) might hide unintentional stuff
         val window = elements.slice(Math.max(0, i - lookback + 1), i + 1)
         window.sum.toDouble / window.length
       }.toList
