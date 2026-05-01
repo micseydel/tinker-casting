@@ -8,14 +8,14 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.kitties.LitterBoxReportActor.*
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, AuditStatus, HasInbox, LitterReportForDay, LitterSummaryForDay}
-import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
+import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report, LineParser}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.*
 import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
-import me.micseydel.util.{MarkdownUtil, TimeUtil}
+import me.micseydel.util.{MarkdownUtil, ParseUtil, TimeUtil}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
@@ -89,17 +89,33 @@ private[kitties] object DailyAbility {
                 context.actorContext.log.warn(s"Something unexpected happened: $other")
             }
           case Validated.Valid((existingMarkdown, document: Document)) =>
-            val summary: LitterSummaryForDay = document.toSummary(forDay)
+            val (leftoverInbox, inboxCorrections) = document.inbox.map(LineParser.apply(_, forDay)).partitionMap {
+              case MarkdownWithoutJsonExperiment.ParseSuccessDatapoint(datapoint) =>
+                Right(datapoint)
+
+              case MarkdownWithoutJsonExperiment.ParseFailure(rawLine, _, _) =>
+                Left(rawLine)
+            }
+
+            val latestDocument = if (inboxCorrections.nonEmpty) {
+              inboxCorrections.foldRight(document) { (correction, documentSoFar) =>
+                documentSoFar.append(correction)
+              }.copy(inbox = leftoverInbox)
+            } else {
+              document
+            }
+
+            val summary: LitterSummaryForDay = latestDocument.toSummary(forDay)
             context.actorContext.log.info(s"$forDay updating the note and listeners with summary $summary")
             monthlyLitterGraphActor !! summary
-            last30DaysLitterGraphActor !! LitterReportForDay(forDay, document.report)
+            last30DaysLitterGraphActor !! LitterReportForDay(forDay, latestDocument.report)
 
-            val latestMarkdown = document.toMarkdown
+            val latestMarkdown = latestDocument.toMarkdown
             if (latestMarkdown != existingMarkdown) {
               val noteId = noteRef.noteId
               // FIXME: delete after confirming LitterBoxesHelper does this just fine
 //              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"""added to ${noteId.heading("Inbox")}""", Some(NeedsAttention))
-              noteRef.setMarkdown(document.toMarkdown) match {
+              noteRef.setMarkdown(latestDocument.toMarkdown) match {
                 case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
                 case Success(NoOp) =>
               }
@@ -342,11 +358,11 @@ object MarkdownWithoutJsonExperiment {
   }
 
 
-  private sealed trait LineParseResult
+  sealed trait LineParseResult
 
-  private case class ParseSuccessDatapoint(datapoint: DataPoint) extends LineParseResult
+  case class ParseSuccessDatapoint(datapoint: DataPoint) extends LineParseResult
 
-  private case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
+  case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
 
   // yaml, summary bullets (poo/pee count), event bullets (time, type, ref)
   // - \[02:58:14AM\] 💦 ([[Transcription for mobile_audio_capture_20240217-025814.wav|ref]])
@@ -417,7 +433,7 @@ object MarkdownWithoutJsonExperiment {
     def fresh(datapoints: List[DataPoint] = Nil): Report = Report(datapoints, AuditNotCompleted)
   }
 
-  private object LineParser {
+  object LineParser {
     // FIXME: if I break the formatting, then received messages can't be encoded in markdown...
     // - without risk of duplication
     // - or loss
@@ -462,6 +478,12 @@ object MarkdownWithoutJsonExperiment {
       @tailrec
       def helper(remaining: List[Char])(accumulatedUses: List[LitterUseType], accumulatedRejections: List[String]): (List[LitterUseType], List[String]) = {
         remaining match {
+          case '1' :: theRest =>
+            helper(theRest)(Urination :: accumulatedUses, accumulatedRejections)
+
+          case '2' :: theRest =>
+            helper(theRest)(Defecation :: accumulatedUses, accumulatedRejections)
+
           case firstCodePoint :: secondCodePoint :: theRest =>
             extractRelevantEmoji(firstCodePoint, secondCodePoint) match {
               case Some(emoji) =>
