@@ -111,7 +111,7 @@ object GroceryListMOCActor {
                     // this is just to keep whatever the convention happened ot be
                     val newNoteName = latestArchiveNote.replace(latestDate.toString.take(10), day.toString)
                     if (document.latestArchive == newNoteName) {
-                      context.actorContext.log.warn(s"(make this info) Not turning over note because it was already done [[${document.latestArchive}]]")
+                      context.actorContext.log.info(s"(make this info) Not turning over note because it was already done [[${document.latestArchive}]]")
                       Tinker.steadily
                     } else {
                       context.actorContext.log.info(s"Creating SpiritRef for $newNoteName")
