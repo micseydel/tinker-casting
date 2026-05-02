@@ -74,8 +74,14 @@ object ParseUtil {
         (time, theRest)
       }
 
+      // FIXME: this was a quick hack to support not requiring a dash at the front
+    case maybeTime :: theRest =>
+      extractTimeFromBrackets(maybeTime, day).map { time =>
+        (time, theRest)
+      }
+
     case other =>
-      Validated.Invalid(NonEmptyList.of(s"""Expected a Markdown list with some contents but got: `${other.mkString("\n")}`"""))
+      Validated.Invalid(NonEmptyList.of(s"""Expected a Markdown list or line with some contents but got: `${other.mkString("\n")}`"""))
   }
 
   def getZonedDateTimeFromListLineFrontWithOptionalPrefix(parts: List[String], day: LocalDate): ValidatedNel[String, (ZonedDateTime, List[String], Option[DataPointState])] = {
