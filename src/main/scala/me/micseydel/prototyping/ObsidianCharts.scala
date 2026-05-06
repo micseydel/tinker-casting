@@ -1,5 +1,7 @@
 package me.micseydel.prototyping
 
+import cats.data.ValidatedNel
+import cats.implicits.catsSyntaxValidatedId
 import spray.json.DefaultJsonProtocol.*
 import spray.json.enrichAny
 
@@ -41,4 +43,27 @@ object ObsidianCharts {
 
   case class IntSeries(title: String, data: List[Int]) extends Series[Int]
   case class DoubleSeries(title: String, data: List[Double]) extends Series[Double]
+
+  // FIXME: javadoc
+  def averageOfLastN(elements: List[Int], lookback: Int = 7): ValidatedNel[String, List[Double]] = {
+    val size = elements.size
+
+    val result: List[Double] = elements.indices.drop(lookback).map { i =>
+      val window = elements.slice(i - lookback, i + 1)
+      window.sum.toDouble / window.length
+    }.toList
+
+    if (result.isEmpty) {
+      s"Not enough elements ($size) for lookback ($lookback)".invalidNel
+    } else {
+      result.valid
+    }
+  }
+
+  // FIXME proper tests!!!!
+  //   the result size should be its input -N, right?
+  def main(args: Array[String]): Unit = {
+    val list = List(1, 2, 3)
+    println(averageOfLastN(list, 1))
+  }
 }

@@ -49,10 +49,13 @@ object LitterBoxReportActor {
   private def setup()(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinkerer(TinkerColor.CatBrown, "🗑️").setup { context =>
     implicit val c: TinkerContext[_] = context
 
+    val DaysToActivateBack = 37
+
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
     val last30DaysLitterGraphActor: SpiritRef[LitterReportForDay] = context.cast(Last30DaysLitterGraphActor(), "Last30DaysLitterGraphActor")
 
-    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[Message]] = context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor), 30), "DailyNotesRouter")
+    val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[Message]] =
+      context.cast(DailyNotesRouter(DailyAbility(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor), DaysToActivateBack), "DailyNotesRouter")
 
     Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
