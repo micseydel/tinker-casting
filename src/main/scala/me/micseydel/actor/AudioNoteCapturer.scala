@@ -257,7 +257,7 @@ object AudioNoteCapturerHelpers {
   def pathSupportedByFfmpeg(audioPath: String): Boolean = audioPath.split("\\.").lastOption.exists(FFMPEGFormats.contains)
 
   def validPath(audioPath: Path): Boolean = {
-    !audioPath.startsWith(".evr_recently_deleted") && supportedByFfmpeg(audioPath)
+    !audioPath.toFile.toString.startsWith(".evr_recently_deleted") && supportedByFfmpeg(audioPath)
   }
 
   def transcriptionNoteName(wavPath: Path): String = s"Transcription for ${wavPath.getFileName.toString}"
