@@ -25,7 +25,7 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService}
 case class TinkerContainer(actorSystem: ActorSystem, tinkerCast: typed.ActorRef[RootTinkerBehavior.Message])
 
 object TinkerContainer {
-  def apply[CentralCast, M](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[M]): TinkerContainer = {
+  def apply[CentralCast, M](appConfig: AppConfig, notificationCenterAbilities: NotificationCenterAbilities, applicationName: String)(centralCastFactory: (Tinker, TinkerContext[_]) => CentralCast, userCast: EnhancedTinker[CentralCast] => Ability[M]): TinkerContainer = {
     implicit val httpExecutionContext: ExecutionContextExecutorService =
       ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(20))
 
@@ -43,7 +43,7 @@ object TinkerContainer {
     // the classic actor system is needed in order to get events from MQTT
     val actorSystem: ActorSystem = ActorSystem("AkkaActor")
 
-    val tinkerCast = actorSystem.toTyped.systemActorOf(rootBehavior, "TinkerCast")
+    val tinkerCast = actorSystem.toTyped.systemActorOf(rootBehavior, applicationName)
 
     TinkerContainer(actorSystem, tinkerCast)
   }

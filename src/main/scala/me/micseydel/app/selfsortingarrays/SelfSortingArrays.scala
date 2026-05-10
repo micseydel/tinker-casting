@@ -43,7 +43,7 @@ object SelfSortingArrays {
         // keeps the system alive waiting for messages on a separate thread
         @unused
         val container =
-        TinkerContainer(config, NotificationCenterAbilities.None)(
+        TinkerContainer(config, NotificationCenterAbilities.None, "SelfSortingArrays")(
           centralCastFactory(config.vaultRoot)(_, _), // effectively globals
           Container()(_: EnhancedTinker[SelfSortingArrayCentralCast])
         )

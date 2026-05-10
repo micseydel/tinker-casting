@@ -104,7 +104,7 @@ object RemindMeListenerActor {
               context.actorContext.log.info("Updated JSON and note")
 
             } else {
-              context.actorContext.log.info(s"New reminder appears to be a duplicate, ignoring; $reminder was in received reminders ${state.receivedReminders}")
+              context.actorContext.log.debug(s"New reminder appears to be a duplicate, ignoring; $reminder was in received reminders ${state.receivedReminders}")
             }
 
             Tinker.steadily

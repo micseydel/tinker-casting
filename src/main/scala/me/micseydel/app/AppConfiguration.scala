@@ -20,7 +20,8 @@ object AppConfiguration {
   /**
    * Fetches from disk the validated configuration.
    */
-  private[app] def getConfig(): ValidatedNel[String, AppConfig] = {
+//  private[app]
+  def getConfig(): ValidatedNel[String, AppConfig] = {
     val config: Config = ConfigFactory.load()
 
     VaultPath(config.getString("vault.root")) match {

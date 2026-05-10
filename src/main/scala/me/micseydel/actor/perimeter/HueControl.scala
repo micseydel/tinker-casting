@@ -78,7 +78,11 @@ object HueControl {
         behavior(lightKeepersByName, lightKeepersByLight)
 
       case Validated.Invalid(e) =>
-        context.actorContext.log.warn(s"Failed to start HueControl: $e")
+        if (e.exists(_.contains("java.io.FileNotFoundException"))) { // FIXME sloppy
+          context.actorContext.log.debug(s"Failed to start HueControl: $e")
+        } else {
+          context.actorContext.log.warn(s"Failed to start HueControl: $e")
+        }
         Tinker.ignore
     }
   }

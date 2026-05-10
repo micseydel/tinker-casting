@@ -1,23 +1,29 @@
 package me.micseydel.actor.kitties
 
+import akka.actor.typed.Behavior
+import akka.actor.typed.scaladsl.Behaviors
+import cats.data.Validated
 import me.micseydel.actor.DailyMarkdownFromPersistedMessagesActor.{RegenerateMarkdown, StoreAndRegenerateMarkdown}
 import me.micseydel.actor.kitties.CatTranscriptionListener.TranscriptionEvent
-import me.micseydel.actor.kitties.CatsHelper.{Message, PartialMatch}
+import me.micseydel.actor.kitties.CatsHelper.PartialMatch
 import me.micseydel.actor.kitties.LitterBoxesHelper.{EventCapture, LitterSifted, ObservedCatUsingLitter, PostHocLitterObservation}
+import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.{DailyMarkdownFromPersistedMessagesActor, DailyNotesRouter}
-import me.micseydel.app.MyCentralCast
+import me.micseydel.app.AppConfiguration.AppConfig
+import me.micseydel.app.{AppConfiguration, MyCentralCast}
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.NeedsAttention
 import me.micseydel.dsl.tinkerer.RasaAnnotatingListener.RasaAnnotatedNotedTranscription
-import me.micseydel.dsl.{EnhancedTinker, SpiritRef, Tinker, TinkerClock, TinkerColor, TinkerContext, Tinkerer}
 import me.micseydel.model.*
 import me.micseydel.util.{MarkdownUtil, TimeUtil}
 import me.micseydel.vault.{LinkIdJsonProtocol, NoteId}
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsObject, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
 import java.time.ZonedDateTime
+import scala.annotation.unused
 import scala.concurrent.duration.DurationInt
 
 object LitterBoxesHelper {
@@ -240,4 +246,42 @@ case object LitterBoxesEventCaptureListJsonProtocol extends DefaultJsonProtocol 
   }
 
   val messageListFormat: RootJsonFormat[List[EventCapture]] = listFormat(EventCaptureJsonFormat)
+}
+
+object LitterBoxesHelperDemo {
+  def main(args: Array[String]): Unit = {
+    AppConfiguration.getConfig() match {
+      case Validated.Invalid(errors) =>
+        println(s"FAILED, errors-\n$errors")
+      case Validated.Valid(config: AppConfig) =>
+        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system: config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
+        run(config)
+    }
+  }
+
+  def run(config: AppConfig): Unit = {
+    @unused
+    val container =
+      TinkerContainer(config, NotificationCenterAbilities.Defaults, "LitterDemo")(
+        centralCastFactory()(_, _),
+        LitterBoxesHelper()(_: EnhancedTinker[MyCentralCast])
+      )
+
+    println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Demo system done starting")
+  }
+
+  private def centralCastFactory()(implicit Tinker: Tinker, context: TinkerContext[?]): MyCentralCast = {
+    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and INERT Rasa")
+    val gossiper = context.cast(InertActor(), "INERTGossiperFORTESTING")
+    val chronicler = context.cast(InertActor(), "INERTChroniclerFORTESTING")
+    val rasaActor = context.cast(InertActor(), "INERTRasaActorFORTESTING")
+    MyCentralCast(chronicler, gossiper, rasaActor)
+  }
+}
+
+object InertActor {
+  def apply[T](): Behavior[T] = Behaviors.receive { case (context, message) =>
+     context.log.debug(s"ignoring $message")
+     Behaviors.same
+  }
 }

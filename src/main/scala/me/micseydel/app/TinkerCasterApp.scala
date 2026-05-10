@@ -39,7 +39,7 @@ object TinkerCasterApp {
 
     @unused
     val container =
-      TinkerContainer(config, NotificationCenterAbilities.Defaults)(
+      TinkerContainer(config, NotificationCenterAbilities.Defaults, "TinkerCast")(
         centralCastFactory(config.vaultRoot)(_, _), // effectively globals
         UserTinkerCast(config.purpleAirReadAPIKey, config.pirateWeatherApiKey, config.anthropic, config.openai)(_: EnhancedTinker[MyCentralCast])
       )
