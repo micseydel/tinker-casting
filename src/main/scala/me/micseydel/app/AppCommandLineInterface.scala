@@ -1,7 +1,7 @@
 package me.micseydel.app
 
 import akka.actor.typed.ActorSystem
-import me.micseydel.actor.kitties.LitterBoxReportActor
+import me.micseydel.actor.kitties.LitterBoxReportsActor
 import me.micseydel.model._
 //import me.micseydel.vault.LitterBoxReportActor.Correction
 

@@ -6,7 +6,7 @@ import me.micseydel.NoOp
 import me.micseydel.actor.MonthlyNotesRouter
 import me.micseydel.actor.MonthlyNotesRouter.Month
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, LitterReportForDay, LitterSummaryForDay}
-import me.micseydel.actor.kitties.MarkdownWithoutJsonExperiment.{DataPoint, Report}
+import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, Report}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.*
@@ -148,7 +148,7 @@ private object LitterGraphHelper {
     import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
     import me.micseydel.vault.LinkIdJsonProtocol.noteIdFormat
     implicit val DataPointJsonFormat: JsonFormat[DataPoint] = jsonFormat4(DataPoint)
-    implicit val reportJsonFormat: JsonFormat[MarkdownWithoutJsonExperiment.Report] = jsonFormat2(MarkdownWithoutJsonExperiment.Report(_, _))
+    implicit val reportJsonFormat: JsonFormat[MarkdownDailyLitterSummaryReportDocumentParser.Report] = jsonFormat2(MarkdownDailyLitterSummaryReportDocumentParser.Report(_, _))
     implicit val litterReportForDayJsonFormat: JsonFormat[LitterReportForDay] = jsonFormat2(LitterReportForDay)
   }
 

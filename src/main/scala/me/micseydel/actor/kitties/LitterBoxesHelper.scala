@@ -59,8 +59,8 @@ object LitterBoxesHelper {
     context.actorContext.log.info("Regenerating Markdown in case things have changed")
     dailyNotesAssistant !! DailyNotesRouter.Envelope(RegenerateMarkdown(), context.system.clock.now())
 
-    val justSiftingReport: SpiritRef[LitterBoxReportActor.Message] = context.cast(
-      LitterBoxReportActor(),
+    val justSiftingReport: SpiritRef[LitterBoxReportsActor.Message] = context.cast(
+      LitterBoxReportsActor(),
       "LitterBoxesSifting_MOC"
     )
 
@@ -69,12 +69,12 @@ object LitterBoxesHelper {
     behavior(timeKeeper, dailyNotesAssistant, justSiftingReport)
   }
 
-  private def behavior(timeKeeper: SpiritRef[TimeKeeper.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[EventCapture]]], justSiftingReport: SpiritRef[LitterBoxReportActor.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(timeKeeper: SpiritRef[TimeKeeper.Message], dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[DailyMarkdownFromPersistedMessagesActor.Message[EventCapture]]], justSiftingReport: SpiritRef[LitterBoxReportsActor.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] = Tinker.receive { (context, message) =>
     implicit val c: TinkerContext[_] = context
     message match {
       // FIXME: need to set a timer for clumping situations
       case capture@LitterSifted(LitterSiftedEvent(when, _, _), _, _) =>
-        justSiftingReport !! LitterBoxReportActor.LitterSiftedObservation(capture)
+        justSiftingReport !! LitterBoxReportsActor.LitterSiftedObservation(capture)
         dailyNotesAssistant !! DailyNotesRouter.Envelope(StoreAndRegenerateMarkdown(capture), when.toLocalDate)
         Tinker.steadily
 
@@ -95,7 +95,7 @@ object LitterBoxesHelper {
 
       case ReceivePartialMatch(PartialMatch(TranscriptionEvent(RasaAnnotatedNotedTranscription(NotedTranscription(TranscriptionCapture(whisperResult, captureTime), noteId), maybeRasaResult)))) =>
         Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, context.system.clock.now(), s"""added to $justSiftingReport's inbox""", Some(NeedsAttention))
-        justSiftingReport !! LitterBoxReportActor.AddToInbox(MarkdownUtil.listLineWithTimestampAndRef(captureTime,
+        justSiftingReport !! LitterBoxReportsActor.AddToInbox(MarkdownUtil.listLineWithTimestampAndRef(captureTime,
           whisperResult.whisperResultContent.text,  // siftedContents.toEmojis,
           noteId).drop(2), // FIXME: hack
           captureTime)
