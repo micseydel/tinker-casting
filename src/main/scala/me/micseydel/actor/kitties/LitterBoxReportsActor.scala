@@ -8,7 +8,7 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.kitties.LitterBoxReportsActor.*
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, AuditStatus, HasInbox, LitterReportForDay, LitterSummaryForDay}
-import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, Report, LineParser}
+import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, LitterReport, LineParser}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability

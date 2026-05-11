@@ -3,10 +3,12 @@ package me.micseydel.actor.kitties
 import cats.data.Validated.Invalid
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
+import com.softwaremill.quicklens.ModifyPimp
+import me.micseydel.actor.kitties.Helper.RichNoteRef
 import me.micseydel.actor.kitties.LitterBoxReportsActor.*
 import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, AuditStatus, HasInbox, LitterReportForDay, LitterSummaryForDay}
-import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, LineParser, Report}
+import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, LineParseResult, LineParser, LitterReport, ParseFailure, ParseSuccessDatapoint}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
@@ -24,124 +26,104 @@ import scala.annotation.tailrec
 import scala.util.{Failure, Success}
 
 private[kitties] object DailyLitterSummaryActor {
+  private val EmptyDocument = DailyLitterDocument(LitterReport.fresh(), Nil)
+
   def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterReportForDay])(implicit Tinker: EnhancedTinker[MyCentralCast]): (String, Ability[Message]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
+    implicit val monthly: SpiritRef[LitterSummaryForDay] = monthlyLitterGraphActor
+    implicit val recent: SpiritRef[LitterReportForDay] = last30DaysLitterGraphActor
+    implicit val parser: MarkdownDailyLitterSummaryReportDocumentParser = new MarkdownDailyLitterSummaryReportDocumentParser(forDay)
+
     noteName -> AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](noteName, color, emoji, ReceiveNotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[?] = context
+      implicit val nr: NoteRef = noteRef
 
-      def refreshMarkdown(): Unit = {
-        context.actorContext.log.info("Refreshing markdown (and notifying listeners)")
-        noteRef.getDocument(forDay) match {
-          case Invalid(e) =>
-            e.toList match {
-              case List(justOne) if justOne.contains("No such file or directory") =>
-              // refactor, but this is normal and expected
-              case other =>
-                context.actorContext.log.warn(s"Something unexpected happened: $other")
-            }
-          case Validated.Valid((existingMarkdown, document: DailyLitterDocument)) =>
-            val (leftoverInbox, inboxCorrections) = document.inbox.map(LineParser.apply(_, forDay)).partitionMap {
-              case MarkdownDailyLitterSummaryReportDocumentParser.ParseSuccessDatapoint(datapoint) =>
-                Right(datapoint)
-
-              case MarkdownDailyLitterSummaryReportDocumentParser.ParseFailure(rawLine, _, _) =>
-                Left(rawLine)
-            }
-
-            val latestDocument = if (inboxCorrections.nonEmpty) {
-              inboxCorrections.foldRight(document) { (correction, documentSoFar) =>
-                documentSoFar.append(correction)
-              }.copy(inbox = leftoverInbox)
-            } else {
-              document
-            }
-
-            val summary: LitterSummaryForDay = latestDocument.toSummary(forDay)
-            context.actorContext.log.info(s"$forDay updating the note and listeners with summary $summary")
-            monthlyLitterGraphActor !! summary
-            last30DaysLitterGraphActor !! LitterReportForDay(forDay, latestDocument.report)
-
-            val latestMarkdown = latestDocument.toMarkdown
-            if (latestMarkdown != existingMarkdown) {
-              val noteId = noteRef.noteId
-              // FIXME: delete after confirming LitterBoxesHelper does this just fine
-              //              Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteId, context.system.clock.now(), s"""added to ${noteId.heading("Inbox")}""", Some(NeedsAttention))
-              noteRef.setMarkdown(latestDocument.toMarkdown) match {
-                case Failure(exception) => context.actorContext.log.warn(s"Something went wrong $forDay", exception)
-                case Success(NoOp) =>
-              }
-            } else {
-              context.actorContext.log.info("Markdown stable")
-            }
-        }
+      val audited = noteRef.getDocument() match {
+        case Validated.Valid((markdownFromDisk, document: DailyLitterDocument)) =>
+          val summary: LitterSummaryForDay = document.toSummary(forDay)
+          context.actorContext.log.info(s"[$forDay] freshing monthly and last 30 days charts with summary $summary")
+          monthlyLitterGraphActor !! summary
+          last30DaysLitterGraphActor !! LitterReportForDay(forDay, document.report)
+          summary.auditStatus == AuditCompleted
+        case Invalid(Left(msg)) =>
+          context.actorContext.log.warn(s"Something went wrong fetching the structured document from disk: $msg")
+          false
+        case Invalid(Right(NoteRef.FileDoesNotExist)) =>
+          monthlyLitterGraphActor !! EmptyDocument.toSummary(forDay)
+          last30DaysLitterGraphActor !! LitterReportForDay(forDay, EmptyDocument.report)
+          false
       }
 
-      refreshMarkdown()
-
-      Tinker.receiveMessage {
-        case ReceiveNotePing(NoOp) =>
-          noteRef.readMarkdownSafer() match {
-            case NoteRef.FileDoesNotExist => context.actorContext.log.warn(s"Race condition or directory mismatch? Tried to read markdown because of a note ping, but it appears not to exist (${noteRef.noteId})")
-            case NoteRef.Contents(s) =>
-              s match {
-                case Failure(exception) => context.actorContext.log.warn(s"Failed to read markdown on note ping", exception)
-                case Success(markdown) =>
-                  val lines = markdown.split('\n')
-                  if (lines.length >= 5) {
-                    val maybeAuditLine = lines(4)
-                    if (maybeAuditLine.length >= 4) {
-                      maybeAuditLine.charAt(3).toLower match {
-                        case 'x' | '-' =>
-                          context.actorContext.log.info("Detected audit complete, refreshing markdown and notifying any listeners")
-                          refreshMarkdown()
-                        case ' ' => // ignore
-                        case other =>
-                          context.actorContext.log.warn(s"Unexpected character $other where a markdown checkbox was expected")
-                      }
-                    } else {
-                      context.actorContext.log.debug(s"Shorter line than expected: $maybeAuditLine")
-                    }
-                  } else {
-                    context.actorContext.log.debug("Fewer lines than expected")
-                  }
-              }
-          }
-          Tinker.steadily
-
-        case observation: EventCapture =>
-          val validatedUpdatedDocument: ValidatedNel[String, DailyLitterDocument] = noteRef.addEventCapture(observation)(context.actorContext.log)
-
-          validatedUpdatedDocument match {
-            case Validated.Valid(document: DailyLitterDocument) =>
-              val summaryForDay = document.toSummary(forDay)
-              monthlyLitterGraphActor !! summaryForDay
-              last30DaysLitterGraphActor !! LitterReportForDay(forDay, document.report)
-
-            case Invalid(e) =>
-              context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
-          }
-
-          Tinker.steadily
-      }
+      behavior(audited)
     }
   }
 
-  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def addEventCapture(eventCapture: EventCapture)(implicit log: Logger): ValidatedNel[String, DailyLitterDocument] = {
+  def behavior(cachedAuditStatus: Boolean)(implicit Tinker: EnhancedTinker[MyCentralCast], monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterReportForDay], noteRef: NoteRef, parser: MarkdownDailyLitterSummaryReportDocumentParser): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[?] = context
+    implicit val log: Logger = context.actorContext.log
+
+    Tinker.receiveMessage { message: Message =>
+      val maybeUpdatedDocument: Option[DailyLitterDocument] = message match {
+        case ReceiveNotePing(NoOp) =>
+          val validatedDocument: Validated[Either[String, NoteRef.FileDoesNotExist.type], (String, DailyLitterDocument)] =
+            noteRef.getDocument()
+
+          validatedDocument
+            .map(_._2)
+            .map(Some(_))
+            .getOrElse(None) match {
+            case Some(document) =>
+              val latestDocIsAudited = document.report.auditStatus == AuditCompleted
+              if (latestDocIsAudited && cachedAuditStatus != latestDocIsAudited) {
+                // (if this is newly audited, normalize the inbox)
+                Some(document.normalizeInbox(parser.day))
+              } else {
+                None
+              }
+
+            case _ => None
+          }
+
+        case observation: EventCapture =>
+          noteRef.addEventCapture(observation) match {
+            case Validated.Valid(document: DailyLitterDocument) => Some(document)
+            case Invalid(e) =>
+              context.actorContext.log.warn(s"Something(s) went wrong: ${e}")
+              None
+          }
+      }
+
+      maybeUpdatedDocument match {
+        case None => Tinker.steadily
+        case Some(document) =>
+          val summaryForDay = document.toSummary(parser.day)
+          monthlyLitterGraphActor !! summaryForDay
+          last30DaysLitterGraphActor !! LitterReportForDay(parser.day, document.report)
+          behavior(document.report.auditStatus == AuditCompleted)
+      }
+    }
+  }
+}
+
+//
+
+private object Helper {
+  implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
+    def addEventCapture(eventCapture: EventCapture)(implicit log: Logger, parser: MarkdownDailyLitterSummaryReportDocumentParser): ValidatedNel[String, DailyLitterDocument] = {
       eventCapture match {
         case obs@LitterSiftedObservation(_) => addObservation(obs)
         case ati@AddToInbox(_, _) => addToInbox(ati)
       }
     }
 
-    private def addObservation(observation: LitterSiftedObservation)(implicit log: Logger): ValidatedNel[String, DailyLitterDocument] = {
+    private def addObservation(observation: LitterSiftedObservation)(implicit log: Logger, parser: MarkdownDailyLitterSummaryReportDocumentParser): ValidatedNel[String, DailyLitterDocument] = {
       val datapoint = observation.capture match {
         case LitterSifted(LitterSiftedEvent(when, _, contents), ref, maybeRaw) =>
           DataPoint(when, contents, ref, maybeRaw.toList.map(c => s"    - $c"))
       }
-      getDocument(observation.capture.when.toLocalDate) match {
+      getDocument() match {
         case v@Validated.Valid((existingMarkdown, document: DailyLitterDocument)) =>
           val updatedDocument = document.append(datapoint)
           val updatedMarkdown = updatedDocument.toMarkdown
@@ -155,25 +137,25 @@ private[kitties] object DailyLitterSummaryActor {
             document.validNel
           }
         case iv@Validated.Invalid(e) =>
-          e.toList match {
-            case List(justone) if justone.contains("FileNotFoundException") =>
-              val document = DailyLitterDocument(Report.fresh(List(datapoint)), Nil)
+          e match {
+            case Left(msg) =>
+              log.warn(s"Failed to generate the markdown report because: $msg")
+              msg.invalidNel
+
+            case Right(NoteRef.FileDoesNotExist) =>
+              val document = DailyLitterDocument(LitterReport.fresh(List(datapoint)), Nil)
               noteRef.setMarkdown(document.toMarkdown) match {
                 case Failure(exception) => Common.getStackTraceString(exception).invalidNel
                 case Success(NoOp) =>
                   log.debug("HACK seems like the first file of the day, creating")
                   Validated.Valid(document)
               }
-
-            case _ =>
-              log.warn(s"Failed to generate the markdown report because: $e")
-              iv
           }
       }
     }
 
-    private def addToInbox(toAdd: AddToInbox)(implicit log: Logger): ValidatedNel[String, DailyLitterDocument] = {
-      getDocument(toAdd.when.toLocalDate) match {
+    private def addToInbox(toAdd: AddToInbox)(implicit log: Logger, parser: MarkdownDailyLitterSummaryReportDocumentParser): ValidatedNel[String, DailyLitterDocument] = {
+      getDocument() match {
         case Validated.Valid((existingMarkdown, document: DailyLitterDocument)) =>
           val updatedDocument = document.appendToInbox(toAdd.string)
 
@@ -190,27 +172,30 @@ private[kitties] object DailyLitterSummaryActor {
 
 
         case iv@Validated.Invalid(e) =>
-          if (e.exists(_.contains("FileNotFoundException"))) {
-            val document = DailyLitterDocument(Report.fresh(), List(toAdd.string))
-            noteRef.setMarkdown(document.toMarkdown) match {
-              case Failure(exception) => Common.getStackTraceString(exception).invalidNel
-              case Success(NoOp) =>
-                Validated.Valid(document)
-            }
-          } else {
-            log.warn(s"Failed to generate the markdown report because: $e")
-            iv
+          e match {
+            case Left(msg) =>
+              log.warn(s"Failed to generate the markdown report because: $msg")
+              msg.invalidNel
+
+            case Right(NoteRef.FileDoesNotExist) =>
+              val document = DailyLitterDocument(LitterReport.fresh(), List(toAdd.string))
+              noteRef.setMarkdown(document.toMarkdown) match {
+                case Failure(exception) => Common.getStackTraceString(exception).invalidNel
+                case Success(NoOp) =>
+                  Validated.Valid(document)
+              }
           }
       }
     }
 
-    def getDocument(forDay: LocalDate): ValidatedNel[String, (String, DailyLitterDocument)] = {
-      noteRef.readMarkdown() match {
-        case Success(markdown) =>
-          MarkdownDailyLitterSummaryReportDocumentParser(markdown, forDay).map(d => (markdown, d))
-
-        case Failure(exception) =>
-          Invalid(Common.getStackTraceString(exception)).toValidatedNel
+    def getDocument()(implicit parser: MarkdownDailyLitterSummaryReportDocumentParser): Validated[Either[String, NoteRef.FileDoesNotExist.type], (String, DailyLitterDocument)] = {
+      noteRef.readMarkdownSafer() match {
+        case NoteRef.Contents(Success(markdown)) =>
+          parser(markdown)
+            .map(d => (markdown, d))
+            .leftMap(Left(_))
+        case NoteRef.Contents(Failure(exception)) => Left(Common.getStackTraceString(exception)).invalid
+        case NoteRef.FileDoesNotExist => Right(NoteRef.FileDoesNotExist).invalid
       }
     }
   }
@@ -220,15 +205,15 @@ private[kitties] object DailyLitterSummaryActor {
 // data model
 
 
-case class DailyLitterDocument(report: Report, inbox: List[String]) {
+case class DailyLitterDocument(report: LitterReport, inbox: List[String]) {
   def toMarkdown: String = this match {
-    case DailyLitterDocument(Report(Nil, _), Nil) =>
+    case DailyLitterDocument(LitterReport(Nil, _), Nil) =>
       ""
-    case DailyLitterDocument(report: Report, Nil) =>
+    case DailyLitterDocument(report: LitterReport, Nil) =>
       report.toMarkdown
-    case DailyLitterDocument(Report(Nil, _), _) =>
+    case DailyLitterDocument(LitterReport(Nil, _), _) =>
       inboxMd
-    case DailyLitterDocument(report: Report, _) =>
+    case DailyLitterDocument(report: LitterReport, _) =>
       s"""${report.markdownSummary}
          |
          |$inboxMd
@@ -237,7 +222,8 @@ case class DailyLitterDocument(report: Report, inbox: List[String]) {
          |""".stripMargin
   }
 
-  def append(dataPoint: DataPoint): DailyLitterDocument = this.copy(report = report.append(dataPoint))
+  def append(dataPoint: DataPoint): DailyLitterDocument =
+    this.copy(report = report.append(dataPoint)) // updates the audit status internally
 
   def appendToInbox(string: String): DailyLitterDocument = {
     if (inbox.contains(string)) {
@@ -250,7 +236,33 @@ case class DailyLitterDocument(report: Report, inbox: List[String]) {
     }
   }
 
-  private def inboxMd: String = ("# Inbox" :: "" :: inbox.map("- " + _).reverse).mkString("\n")
+  def normalizeInbox(forDay: LocalDate)(implicit log: Logger): DailyLitterDocument = {
+    val (leftoverInbox, inboxCorrections) = inbox.map(LineParser.apply(_, forDay)).partitionMap {
+      case MarkdownDailyLitterSummaryReportDocumentParser.ParseSuccessDatapoint(datapoint) =>
+        Right(datapoint)
+
+      case MarkdownDailyLitterSummaryReportDocumentParser.ParseFailure(rawLine, reason, comments) =>
+        log.warn(s"!! parse failure: $reason ($comments)")
+        Left(rawLine)
+    }
+
+    if (inboxCorrections.nonEmpty) {
+      val partlyCorrected = inboxCorrections.foldRight(this) { (correction, documentSoFar) =>
+        documentSoFar.append(correction)
+      }
+      partlyCorrected
+        .modify(_.inbox).setTo(leftoverInbox)
+        .modify(_.report.auditStatus).setTo(AuditCompleted)
+    } else {
+      this
+    }
+  }
+
+  private def inboxMd: String = (
+    "# Summary\n\n- Total pee: 0\n- Total poo: 0\n- [ ] Audited\n" ::
+      "# Inbox" :: "" ::
+      inbox.map("- " + _).reverse // FIXME: remove the reverse?
+    ).mkString("\n")
 
   def toSummary(forDay: LocalDate): LitterSummaryForDay = {
     report.toSummary(forDay)
@@ -261,8 +273,8 @@ case class DailyLitterDocument(report: Report, inbox: List[String]) {
 // markdown (pure)
 
 
-object MarkdownDailyLitterSummaryReportDocumentParser {
-  def apply(markdown: String, day: LocalDate): ValidatedNel[String, DailyLitterDocument] = {
+class MarkdownDailyLitterSummaryReportDocumentParser(val day: LocalDate) {
+  def apply(markdown: String): Validated[String, DailyLitterDocument] = {
     val inboxLines = markdown.split("\n").toList.dropWhile(_ != "# Inbox").drop(1).takeWhile(!_.startsWith("#")).filter(_.nonEmpty).map(_.drop(2))
 
     val auditedButton = markdown.contains("- [x] Audited")
@@ -302,7 +314,7 @@ object MarkdownDailyLitterSummaryReportDocumentParser {
     }
 
     if (failures.nonEmpty) {
-      Validated.Invalid(NonEmptyList("Not all lines were successfully parsed", failures))
+      s"Not all lines were successfully parsed $failures".invalid
     } else {
       val auditStatus = if (auditedButton) {
         AuditCompleted
@@ -312,85 +324,20 @@ object MarkdownDailyLitterSummaryReportDocumentParser {
         AuditNotCompleted
       }
 
-      val report = Report(successes.sortBy(_.zonedDateTime), auditStatus)
-      Validated.Valid(DailyLitterDocument(report, inboxLines.reverse))
+      val report = LitterReport(successes.sortBy(_.zonedDateTime), auditStatus)
+      DailyLitterDocument(report, inboxLines.reverse).valid
     }
   }
 
 
-  sealed trait LineParseResult
 
-  case class ParseSuccessDatapoint(datapoint: DataPoint) extends LineParseResult
 
-  case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
 
-  // yaml, summary bullets (poo/pee count), event bullets (time, type, ref)
-  // - \[02:58:14AM\] 💦 ([[Transcription for mobile_audio_capture_20240217-025814.wav|ref]])
-  case class DataPoint(zonedDateTime: ZonedDateTime, siftedContents: SiftedContents, noteId: NoteId, comments: List[String] = Nil)
+}
 
-  case class Report(datapoints: List[DataPoint], auditStatus: AuditStatus) {
-    def nonEmpty: Boolean = datapoints.nonEmpty
-
-    def toSummary(forDay: LocalDate): LitterSummaryForDay = {
-      val (pee, poop) = aggregates
-      LitterSummaryForDay(forDay, pee, poop, auditStatus)
-    }
-
-    def toMarkdown: String = {
-      s"""$markdownSummary
-         |
-         |$events
-         |""".stripMargin
-    }
-
-    private[kitties] def markdownSummary: String = {
-      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
-
-      val (totalPee, totalPoo) = aggregates
-      val auditedChar = if (auditStatus == AuditCompleted) 'x' else ' '
-      s"""# Summary
-         |
-         |- Total pee: $totalPee
-         |- Total poo: $totalPoo
-         |- [$auditedChar] Audited""".stripMargin
-    }
-
-    private[kitties] def events: String = {
-      val eventsList: String = distinctDatapoints.distinct.map {
-        case DataPoint(zonedDateTime, siftedContents, noteId, maybeComments) =>
-          MarkdownUtil.listLineWithTimestampAndRef(zonedDateTime, siftedContents.toEmojis, noteId) +
-            Some(maybeComments).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
-      }.mkString("\n")
-      s"""# Events
-         |
-         |$eventsList""".stripMargin
-    }
-
-    private def distinctDatapoints: List[DataPoint] = datapoints.distinct
-
-    def append(datapoint: DataPoint): Report = {
-      this.copy(
-        datapoints = (datapoint :: datapoints).distinct.sortBy(_.zonedDateTime),
-        auditStatus = if (auditStatus == AuditCompleted) {
-          AuditNotCompleted
-        } else {
-          auditStatus
-        }
-      )
-    }
-
-    def aggregates: (Int, Int) = {
-      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
-
-      val totalPee = total(Urination)
-      val totalPoo = total(Defecation)
-
-      (totalPee, totalPoo)
-    }
-  }
-
-  object Report {
-    def fresh(datapoints: List[DataPoint] = Nil): Report = Report(datapoints, AuditNotCompleted)
+object MarkdownDailyLitterSummaryReportDocumentParser {
+  object LitterReport {
+    def fresh(datapoints: List[DataPoint] = Nil): LitterReport = LitterReport(datapoints, AuditNotCompleted)
   }
 
   object LineParser {
@@ -468,6 +415,77 @@ object MarkdownDailyLitterSummaryReportDocumentParser {
         val msg = s"Expected characters (emojis!) in ${LitterUseTypeMap.keys.toSet} but got ${rejected.toSet} ($shouldBeEmojis)"
         Validated.Invalid(NonEmptyList.of(msg))
       }
+    }
+  }
+
+  sealed trait LineParseResult
+
+  case class ParseSuccessDatapoint(datapoint: DataPoint) extends LineParseResult
+
+  case class ParseFailure(rawLine: String, reason: NonEmptyList[String], comments: List[String]) extends LineParseResult
+
+  // yaml, summary bullets (poo/pee count), event bullets (time, type, ref)
+  // - \[02:58:14AM\] 💦 ([[Transcription for mobile_audio_capture_20240217-025814.wav|ref]])
+  case class DataPoint(zonedDateTime: ZonedDateTime, siftedContents: SiftedContents, noteId: NoteId, comments: List[String] = Nil)
+
+  case class LitterReport(datapoints: List[DataPoint], auditStatus: AuditStatus) {
+    def nonEmpty: Boolean = datapoints.nonEmpty
+
+    def toSummary(forDay: LocalDate): LitterSummaryForDay = {
+      val (pee, poop) = aggregates
+      LitterSummaryForDay(forDay, pee, poop, auditStatus)
+    }
+
+    def toMarkdown: String = {
+      s"""$markdownSummary
+         |
+         |$events
+         |""".stripMargin
+    }
+
+    private[kitties] def markdownSummary: String = {
+      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
+
+      val (totalPee, totalPoo) = aggregates
+      val auditedChar = if (auditStatus == AuditCompleted) 'x' else ' '
+      s"""# Summary
+         |
+         |- Total pee: $totalPee
+         |- Total poo: $totalPoo
+         |- [$auditedChar] Audited""".stripMargin
+    }
+
+    private[kitties] def events: String = {
+      val eventsList: String = distinctDatapoints.distinct.map {
+        case DataPoint(zonedDateTime, siftedContents, noteId, maybeComments) =>
+          MarkdownUtil.listLineWithTimestampAndRef(zonedDateTime, siftedContents.toEmojis, noteId) +
+            Some(maybeComments).filter(_.nonEmpty).map(_.mkString("\n", "\n", "")).getOrElse("")
+      }.mkString("\n")
+      s"""# Events
+         |
+         |$eventsList""".stripMargin
+    }
+
+    private def distinctDatapoints: List[DataPoint] = datapoints.distinct
+
+    def append(datapoint: DataPoint): LitterReport = {
+      this.copy(
+        datapoints = (datapoint :: datapoints).distinct.sortBy(_.zonedDateTime),
+        auditStatus = if (auditStatus == AuditCompleted) {
+          AuditNotCompleted
+        } else {
+          auditStatus
+        }
+      )
+    }
+
+    def aggregates: (Int, Int) = {
+      def total(litterUseType: LitterUseType): Int = distinctDatapoints.map(_.siftedContents.multiset.getOrElse(litterUseType, 0)).sum
+
+      val totalPee = total(Urination)
+      val totalPoo = total(Defecation)
+
+      (totalPee, totalPoo)
     }
   }
 }

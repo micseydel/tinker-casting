@@ -47,7 +47,7 @@ object ManualTesting {
 
   def main(args: Array[String]): Unit = {
     val forDay = LocalDate.now() // lazy
-    MarkdownDailyLitterSummaryReportDocumentParser(Markdown, LocalDate.now()) match {
+    new MarkdownDailyLitterSummaryReportDocumentParser(LocalDate.now())(Markdown) match {
       case Invalid(e) => println(e)
       case Validated.Valid(document@DailyLitterDocument(report, inbox)) =>
         val (leftoverInbox, inboxCorrections) = document.inbox.map(LineParser.apply(_, forDay)).partitionMap {
