@@ -8,4 +8,3 @@ export tinkerbrainPort=5103
 cmd_str="sbt '; set javaOptions += \"-Dlogfolder=litter_demo_logs\" ; runMain me.micseydel.actor.kitties.LitterBoxesHelperDemo'"
 echo "Running: $cmd_str"
 eval "$cmd_str"
-# sbt '; set javaOptions += "-Dlogfolder=litter_demo_logs" ; runMain me.micseydel.actor.kitties.LitterBoxesHelperDemo'
