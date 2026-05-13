@@ -74,7 +74,7 @@ class PythonActor:
                 print_with_time("Litter sifting detected")
                 for_day = incoming_data['forDay']
                 self.document.add_sifting(for_day, incoming_data['report'])
-                self.document.appendToInbox(f"- \\[{datetime.datetime.now().isoformat()[:19]}] Received litter report for day {incoming_data['forDay']}, {len(incoming_data['report']['datapoints'])} events ([[Litter boxes sifting ({for_day})|ref]])\n")
+                # self.document.appendToInbox(f"- \\[{datetime.datetime.now().isoformat()[:19]}] Received litter report for day {incoming_data['forDay']}, {len(incoming_data['report']['datapoints'])} events ([[Litter boxes sifting ({for_day})|ref]])\n")
             else:
                 logging.warn("Unexpected topic %s (should have been impossible here)", incoming_topic)
         except Exception as e:
