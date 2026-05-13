@@ -14,7 +14,7 @@ import java.net.InetAddress
 
 
 object EventRouting {
-  def route(actorRef: ActorRef[EventReceiver.IncomingEvent]): Route = {
+  def route(actorRef: ActorRef[EventReceiver.IncomingEvent], tinkerbrainPort: Int): Route = {
     // ! asynchronously pass the event off, as long as the structure is valid
     // else, report the error
 
@@ -43,11 +43,12 @@ object EventRouting {
       pathPrefix("voice-capture") {
         get {
           val hostname = InetAddress.getLocalHost.getHostName
-          // FIXME: need to dynamically populate the port
+          // FIXME: need to dynamically populate the port - tinkerbrainPort
           val htmlContent = QuickVoiceCaptureActor.html("ws://localhost:5003/quick-voice-capture")
           complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, htmlContent))
         }
       }
+      ???
     }
 
     concat(event, quickVoiceCapture)

@@ -17,6 +17,7 @@ import me.micseydel.actor.inactive.QuickVoiceCaptureActor
 
 import scala.util.{Failure, Success}
 
+// FIXME: remove?
 object EventReceiver {
   sealed trait Message
 
@@ -29,10 +30,10 @@ object EventReceiver {
 
   // behavior
 
-  def apply(config: Config, tinkerBrain: ActorRef[TinkerBrain.Message]): Behavior[Message] = Behaviors.setup { context =>
+  def apply(config: Config, tinkerBrain: ActorRef[TinkerBrain.Message], tinkerbrainPort: Int): Behavior[Message] = Behaviors.setup { context =>
 
     val route = concat(
-      EventRouting.route(context.self),
+      EventRouting.route(context.self, tinkerbrainPort),
       WebSocketRouting.websocketRoute(tinkerBrain)
     )
     context.log.info(f"Starting event receiver HTTP server on port ${config.httpPort}")

@@ -147,8 +147,8 @@ object TinkerBrain {
         val route = concat(
           WebSocketRouting.websocketRoute(context.self)
         )
-        // FIXME
-        tinkerbrainPort.foreach(port => startHttpServer(route, 5003)(context.system))
+        context.log.debug(s"Using tinkerbrain port $tinkerbrainPort")
+        tinkerbrainPort.foreach(port => startHttpServer(route, port)(context.system))
 
         systemStarted(appendToJsonl, readJson, webSocketMessageActor, batcher, tinkerers)
 

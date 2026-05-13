@@ -1,29 +1,14 @@
 package me.micseydel.actor.kitties
 
-import cats.data.Validated.Invalid
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
-import cats.implicits.catsSyntaxValidatedId
+import me.micseydel.NoOp
 import me.micseydel.actor.DailyNotesRouter
 import me.micseydel.actor.FolderWatcherActor.Ping
-import me.micseydel.actor.kitties.LitterBoxReportsActor.*
-import me.micseydel.actor.kitties.LitterBoxesHelper.LitterSifted
-import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, AuditNotCompleted, AuditStatus, HasInbox, LitterReportForDay, LitterSummaryForDay}
-import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, LitterReport, LineParser}
+import me.micseydel.actor.kitties.LitterCharts.{LitterReportForDay, LitterSummaryForDay}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.model.*
-import me.micseydel.util.ParseUtil.{batchConsecutiveComments, getLinesAfterHeader, getNoteId, getZonedDateTimeFromListLineFront}
-import me.micseydel.util.{MarkdownUtil, ParseUtil, TimeUtil}
-import me.micseydel.vault.NoteId
-import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.{Common, NoOp}
-import org.slf4j.Logger
 
-import java.time.{LocalDate, ZonedDateTime}
-import scala.annotation.tailrec
-import scala.util.{Failure, Success}
+import java.time.ZonedDateTime
 
 
 object LitterBoxReportsActor {
@@ -72,11 +57,3 @@ object LitterBoxReportsActor {
     }
   }
 }
-
-
-
-//FIXME scope
-
-
-
-

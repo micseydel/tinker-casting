@@ -98,6 +98,10 @@ private[kitties] object DailyLitterSummaryActor {
       maybeUpdatedDocument match {
         case None => Tinker.steadily
         case Some(document) =>
+          noteRef.setMarkdown(document.toMarkdown) match {
+            case Failure(exception) => context.actorContext.log.warn(s"Failed to refresh markdown!", exception)
+            case Success(NoOp) =>
+          }
           val summaryForDay = document.toSummary(parser.day)
           monthlyLitterGraphActor !! summaryForDay
           last30DaysLitterGraphActor !! LitterReportForDay(parser.day, document.report)
@@ -212,7 +216,7 @@ case class DailyLitterDocument(report: LitterReport, inbox: List[String]) {
     case DailyLitterDocument(report: LitterReport, Nil) =>
       report.toMarkdown
     case DailyLitterDocument(LitterReport(Nil, _), _) =>
-      inboxMd
+      "# Summary\n\n- Total pee: 0\n- Total poo: 0\n- [ ] Audited\n" + inboxMd
     case DailyLitterDocument(report: LitterReport, _) =>
       s"""${report.markdownSummary}
          |
@@ -259,8 +263,7 @@ case class DailyLitterDocument(report: LitterReport, inbox: List[String]) {
   }
 
   private def inboxMd: String = (
-    "# Summary\n\n- Total pee: 0\n- Total poo: 0\n- [ ] Audited\n" ::
-      "# Inbox" :: "" ::
+    "# Inbox" :: "" ::
       inbox.map("- " + _).reverse // FIXME: remove the reverse?
     ).mkString("\n")
 
