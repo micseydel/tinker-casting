@@ -1,15 +1,22 @@
 package me.micseydel.actor.tasks
 
+import akka.actor.typed.Behavior
+import akka.actor.typed.scaladsl.Behaviors
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
-import me.micseydel.app.MyCentralCast
+import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
+import me.micseydel.app.AppConfiguration.AppConfig
+import me.micseydel.app.{AppConfiguration, MyCentralCast}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.cast.Gossiper
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{EnhancedTinker, Tinker, TinkerColor}
+import me.micseydel.dsl.{EnhancedTinker, Tinker, TinkerColor, TinkerContainer, TinkerContext}
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.persistence.NoteRef
 
-import java.time.LocalDate
+import java.time.{LocalDate, ZonedDateTime}
+import scala.annotation.unused
 import scala.util.{Failure, Success, Try}
 
 object RecurringResponsibilityManager {
@@ -106,3 +113,42 @@ object RecurringResponsibilityManager {
   }
 }
 
+
+//object RecurringResponsibilityManagerDemo {
+//  def main(args: Array[String]): Unit = {
+//    AppConfiguration.getConfig() match {
+//      case Validated.Invalid(errors) =>
+//        println(s"FAILED, errors-\n$errors")
+//      case Validated.Valid(config: AppConfig) =>
+//        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system: config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
+//        run(config)
+//    }
+//  }
+//
+//  def run(config: AppConfig): Unit = {
+//    @unused
+//    val container =
+//      TinkerContainer(config, NotificationCenterAbilities.Defaults, "RecurringResponsibilityManagerDemo")(
+//        centralCastFactory()(_, _),
+//        RecurringResponsibilityManager()(_: EnhancedTinker[MyCentralCast])
+//      )
+//
+//    println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Demo system done starting")
+//  }
+//
+//  private def centralCastFactory()(implicit Tinker: Tinker, context: TinkerContext[?]): MyCentralCast = {
+//    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and INERT Rasa")
+//    val gossiper = context.cast(Gossiper(), "Gossiper") // FIXME: check/test
+//    val chronicler = context.cast(InertActor(), "INERTChroniclerFORTESTING")
+//    val rasaActor = context.cast(InertActor(), "INERTRasaActorFORTESTING")
+//    MyCentralCast(chronicler, gossiper, rasaActor)
+//  }
+//}
+//
+//// FIXME: consolidate with the one in LitterBoxesHelper
+//object InertActor {
+//  def apply[T](): Behavior[T] = Behaviors.receive { case (context, message) =>
+//    context.log.debug(s"ignoring $message")
+//    Behaviors.same
+//  }
+//}

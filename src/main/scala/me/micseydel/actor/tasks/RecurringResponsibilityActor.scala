@@ -1,9 +1,11 @@
 package me.micseydel.actor.tasks
 
-import me.micseydel.NoOp
-import me.micseydel.actor.FolderWatcherActor
+import cats.data.Validated
+import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.FolderWatcherActor.Ping
-import me.micseydel.actor.notifications.NotificationCenterManager.{CompleteNotification, NewNotification, Notification, NotificationId}
+import me.micseydel.actor.notifications.NotificationCenterManager
+import me.micseydel.actor.notifications.NotificationCenterManager.*
+import me.micseydel.actor.tasks.RecurringResponsibilityActorDocument.{Document, FrontmatterConfig, NtfyIfLate}
 import me.micseydel.app.MyCentralCast
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
@@ -13,15 +15,17 @@ import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult}
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
+import me.micseydel.vault.{Note, NoteId}
+import me.micseydel.{Common, NoOp}
+import net.jcazevedo.moultingyaml.*
 import org.slf4j.Logger
 
 import java.io.FileNotFoundException
 import java.security.MessageDigest
-import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.{LocalDate, ZonedDateTime}
 import scala.concurrent.duration.DurationInt
-import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.{Failure, Success, Try}
 
 
@@ -32,10 +36,11 @@ object RecurringResponsibilityActor {
 
   private case class ReceiveTranscription(transcription: NotedTranscription) extends Message
 
-  private final case object TimerUp extends Message
+  private final case object MidnightForNextNotificationDayTimer extends Message
+  private final case object TimeToNtfy extends Message
 
   def apply(noteId: String, manager: SpiritRef[RecurringResponsibilityManager.Track])(implicit Tinker: EnhancedTinker[MyCentralCast]): Ability[Message] =
-    AttentiveNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing, Some("_actor_notes")) { (context, noteRef) =>
+    AttentiveNoteMakingTinkerer[Message, NotePing](noteId, TinkerColor.rgb(0, 50, 100), "🔥", NotePing, Some("_actor_notes") /*FIXME*/) { (context, noteRef) =>
       implicit val tc: TinkerContext[_] = context
       implicit val c: TinkerClock = context.system.clock
       val timeKeeper: SpiritRef[TimeKeeper.Message] = context.castTimeKeeper()
@@ -44,31 +49,32 @@ object RecurringResponsibilityActor {
       l.debug("setting up")
 
       noteRef.getDocument() match {
-        case Success(d@Document(intervalDays, markedAsDone, _, maybeVoiceCompletion, nagDaily)) =>
-          if (maybeVoiceCompletion.nonEmpty) {
+        case Success(d@Document(config, markedAsDone, _)) =>
+          if (config.maybeVoiceCompletion.nonEmpty) {
             context.actorContext.log.info("Subscribing to Gossiper")
             Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(ReceiveTranscription))
           }
 
-          val nextTriggerDay = (d.latestEntry match {
+          // if this happens to be in the past, it'll trigger immediately
+          val nextTriggerDay: LocalDate = (d.latestEntry match {
             case Some(latestEntry) => latestEntry
             case None => context.system.clock.today()
-          }).plusDays(intervalDays)
+          }).plusDays(config.interval_days)
 
           manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTriggerDay)
-          timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, TimerUp, Some(TimerUp))
+          timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
 
           if (markedAsDone) {
             val forDay = context.system.clock.today() // FIXME: we can't ack without knowing the day the NoteId was, and this will be mostly right for now 😕 (the race condition is unlikely!)
             Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
             val today = context.system.clock.today()
-            noteRef.prepend(today, Some(today.plusDays(intervalDays)), None) match {
+            noteRef.prepend(today, Some(today.plusDays(config.interval_days)), None) match {
               case Failure(exception) => context.actorContext.log.error("Something went wrong prepending", exception)
               case Success(NoOp) =>
             }
           }
 
-          behavior(intervalDays, maybeVoiceCompletion, nagDaily)(Tinker, noteRef, timeKeeper, manager)
+          behavior(config)(Tinker, noteRef, timeKeeper, manager)
 
         case Failure(exception) =>
           context.actorContext.log.error("Something went wrong", exception)
@@ -76,7 +82,7 @@ object RecurringResponsibilityActor {
       }
     }
 
-  private def behavior(intervalDays: Int, maybeVoiceCompletion: Option[VoiceCompletion], nagDaily: Boolean)(implicit Tinker: EnhancedTinker[MyCentralCast], noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
+  private def behavior(config: FrontmatterConfig)(implicit Tinker: EnhancedTinker[MyCentralCast], noteRef: NoteRef, timeKeeper: SpiritRef[TimeKeeper.Message], manager: SpiritRef[RecurringResponsibilityManager.Track]): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[_] = context
     implicit val c: TinkerClock = context.system.clock
     implicit val l: Logger = context.actorContext.log
@@ -89,51 +95,53 @@ object RecurringResponsibilityActor {
             Tinker.ignore
           case Failure(exception) => throw exception // FIXME
 
-          case Success(doc@Document(intervalDays, markedAsDone, _, _, _)) =>
+          case Success(doc@Document(config, markedAsDone, _)) =>
             val Today = context.system.clock.today()
             val result: Try[NoOp.type] = (markedAsDone, doc.latestEntry) match {
               case (false, None) =>
                 // start the interval from today
-                val triggerDay = Today.plusDays(intervalDays)
+                val triggerDay = Today.plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
                 context.actorContext.log.info(s"Scheduling trigger day $triggerDay")
-                timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, TimerUp, Some(TimerUp))
+                timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
                 Success(NoOp)
 
               case (false, Some(Today)) =>
-                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, Today.plusDays(intervalDays))
+                manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, Today.plusDays(config.interval_days))
                 Success(NoOp) // just ignore this
 
               case (false, Some(latestEntry)) =>
-                val triggerDay = latestEntry.plusDays(intervalDays)
+                val triggerDay = latestEntry.plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
                 if (triggerDay.isBefore(Today)) {
                   // it should have already triggered
                   context.actorContext.log.warn(s"Trigger day $triggerDay is before today ($Today) so sending TimerUp to self")
-                  context.self !! TimerUp
+                  context.self !! MidnightForNextNotificationDayTimer
                 } else {
                   val triggerInDays = TimeUtil.daysBetween(Today, triggerDay).toInt.days
                   context.actorContext.log.info(s"Will trigger in $triggerInDays days (trigger day $triggerDay, latest entry $latestEntry)")
-                  timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, TimerUp, Some(TimerUp))
+                  timeKeeper !! TimeKeeper.RemindMeAt(triggerDay, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
                 }
                 Success(NoOp)
 
               case (true, Some(Today)) =>
                 val notificationId = notificationIdForNoteId(noteRef.noteId)
                 context.system.notifier !! CompleteNotification(notificationId)
+                timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy)) // fire and forget just in case
 
                 context.actorContext.log.info("Button was pushed but there's already an entry for today, clearing button")
-                val triggerDay = Today.plusDays(intervalDays)
+                val triggerDay = Today.plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, triggerDay)
                 noteRef.resetButton(Some(triggerDay))
 
               case (true, _) =>
                 val notificationId = notificationIdForNoteId(noteRef.noteId)
                 context.system.notifier !! CompleteNotification(notificationId)
+                timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy)) // fire and forget just in case
 
-                val nextTrigger = Today.plusDays(intervalDays)
+                val nextTrigger = Today.plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
-                timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
+                timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
                 context.actorContext.log.info(s"Prepending today ($Today) and setting timer for $nextTrigger")
                 val forDay = context.system.clock.today()
                 Tinker.userExtension.chronicler !! Chronicler.ListenerAcknowledgement(noteRef.noteId, forDay, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
@@ -152,7 +160,7 @@ object RecurringResponsibilityActor {
         context.actorContext.log.info(s"Received transcription $noteId")
         val loweredText = whisperResultContent.text.toLowerCase
 
-        maybeVoiceCompletion match {
+        config.maybeVoiceCompletion match {
           case None => context.actorContext.log.warn("No voice completion config, should not have subscribed to Gossiper and should not have received this message! Bug!")
           case Some(voiceCompletion) =>
             context.actorContext.log.debug(s"Using $voiceCompletion to check...")
@@ -162,9 +170,9 @@ object RecurringResponsibilityActor {
                 context.system.notifier !! CompleteNotification(notificationId)
 
                 val today = context.system.clock.today()
-                val nextTrigger = context.system.clock.today().plusDays(intervalDays)
+                val nextTrigger = context.system.clock.today().plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
-                timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, TimerUp, Some(TimerUp))
+                timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
                 context.actorContext.log.info(s"Prepending today ($today), setting timer for $nextTrigger, and ack'ing as done ${noteRef.noteId}")
                 noteRef.prepend(today, Some(nextTrigger), Some(noteId))
                 val ack = Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
@@ -180,53 +188,63 @@ object RecurringResponsibilityActor {
 
         Tinker.steadily
 
-      case TimerUp =>
-
+      case MidnightForNextNotificationDayTimer =>
         val notificationId: String = notificationIdForNoteId(noteRef.noteId)
         context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
 
-        context.system.notifier !! NewNotification(Notification(
-          context.system.clock.now(),
-          s"${noteRef.noteId} eligible since ${context.system.clock.today()}", // FIXME: this is not correct!
-          None,
-          NotificationId(notificationId),
-          Nil, // FIXME: specify side-effects in the yaml?
-          None
-        ))
+        noteRef.getDocument() match {
+          case Failure(exception) =>
+            context.actorContext.log.warn(s"Failed to get document from disk", exception)
+            Tinker.steadily
 
-        if (nagDaily) {
-          context.actorContext.log.info("Daily nagging configured, resetting timer for one day")
-          // FIXME: although probably not a bug here, I need better MIDNIGHT management (here, it'll just be a duplicate message)
-          timeKeeper !! TimeKeeper.RemindMeAt(context.system.clock.today().plusDays(1), context.self, TimerUp, Some(TimerUp))
+          case Success(d@Document(config, markedAsDone, _)) =>
+            val eligibleSince: LocalDate = (d.latestEntry match {
+              case Some(latestEntry) => latestEntry
+              case None => context.system.clock.today()
+            }).plusDays(config.interval_days)
+
+            context.system.notifier !! NewNotification(Notification(
+              context.system.clock.now(),
+              s"${noteRef.noteId} eligible since $eligibleSince",
+              None,
+              NotificationId(notificationId),
+              Nil, // FIXME: specify side-effects in the yaml?
+              None
+            ))
+
+            config.ntfyIfLate.foreach { case ntfyif@NtfyIfLate(_, _, _) =>
+              ntfyif.nextTrigger(context.system.clock.now()) match {
+                case Validated.Valid(at: ZonedDateTime) =>
+                  context.actorContext.log.warn(s"[CANARY] Scheduling ntfy at $at")
+                  timeKeeper !! TimeKeeper.RemindMeAt(at, context.self, TimeToNtfy, Some(TimeToNtfy))
+                case Validated.Invalid(e) =>
+                  context.actorContext.log.warn(s"[CANARY] ntfy config was present but failed to get next trigger: $e")
+              }
+            }
+
+            if (config.nagDaily.getOrElse(false)) {
+              context.actorContext.log.info("Daily nagging configured, resetting timer for one day")
+              // FIXME: although probably not a bug here, I need better MIDNIGHT management (here, it'll just be a duplicate message)
+              timeKeeper !! TimeKeeper.RemindMeAt(context.system.clock.today().plusDays(1), context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
+            }
+
+            behavior(config)
         }
 
+      case TimeToNtfy =>
+        config.ntfyIfLate match {
+          case Some(NtfyIfLate(channel, _, message)) =>
+            context.actorContext.log.warn("[CANARY] Sending push notification!")
+            val sideEffect = PushNotification(channel, message)
+            context.system.notifier !! NotificationCenterManager.JustSideEffect(sideEffect)
+          case None =>
+            context.actorContext.log.warn("TimeToNtfy but missing config for it; ignoring")
+        }
         Tinker.steadily
     }
   }
 
   //
-
-  case class VoiceCompletion(config: List[List[String]]) {
-    def matches(loweredText: String): Boolean =
-      config.exists(sublist => sublist.forall(s => loweredText.contains(s)))
-  }
-
-  case class Document(intervalDays: Int, markedAsDone: Boolean, itemsAfterDone: List[String], maybeVoiceCompletion: Option[VoiceCompletion], nagDaily: Boolean) {
-    def latestEntry: Option[LocalDate] = {
-      itemsAfterDone.headOption.flatMap(latest =>
-        if (latest.contains(")]] ")) {
-          latest.split("\\)]] ").toList match {
-            case List(messyWikiLink, ref) =>
-              Some(messyWikiLink.takeRight(10))
-            case _ =>
-              None
-          }
-        } else {
-          Some(latest.dropRight(3).takeRight(10))
-        }
-      ).map(LocalDate.parse)
-    }
-  }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
     def resetButton(nextTrigger: Option[LocalDate])(implicit log: Logger): Try[NoOp.type] = {
@@ -258,45 +276,18 @@ object RecurringResponsibilityActor {
     }
 
     def getDocument()(implicit log: Logger): Try[Document] = {
-      noteRef.readMarkdownAndFrontmatter().map { case (markdown, frontmatter) =>
-        val maybeVoiceCompletion: Option[VoiceCompletion] = frontmatter.get("voice_completion") match {
-          case Some(result: java.util.List[_]) =>
-            val (passed, failed) = result.asScala.partition(_.isInstanceOf[java.util.List[?]])
-            if (failed.nonEmpty) {
-              log.warn(s"Expected to find a List[List[String]] but found: $failed")
-              None
-            } else {
-              Try(Some(VoiceCompletion(passed.toList.map(_.asInstanceOf[java.util.List[?]].asScala.toList.map(_.asInstanceOf[String]))))) match {
-                case Failure(exception) =>
-                  log.warn(s"Deserializing yaml failed - could be because of an intermediary change", exception)
-                  None
-                case Success(value) => value
-              }
-            }
+      noteRef.readNote().flatMap { case Note(markdown, frontmatter) =>
+        import RecurringResponsibilityActorDocument.YamlProtocol.configYamlFormat
+        val parsedConfig = Try(frontmatter.get.parseYaml.convertTo[FrontmatterConfig]) // FIXME: .get
 
-          case None => None
+        parsedConfig.flatMap(config => Try {
+          val lines = markdown.split("\n").filterNot(_.startsWith(" "))
 
-          case other =>
-            log.warn(s"Expected a List[List[String]] but got $other")
-            None
-        }
+          // FIXME: how best to check for lines.head containing "mark as complete"? just assuming for now
+          val linesAfterDone: List[String] = lines.toList.drop(1)
 
-        val intervalDays = frontmatter("interval_days").asInstanceOf[Int]
-        val nag = frontmatter.get("nag_daily").map(_.asInstanceOf[Boolean])
-
-        // ignore any lines that are indented (comments
-        val lines = markdown.split("\n").filterNot(_.startsWith(" "))
-
-        // FIXME: how best to check for lines.head containing "mark as complete"? just assuming for now
-        val linesAfterDone: List[String] = lines.toList.drop(1)
-
-        Document(
-          intervalDays,
-          markdown.startsWith("- [x]"),
-          linesAfterDone.map(_.drop(2)), // drop the Markdown list characters
-          maybeVoiceCompletion,
-          nag.getOrElse(false)
-        )
+          Document(config, markdown.startsWith("- [x]"), linesAfterDone.map(_.drop(2)))
+        })
       }
     }
   }
@@ -306,5 +297,60 @@ object RecurringResponsibilityActor {
       .digest(noteId.id.getBytes("UTF-8"))
       .take(7)
       .map("%02x".format(_)).mkString
+  }
+}
+
+object RecurringResponsibilityActorDocument {
+  case class FrontmatterConfig(interval_days: Int, maybeVoiceCompletion: Option[VoiceCompletion], nagDaily: Option[Boolean], ntfyIfLate: Option[NtfyIfLate])
+
+  case class Document(config: FrontmatterConfig, markedAsDone: Boolean, itemsAfterDone: List[String]) {
+    def latestEntry: Option[LocalDate] = {
+      itemsAfterDone.headOption.flatMap(latest =>
+        if (latest.contains(")]] ")) {
+          latest.split("\\)]] ").toList match {
+            case List(messyWikiLink, ref) =>
+              Some(messyWikiLink.takeRight(10))
+            case _ =>
+              None
+          }
+        } else {
+          Some(latest.dropRight(3).takeRight(10))
+        }
+      ).map(LocalDate.parse)
+    }
+  }
+
+  case class VoiceCompletion(config: List[List[String]]) {
+    def matches(loweredText: String): Boolean =
+      config.exists(sublist => sublist.forall(s => loweredText.contains(s)))
+  }
+
+  /**
+   * @param ifNotDoneBy e.g. 08:00:00-05:00
+   */
+  case class NtfyIfLate(channel: String, ifNotDoneBy: String, message: String) {
+    def nextTrigger(now: ZonedDateTime): Validated[String, ZonedDateTime] = {
+      val today = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+      val stringToParse = s"${today}T$ifNotDoneBy"
+      Try(ZonedDateTime.parse(stringToParse)) match {
+        case Failure(exception) =>
+          s"Something went wrong with `$ifNotDoneBy`: ${Common.getStackTraceString(exception)}".invalid
+
+        case Success(value) =>
+          (if (value.isBefore(now)) {
+            value.plusDays(1)
+          } else {
+            value
+          }).valid
+      }
+    }
+  }
+
+  //
+
+  object YamlProtocol extends DefaultYamlProtocol {
+    implicit val voiceCompletionYamlFormat: YamlFormat[VoiceCompletion] = yamlFormat1(VoiceCompletion)
+    implicit val ntfyIfLateYamlFormat: YamlFormat[NtfyIfLate] = yamlFormat3(NtfyIfLate)
+    implicit val configYamlFormat: YamlFormat[FrontmatterConfig] = yamlFormat4(FrontmatterConfig)
   }
 }
