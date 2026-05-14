@@ -10,6 +10,7 @@ import me.micseydel.dsl.cast.NetworkPerimeterActor.HttpResponse
 import scala.concurrent.{ExecutionContextExecutorService, Future}
 import scala.util.{Failure, Success, Try}
 
+// FIXME: remove; a util function or method on the context that asynchronously tracks things would probably be better than this idea for a centralized in/out
 object NetworkPerimeterActor {
   // mailbox
 
