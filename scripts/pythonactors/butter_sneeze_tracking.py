@@ -59,7 +59,7 @@ class PythonActor:
                     print_with_time("Sneez* detected")
                     captureTime = incoming_data["capture"]["captureTime"]
                     noteId = incoming_data["noteId"]
-                    self.document.appendToInbox(f"- \\[{datetime.datetime.now().isoformat()[:19]}] Noticed a sneeze! {lowered_text} ([[{noteId['id']}|ref]])\n")
+                    self.document.appendToInbox(f"- \\[{captureTime[:19]}] Noticed a sneeze! {lowered_text} ([[{noteId['id']}|ref]])\n")
                     print_with_time("Appended to inbox, publishing ack now...")
                     self.mqtt_client.publish("[[Chronicler]]", json.dumps({
                         "noteId": noteId,
@@ -71,10 +71,9 @@ class PythonActor:
                 else:
                     logging.info("Ignoring: %s", lowered_text) # FIXME remove
             elif incoming_topic == ReceivingTopicLitterSiftings:
-                print_with_time("Litter sifting detected")
+                # print_with_time("Litter sifting detected")
                 for_day = incoming_data['forDay']
                 self.document.add_sifting(for_day, incoming_data['report'])
-                # self.document.appendToInbox(f"- \\[{datetime.datetime.now().isoformat()[:19]}] Received litter report for day {incoming_data['forDay']}, {len(incoming_data['report']['datapoints'])} events ([[Litter boxes sifting ({for_day})|ref]])\n")
             else:
                 logging.warn("Unexpected topic %s (should have been impossible here)", incoming_topic)
         except Exception as e:
