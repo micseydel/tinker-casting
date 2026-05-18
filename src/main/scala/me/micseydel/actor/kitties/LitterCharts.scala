@@ -1,5 +1,6 @@
 package me.micseydel.actor.kitties
 
+import akka.actor.ActorPath
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.NoOp
@@ -15,7 +16,9 @@ import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries, Series, averageOfLastN}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
+import net.jcazevedo.moultingyaml.{DefaultYamlProtocol, YamlFormat}
 import org.slf4j.Logger
+import net.jcazevedo.moultingyaml.*
 import spray.json.*
 
 import java.io.FileNotFoundException
@@ -44,7 +47,7 @@ object LitterCharts {
       case JsString("AuditCompleted") => AuditCompleted
       case JsString("AuditNotCompleted") => AuditNotCompleted
       case JsString("HasInbox") => HasInbox
-      case other => deserializationError(s"Expected a AuditStatus: {AuditCompleted, AuditNotCompleted, HasInbox} but got $other")
+      case other => spray.json.deserializationError(s"Expected a AuditStatus: {AuditCompleted, AuditNotCompleted, HasInbox} but got $other")
     }
   }
 }
@@ -168,7 +171,7 @@ private object LitterGraphHelper {
               log.debug(s"ignoring ${ignoring.size} lines after json, parsing $raw")
               Try(Some(raw.parseJson.convertTo[Document]))
                 .recoverWith {
-                  case _: DeserializationException =>
+                  case _: spray.json.DeserializationException =>
                     Try(maybeFrontmatter.map(_.parseJson.convertTo[Document]))
                 }
             case other =>
@@ -182,7 +185,7 @@ private object LitterGraphHelper {
     }
 
     def setDocument(document: Document)(implicit l: Logger): Try[NoOp.type] = {
-      noteRef.setTo(Note(document.toMarkdown(), None)).map(_ => NoOp)
+      noteRef.setMarkdown(document.toMarkdown())
     }
   }
 }
@@ -249,6 +252,9 @@ object Last30DaysLitterGraphActor {
       implicit val l: Logger = context.actorContext.log
       l.info(s"Started ${noteRef.noteId}, refreshing markdown")
 
+      // FIXME: minimize reads; not a huge deal since it's just once on startup...
+      val mqttPublishing = noteRef.getConfig(context.self.path).mqttPublishing
+
       noteRef.readDocument() match {
         case Failure(exception) => l.warn("failed to read/refresh markdown", exception)
         case Success(None) => l.warn("didn't find any json")
@@ -261,9 +267,10 @@ object Last30DaysLitterGraphActor {
 
       Tinker.receiveMessage { report: LitterReportForDay =>
         import me.micseydel.actor.kitties.LitterGraphHelper.DocumentJsonProtocol.litterReportForDayJsonFormat
-        val OutTopic = s"${noteRef.noteId}/publish/LitterReportForDay"
-        context.actorContext.log.debug(s"publishing to $OutTopic")
-        context.system.mqtt ! TypedMqtt.Publish(OutTopic, report.toJson.compactPrint.getBytes)
+        if (mqttPublishing.enabled) {
+          context.actorContext.log.debug(s"publishing to ${mqttPublishing.outputTopic}")
+          context.system.mqtt ! TypedMqtt.Publish(mqttPublishing.outputTopic, report.toJson.compactPrint.getBytes)
+        }
 
         val summary: LitterSummaryForDay = report.toSummary
         noteRef.readDocument().flatMap {
@@ -286,6 +293,40 @@ object Last30DaysLitterGraphActor {
       }
     }
   }
+
+  //
+
+  case class MqttPublishing(enabled: Boolean, outputTopic: String)
+  case class Config(mqttPublishing: MqttPublishing)
+
+  private object YamlProtocol extends DefaultYamlProtocol {
+    implicit val mqttPublishingYamlFormat: YamlFormat[MqttPublishing] = yamlFormat2(MqttPublishing)
+    implicit val configYamlFormat: YamlFormat[Config] = yamlFormat1(Config(_))
+  }
+
+  private implicit class RichNoteRefForConfig(val noteRef: NoteRef) extends AnyVal {
+    def getConfig(actorPath: ActorPath)(implicit log: Logger): Config = {
+      val default = (Config(MqttPublishing(enabled = false, actorPath.toSerializationFormat)))
+      noteRef.readNote().map(_.maybeFrontmatter) match {
+        case Failure(_: FileNotFoundException) => default
+        case Failure(exception) =>
+          log.warn(s"Unexpected failure accessing ${noteRef}", exception)
+          default
+        case Success(None) =>
+          default
+        case Success(Some(frontmatter)) =>
+          import YamlProtocol.configYamlFormat
+          Try(frontmatter.parseYaml.convertTo[Config]) match {
+            case Failure(exception) =>
+              log.warn(s"Failed to deserialize yaml", exception)
+              default
+            case Success(value) => value
+          }
+      }
+    }
+  }
+
+  //
 
   private def setDocumentTruncated(noteRef: NoteRef, document: LitterGraphHelper.Document)(implicit l: Logger): Try[NoOp.type] = {
     val latestDay = document.summaries.keys.max

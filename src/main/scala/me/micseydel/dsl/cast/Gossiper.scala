@@ -14,6 +14,7 @@ import me.micseydel.vault.persistence.NoteRef
 import net.jcazevedo.moultingyaml.*
 import spray.json.*
 
+import java.io.FileNotFoundException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success, Try}
@@ -62,15 +63,26 @@ object Gossiper {
 //        case Success(value) => value
 //      }
 
-      val publishWhisperLargeToMqtt: Boolean = noteRef.getConfig() match {
+      val mqttPublishing = noteRef.getConfig() match {
+        case Failure(_: FileNotFoundException) =>
+          noteRef.setFrontMatterRaw(
+            s"""mqttPublishing:
+               |  enabled: false
+               |  largeOutputTopic: ${context.self.path.toSerializationFormat}""".stripMargin) match {
+            case Failure(exception) => context.actorContext.log.warn(s"Failed to create default note", exception)
+            case Success(_) =>
+          }
+          MqttPublishing(enabled = false, context.self.actorPath.toSerializationFormat)
         case Failure(exception) =>
           context.actorContext.log.warn(s"Something went wrong reading config from disk or deserializing it ${exception.getClass}", exception)
-          false
-        case Success(None) => false // opt-in to mqtt, rather than opt-out
-        case Success(Some(GossiperConfig(publishWhisperLargeToMqtt))) => publishWhisperLargeToMqtt
+          MqttPublishing(enabled = false, context.self.actorPath.toSerializationFormat)
+        case Success(None) =>
+          context.actorContext.log.warn(s"Note existed without frontmatter, not publishing to mqtt")
+          MqttPublishing(enabled = false, context.self.actorPath.toSerializationFormat)
+        case Success(Some(GossiperConfig(mqttPublishing))) => mqttPublishing
       }
 
-      behavior(Set.empty, Set.empty, Set.empty, Map.empty, publishWhisperLargeToMqtt
+      behavior(Set.empty, Set.empty, Set.empty, Map.empty, mqttPublishing
 //        , generatedMarkdown
       )(Tinker, noteRef)
     }
@@ -83,7 +95,7 @@ object Gossiper {
                         fastListeners: Set[SpiritRef[NotedTranscription]],
                         turboListeners: Set[SpiritRef[NotedTranscription]],
                         votesMapping: Map[NoteId, Map[String, NonEmptyList[Vote]]],
-                        publishWhisperLargeToMqtt: Boolean
+                        mqttPublishing: MqttPublishing
                         //                        generatedMarkdown: Boolean
                       )(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val sender: Sender = Sender(context.self.path)
@@ -130,11 +142,12 @@ object Gossiper {
 
         notedTranscription.capture.whisperResult.whisperResultMetadata.model match {
           case LargeModel =>
-            context.actorContext.log.info(s"""Sending ${notedTranscription.noteId} to ${accurateListeners.size} listeners (large, accurate model) and ${if (publishWhisperLargeToMqtt) "" else "NOT "} publishing to mqtt""")
+            context.actorContext.log.info(s"""Sending ${notedTranscription.noteId} to ${accurateListeners.size} listeners (large, accurate model)""")
             accurateListeners *!* notedTranscription
-            if (publishWhisperLargeToMqtt) {
+            if (mqttPublishing.enabled) {
+              context.actorContext.log.debug(s"publishing to ${mqttPublishing.largeOutputTopic}")
               import me.micseydel.model.NotedTranscription.NotedTranscriptionJsonProtocol.notedTranscriptionFormat
-              context.system.mqtt ! TypedMqtt.Publish("[[Gossiper]]/publish/WhisperLarge", notedTranscription.toJson.compactPrint.getBytes)
+              context.system.mqtt ! TypedMqtt.Publish(mqttPublishing.largeOutputTopic, notedTranscription.toJson.compactPrint.getBytes)
             } else {
               context.actorContext.log.info("not publishing to mqtt, config not set to true")
             }
@@ -150,19 +163,19 @@ object Gossiper {
 
       case SubscribeAccurate(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to accurate subscribers")
-        behavior(accurateListeners + subscriber, fastListeners, turboListeners, votesMapping, publishWhisperLargeToMqtt
+        behavior(accurateListeners + subscriber, fastListeners, turboListeners, votesMapping, mqttPublishing
 //          , generatedMarkdown
         )
 
       case SubscribeHybrid(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to both fast and accurate subscribers")
-        behavior(accurateListeners + subscriber, fastListeners + subscriber, turboListeners, votesMapping, publishWhisperLargeToMqtt
+        behavior(accurateListeners + subscriber, fastListeners + subscriber, turboListeners, votesMapping, mqttPublishing
 //          , generatedMarkdown
         )
 
       case SubscribeTurbo(subscriber) =>
         context.actorContext.log.debug(s"Adding ${subscriber.path} to turbo")
-        behavior(accurateListeners, fastListeners, turboListeners + subscriber, votesMapping, publishWhisperLargeToMqtt
+        behavior(accurateListeners, fastListeners, turboListeners + subscriber, votesMapping, mqttPublishing
 //          , generatedMarkdown
         )
 
@@ -173,7 +186,7 @@ object Gossiper {
         votesMapping.get(newVote.noteId) match {
           case None =>
             val updatedVotes = votesMapping.updated(newVote.noteId, Map(normalizedUri -> NonEmptyList.of(newVote)))
-            behavior(accurateListeners, fastListeners, turboListeners, updatedVotes, publishWhisperLargeToMqtt
+            behavior(accurateListeners, fastListeners, turboListeners, updatedVotes, mqttPublishing
 //              , generatedMarkdown
             )
           case Some(voterToVotesMap) =>
@@ -187,7 +200,7 @@ object Gossiper {
                 }
 
                 val updatedVotes: Map[String, NonEmptyList[Vote]] = voterToVotesMap.updated(normalizedUri, NonEmptyList.of(newVote))
-                behavior(accurateListeners, fastListeners, turboListeners, votesMapping.updated(newVote.noteId, updatedVotes), publishWhisperLargeToMqtt
+                behavior(accurateListeners, fastListeners, turboListeners, votesMapping.updated(newVote.noteId, updatedVotes), mqttPublishing
 //                  , generatedMarkdown
                 )
 
@@ -206,7 +219,7 @@ object Gossiper {
                   val updatedVotesMap = voterToVotesMap.updated(normalizedUri, updatedVotesListForVoter)
                   val updatedVotesMapping = votesMapping.updated(newVote.noteId, updatedVotesMap)
 
-                  behavior(accurateListeners, fastListeners, turboListeners, updatedVotesMapping, publishWhisperLargeToMqtt
+                  behavior(accurateListeners, fastListeners, turboListeners, updatedVotesMapping, mqttPublishing
 //                    , generatedMarkdown
                   )
                 }
@@ -223,17 +236,17 @@ object Gossiper {
 //        )
 
       case ReceiveNotePing(_) =>
-        val updatedPublishWhisperLargeToMqtt = noteRef.getConfig() match {
+        val updatedMqttPublishing = noteRef.getConfig() match {
           case Failure(exception) =>
-            context.actorContext.log.warn(s"Refreshing publishWhisperLargeToMqtt failed unexpected, retaining $publishWhisperLargeToMqtt (${exception.getClass})", exception)
-            publishWhisperLargeToMqtt // still retain
-          case Success(None) => publishWhisperLargeToMqtt // retain existing behavior
-          case Success(Some(config)) => config.publishWhisperLargeToMqtt
+            context.actorContext.log.warn(s"Refreshing publishWhisperLargeToMqtt failed unexpected, retaining $mqttPublishing (${exception.getClass})", exception)
+            mqttPublishing // still retain
+          case Success(None) => mqttPublishing // retain existing behavior
+          case Success(Some(GossiperConfig(mqttPublishing))) => mqttPublishing
         }
 
         behavior(
           accurateListeners, fastListeners, turboListeners, votesMapping,
-          publishWhisperLargeToMqtt = updatedPublishWhisperLargeToMqtt
+          mqttPublishing = updatedMqttPublishing
         )
     }
   }
@@ -251,10 +264,12 @@ object Gossiper {
 
   //
 
-  private case class GossiperConfig(publishWhisperLargeToMqtt: Boolean)
+  case class MqttPublishing(enabled: Boolean, largeOutputTopic: String)
+  case class GossiperConfig(mqttPublishing: MqttPublishing)
 
   private object YamlProtocol extends DefaultYamlProtocol {
-    implicit val configYamlFormat: YamlFormat[GossiperConfig] = yamlFormat1(GossiperConfig)
+    implicit val mqttPublishingYamlFormat: YamlFormat[MqttPublishing] = yamlFormat2(MqttPublishing)
+    implicit val configYamlFormat: YamlFormat[GossiperConfig] = yamlFormat1(GossiperConfig(_))
   }
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {

@@ -20,3 +20,6 @@ sbt-dist/
 scripts/wakewordtesting.bash
 playground
 litter_demo_logs
+
+mike-nate-chatting
+nateenv.bash

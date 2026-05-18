@@ -114,41 +114,41 @@ object RecurringResponsibilityManager {
 }
 
 
-//object RecurringResponsibilityManagerDemo {
-//  def main(args: Array[String]): Unit = {
-//    AppConfiguration.getConfig() match {
-//      case Validated.Invalid(errors) =>
-//        println(s"FAILED, errors-\n$errors")
-//      case Validated.Valid(config: AppConfig) =>
-//        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system: config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
-//        run(config)
-//    }
-//  }
-//
-//  def run(config: AppConfig): Unit = {
-//    @unused
-//    val container =
-//      TinkerContainer(config, NotificationCenterAbilities.Defaults, "RecurringResponsibilityManagerDemo")(
-//        centralCastFactory()(_, _),
-//        RecurringResponsibilityManager()(_: EnhancedTinker[MyCentralCast])
-//      )
-//
-//    println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Demo system done starting")
-//  }
-//
-//  private def centralCastFactory()(implicit Tinker: Tinker, context: TinkerContext[?]): MyCentralCast = {
-//    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and INERT Rasa")
-//    val gossiper = context.cast(Gossiper(), "Gossiper") // FIXME: check/test
-//    val chronicler = context.cast(InertActor(), "INERTChroniclerFORTESTING")
-//    val rasaActor = context.cast(InertActor(), "INERTRasaActorFORTESTING")
-//    MyCentralCast(chronicler, gossiper, rasaActor)
-//  }
-//}
-//
-//// FIXME: consolidate with the one in LitterBoxesHelper
-//object InertActor {
-//  def apply[T](): Behavior[T] = Behaviors.receive { case (context, message) =>
-//    context.log.debug(s"ignoring $message")
-//    Behaviors.same
-//  }
-//}
+object RecurringResponsibilityManagerDemo {
+  def main(args: Array[String]): Unit = {
+    AppConfiguration.getConfig() match {
+      case Validated.Invalid(errors) =>
+        println(s"FAILED, errors-\n$errors")
+      case Validated.Valid(config: AppConfig) =>
+        println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Starting system: config with vault root ${config.vaultRoot}, creating json/ subdirectory if needed")
+        run(config)
+    }
+  }
+
+  def run(config: AppConfig): Unit = {
+    @unused
+    val container =
+      TinkerContainer(config, NotificationCenterAbilities.Defaults, "RecurringResponsibilityManagerDemo")(
+        centralCastFactory()(_, _),
+        RecurringResponsibilityManager()(_: EnhancedTinker[MyCentralCast])
+      )
+
+    println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Demo system done starting")
+  }
+
+  private def centralCastFactory()(implicit Tinker: Tinker, context: TinkerContext[?]): MyCentralCast = {
+    context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and INERT Rasa")
+    val gossiper = context.cast(Gossiper(), "Gossiper") // FIXME: this has not been tested, relies on mqtt which I have not yet configured for this testing
+    val chronicler = context.cast(InertActor(), "INERTChroniclerFORTESTING")
+    val rasaActor = context.cast(InertActor(), "INERTRasaActorFORTESTING")
+    MyCentralCast(chronicler, gossiper, rasaActor)
+  }
+}
+
+// FIXME: consolidate with the one in LitterBoxesHelper
+object InertActor {
+  def apply[T](): Behavior[T] = Behaviors.receive { case (context, message) =>
+    context.log.debug(s"ignoring $message")
+    Behaviors.same
+  }
+}

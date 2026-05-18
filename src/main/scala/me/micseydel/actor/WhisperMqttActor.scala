@@ -23,11 +23,13 @@ object WhisperMqttActor {
   def apply(replyTo: ActorRef[AudioNoteCapturer.TranscriptionEvent], model: WhisperModel)(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
 
-    val Topic = s"${context.self.path}" // can't be actor class name because of collisions, path works well
-    val OutTopic = s"python/transcription/${model.simpleName}"
+    val ReplyTopic = s"${context.self.path}" // can't be actor class name because of collisions, path works well
 
-    context.system.mqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
-    context.actorContext.log.info(s"Subscribed to $Topic")
+    // FIXME: this should be configurable
+    val RequestTopic = s"python/transcription/${model.simpleName}"
+
+    context.system.mqtt ! TypedMqtt.Subscribe(ReplyTopic, context.messageAdapter(ReceiveMqtt).underlying)
+    context.actorContext.log.info(s"Subscribed to $ReplyTopic")
 
     Tinker.receiveMessage {
       case Enqueue(vaultPath) =>
@@ -35,7 +37,7 @@ object WhisperMqttActor {
         context.system.vaultKeeper !! VaultKeeper.RequestAttachmentContents(vaultPath, context.messageAdapter(ReceiveAttachment).underlying)
         Tinker.steadily
 
-      case ReceiveMqtt(MqttMessage(Topic, payload)) =>
+      case ReceiveMqtt(MqttMessage(ReplyTopic, payload)) =>
         context.actorContext.log.info(s"Forwarding to AudioNoteCapturer a payload of size ${payload.length}")
         replyTo ! AudioNoteCapturer.TranscriptionEvent(new String(payload))
         Tinker.steadily
@@ -45,20 +47,20 @@ object WhisperMqttActor {
           case Failure(exception) => context.actorContext.log.warn(s"Failed to read $vaultPath", exception)
           case Success(attachmentContents) =>
             import WhisperMqttJsonProtocol.outMessageJsonFormat
-            val outMessage = OutMessage(Topic, vaultPath, Base64.getEncoder.encodeToString(attachmentContents)).toJson
+            val outMessage = OutMessage(ReplyTopic, vaultPath, Base64.getEncoder.encodeToString(attachmentContents)).toJson
             val outMessageBytes = outMessage.compactPrint.getBytes
             // per https://stackoverflow.com/a/34525013/1157440
             if (outMessageBytes.length > 268435456) {
               context.actorContext.log.warn(s"Ignoring $vaultPath, too big at ${outMessageBytes.length} bytes")
             } else {
-              context.system.mqtt ! TypedMqtt.Publish(OutTopic, outMessageBytes)
+              context.system.mqtt ! TypedMqtt.Publish(RequestTopic, outMessageBytes)
             }
         }
 
         Tinker.steadily
 
       case other =>
-        context.actorContext.log.warn(s"did not expect $other (Topic=$Topic)")
+        context.actorContext.log.warn(s"did not expect $other (Topic=$ReplyTopic)")
         Tinker.steadily
     }
   }

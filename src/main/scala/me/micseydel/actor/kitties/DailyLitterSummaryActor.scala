@@ -96,11 +96,13 @@ private[kitties] object DailyLitterSummaryActor {
       }
 
       maybeUpdatedDocument match {
-        case None => Tinker.steadily
+        case None =>
+          context.actorContext.log.warn(s"(CANARY) no need to update ${noteRef.noteId}")
+          Tinker.steadily
         case Some(document) =>
           noteRef.setMarkdown(document.toMarkdown) match {
             case Failure(exception) => context.actorContext.log.warn(s"Failed to refresh markdown!", exception)
-            case Success(NoOp) =>
+            case Success(NoOp) => context.actorContext.log.warn(s"(CANARY) refreshed markdown for ${noteRef.noteId}")
           }
           val summaryForDay = document.toSummary(parser.day)
           monthlyLitterGraphActor !! summaryForDay
@@ -135,10 +137,10 @@ private object Helper {
             noteRef.setMarkdown(updatedMarkdown) match {
               case Failure(exception) => Common.getStackTraceString(exception).invalidNel
               case Success(NoOp) =>
-                document.validNel
+                updatedDocument.validNel
             }
           } else {
-            document.validNel
+            document.validNel // should be same as updatedDocument
           }
         case iv@Validated.Invalid(e) =>
           e match {

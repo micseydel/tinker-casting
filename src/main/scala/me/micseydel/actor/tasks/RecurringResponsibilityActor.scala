@@ -316,7 +316,7 @@ object RecurringResponsibilityActorDocument {
         } else {
           Some(latest.dropRight(3).takeRight(10))
         }
-      ).map(LocalDate.parse)
+      ).map(LocalDate.parse) // FIXME: parsing should happen via a Try-wrapped utility!
     }
   }
 
