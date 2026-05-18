@@ -24,8 +24,8 @@ import org.slf4j.Logger
 import java.io.FileNotFoundException
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDate, ZonedDateTime}
-import scala.concurrent.duration.DurationInt
+import java.time.{LocalDate, LocalTime, ZonedDateTime}
+import scala.concurrent.duration.{DurationInt, DurationLong}
 import scala.util.{Failure, Success, Try}
 
 
@@ -62,7 +62,17 @@ object RecurringResponsibilityActor {
           }).plusDays(config.interval_days)
 
           manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTriggerDay)
-          timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
+
+          val nagDaily = config.nagDaily.getOrElse(false)
+          if (nagDaily) {
+            context.actorContext.log.info("Daily nagging configured, setting timer for daily at midnight")
+            val now = ZonedDateTime.now()
+            val secondsToMidnight = (now.toEpochSecond - nextTriggerDay.toEpochSecond(context.system.clock.now().toLocalTime, now.getOffset))
+            timeKeeper !! TimeKeeper.RemindMeEvery(24.hours, secondsToMidnight.seconds, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
+          } else {
+            context.actorContext.log.info("Setting timer for midnight")
+            timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
+          }
 
           if (markedAsDone) {
             val forDay = context.system.clock.today() // FIXME: we can't ack without knowing the day the NoteId was, and this will be mostly right for now 😕 (the race condition is unlikely!)
@@ -220,12 +230,6 @@ object RecurringResponsibilityActor {
                 case Validated.Invalid(e) =>
                   context.actorContext.log.warn(s"[CANARY] ntfy config was present but failed to get next trigger: $e")
               }
-            }
-
-            if (config.nagDaily.getOrElse(false)) {
-              context.actorContext.log.info("Daily nagging configured, resetting timer for one day")
-              // FIXME: although probably not a bug here, I need better MIDNIGHT management (here, it'll just be a duplicate message)
-              timeKeeper !! TimeKeeper.RemindMeAt(context.system.clock.today().plusDays(1), context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
             }
 
             behavior(config)
