@@ -57,18 +57,28 @@ object RecurringResponsibilityActor {
 
           // if this happens to be in the past, it'll trigger immediately
           val nextTriggerDay: LocalDate = (d.latestEntry match {
-            case Some(latestEntry) => latestEntry
-            case None => context.system.clock.today()
+            case Some(latestEntry) =>
+              context.actorContext.log.info(s"Latest entry $latestEntry")
+              latestEntry
+            case None =>
+              val today = context.system.clock.today()
+              context.actorContext.log.warn(s"No latest entry, using today: $today")
+              today
           }).plusDays(config.interval_days)
+          context.actorContext.log.info(s"Using nextTriggerDay $nextTriggerDay")
 
           manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTriggerDay)
 
           val nagDaily = config.nag_daily.getOrElse(false)
           if (nagDaily) {
             context.actorContext.log.info("Daily nagging configured, setting timer for daily at midnight")
-            val now = ZonedDateTime.now()
-            val secondsToMidnight = (now.toEpochSecond - nextTriggerDay.toEpochSecond(context.system.clock.now().toLocalTime, now.getOffset))
-            timeKeeper !! TimeKeeper.RemindMeEvery(24.hours, secondsToMidnight.seconds, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
+            val now = context.system.clock.now()
+
+            val nextTriggerMidnight = nextTriggerDay.toEpochSecond(LocalTime.of(0, 0, 0), now.getOffset)
+            val secondsToMidnightTrigger: Long = nextTriggerMidnight - now.toEpochSecond
+
+            // if the delay is less than 0 seconds, it triggers things immediately
+            timeKeeper !! TimeKeeper.RemindMeEvery(24.hours, secondsToMidnightTrigger.seconds, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
           } else {
             context.actorContext.log.info("Setting timer for midnight")
             timeKeeper !! TimeKeeper.RemindMeAt(nextTriggerDay, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
@@ -135,7 +145,7 @@ object RecurringResponsibilityActor {
                 Success(NoOp)
 
               case (true, Some(Today)) =>
-                val notificationId = notificationIdForNoteId(noteRef.noteId)
+                val notificationId = noteRef.notificationIdForNoteId()
                 context.system.notifier !! CompleteNotification(notificationId)
                 timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy)) // fire and forget just in case
 
@@ -145,7 +155,7 @@ object RecurringResponsibilityActor {
                 noteRef.resetButton(Some(triggerDay))
 
               case (true, _) =>
-                val notificationId = notificationIdForNoteId(noteRef.noteId)
+                val notificationId = noteRef.notificationIdForNoteId()
                 context.system.notifier !! CompleteNotification(notificationId)
                 timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy)) // fire and forget just in case
 
@@ -176,7 +186,7 @@ object RecurringResponsibilityActor {
             context.actorContext.log.debug(s"Using $voiceCompletion to check...")
             if (loweredText.contains("mark") && (loweredText.contains("as completed") || loweredText.contains("is completed") || loweredText.contains("as done"))) {
               if (voiceCompletion.matches(loweredText)) {
-                val notificationId = notificationIdForNoteId(noteRef.noteId)
+                val notificationId = noteRef.notificationIdForNoteId()
                 context.system.notifier !! CompleteNotification(notificationId)
 
                 val today = context.system.clock.today()
@@ -199,7 +209,7 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case MidnightForNextNotificationDayTimer =>
-        val notificationId: String = notificationIdForNoteId(noteRef.noteId)
+        val notificationId: String = noteRef.notificationIdForNoteId()
         context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
 
         noteRef.getDocument() match {
@@ -218,7 +228,7 @@ object RecurringResponsibilityActor {
               s"${noteRef.noteId} eligible since $eligibleSince",
               None,
               NotificationId(notificationId),
-              Nil, // FIXME: specify side-effects in the yaml?
+              Nil,
               None
             ))
 
@@ -294,13 +304,13 @@ object RecurringResponsibilityActor {
         })
       }
     }
-  }
 
-  private def notificationIdForNoteId(noteId: NoteId): String = {
-    MessageDigest.getInstance("SHA-256")
-      .digest(noteId.id.getBytes("UTF-8"))
-      .take(7)
-      .map("%02x".format(_)).mkString
+    def notificationIdForNoteId(): String = {
+      MessageDigest.getInstance("SHA-256")
+        .digest(noteRef.noteId.id.getBytes("UTF-8"))
+        .take(7)
+        .map("%02x".format(_)).mkString
+    }
   }
 }
 
