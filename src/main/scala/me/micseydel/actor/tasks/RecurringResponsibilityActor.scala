@@ -50,7 +50,7 @@ object RecurringResponsibilityActor {
 
       noteRef.getDocument() match {
         case Success(d@Document(config, markedAsDone, _)) =>
-          if (config.maybeVoiceCompletion.nonEmpty) {
+          if (config.voice_completion.nonEmpty) {
             context.actorContext.log.info("Subscribing to Gossiper")
             Tinker.userExtension.gossiper !! Gossiper.SubscribeAccurate(context.messageAdapter(ReceiveTranscription))
           }
@@ -63,7 +63,7 @@ object RecurringResponsibilityActor {
 
           manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTriggerDay)
 
-          val nagDaily = config.nagDaily.getOrElse(false)
+          val nagDaily = config.nag_daily.getOrElse(false)
           if (nagDaily) {
             context.actorContext.log.info("Daily nagging configured, setting timer for daily at midnight")
             val now = ZonedDateTime.now()
@@ -170,7 +170,7 @@ object RecurringResponsibilityActor {
         context.actorContext.log.info(s"Received transcription $noteId")
         val loweredText = whisperResultContent.text.toLowerCase
 
-        config.maybeVoiceCompletion match {
+        config.voice_completion match {
           case None => context.actorContext.log.warn("No voice completion config, should not have subscribed to Gossiper and should not have received this message! Bug!")
           case Some(voiceCompletion) =>
             context.actorContext.log.debug(s"Using $voiceCompletion to check...")
@@ -222,7 +222,7 @@ object RecurringResponsibilityActor {
               None
             ))
 
-            config.ntfyIfLate.foreach { case ntfyif@NtfyIfLate(_, _, _) =>
+            config.ntfy_if_late.foreach { case ntfyif@NtfyIfLate(_, _, _) =>
               ntfyif.nextTrigger(context.system.clock.now()) match {
                 case Validated.Valid(at: ZonedDateTime) =>
                   context.actorContext.log.warn(s"[CANARY] Scheduling ntfy at $at")
@@ -236,7 +236,7 @@ object RecurringResponsibilityActor {
         }
 
       case TimeToNtfy =>
-        config.ntfyIfLate match {
+        config.ntfy_if_late match {
           case Some(NtfyIfLate(channel, _, message)) =>
             context.actorContext.log.warn("[CANARY] Sending push notification!")
             val sideEffect = PushNotification(channel, message)
@@ -305,7 +305,7 @@ object RecurringResponsibilityActor {
 }
 
 object RecurringResponsibilityActorDocument {
-  case class FrontmatterConfig(interval_days: Int, maybeVoiceCompletion: Option[VoiceCompletion], nagDaily: Option[Boolean], ntfyIfLate: Option[NtfyIfLate])
+  case class FrontmatterConfig(interval_days: Int, voice_completion: Option[VoiceCompletion], nag_daily: Option[Boolean], ntfy_if_late: Option[NtfyIfLate])
 
   case class Document(config: FrontmatterConfig, markedAsDone: Boolean, itemsAfterDone: List[String]) {
     def latestEntry: Option[LocalDate] = {

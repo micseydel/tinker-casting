@@ -6,7 +6,7 @@ const SUBSCRIBE_TOPIC = process.env.SUBSCRIBE_TOPIC || 'test/input';
 const PUBLISH_TOPIC = process.env.PUBLISH_TOPIC || 'test/output';
 const CLIENT_ID = `mqtt-length-counter-${Math.random().toString(16).slice(2, 8)}`;
 const MQTT_USERNAME = 'mosquitto';
-const MQTT_PASSWORD = '8b0a0dc2-0192-4834-8540-6fec37e829aa';
+const MQTT_PASSWORD = '';
 
 console.log('Starting MQTT Length Counter...');
 console.log(`Broker: ${BROKER_URL}`);
