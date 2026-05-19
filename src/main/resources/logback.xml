@@ -13,6 +13,16 @@
         </encoder>
     </appender>
 
+<!--    <appender name="DEBUG" class="ch.qos.logback.core.FileAppender">-->
+<!--        <file>${LOG_FOLDER}/DEBUG.log</file>-->
+<!--        <encoder>-->
+<!--            <pattern>[%date{ISO8601}] [%level] [%X{akkaSource}] - %msg%n</pattern>-->
+<!--        </encoder>-->
+<!--        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">-->
+<!--            <level>DEBUG</level>-->
+<!--        </filter>-->
+<!--    </appender>-->
+
 <!--    <appender name="FILE" class="ch.qos.logback.core.FileAppender">-->
 <!--        <file>${LOG_FOLDER}/verbose.log</file>-->
 <!--        <encoder>-->
@@ -157,4 +167,8 @@
         <appender-ref ref="ASYNC"/>
         <appender-ref ref="ERROR-WARN-FILE"/>
     </root>
+
+<!--    <root level="DEBUG">-->
+<!--        <appender-ref ref="DEBUG"/>-->
+<!--    </root>-->
 </configuration>

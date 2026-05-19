@@ -74,7 +74,13 @@ object RecurringResponsibilityActor {
             context.actorContext.log.info("Daily nagging configured, setting timer for daily at midnight")
             val now = context.system.clock.now()
 
-            val nextTriggerMidnight = nextTriggerDay.toEpochSecond(LocalTime.of(0, 0, 0), now.getOffset)
+            val today = now.toLocalDate
+            val nextTriggerMidnight = (if (nextTriggerDay.isAfter(today)) {
+              nextTriggerDay
+            } else {
+              today
+            }).toEpochSecond(LocalTime.of(0, 0, 0), now.getOffset)
+
             val secondsToMidnightTrigger: Long = nextTriggerMidnight - now.toEpochSecond
 
             // if the delay is less than 0 seconds, it triggers things immediately
@@ -209,6 +215,8 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case MidnightForNextNotificationDayTimer =>
+        // FIXME: name is kinda misleading, can trigger on app startup if the responsibility is stale
+
         val notificationId: String = noteRef.notificationIdForNoteId()
         context.actorContext.log.info(s"TimerUp, sending notification $notificationId")
 
@@ -218,6 +226,8 @@ object RecurringResponsibilityActor {
             Tinker.steadily
 
           case Success(d@Document(config, markedAsDone, _)) =>
+            // FIXME: role of markedAsDone ?
+
             val eligibleSince: LocalDate = (d.latestEntry match {
               case Some(latestEntry) => latestEntry
               case None => context.system.clock.today()
@@ -252,7 +262,7 @@ object RecurringResponsibilityActor {
             val sideEffect = PushNotification(channel, message)
             context.system.notifier !! NotificationCenterManager.JustSideEffect(sideEffect)
           case None =>
-            context.actorContext.log.warn("TimeToNtfy but missing config for it; ignoring")
+            context.actorContext.log.warn("[CANARY] TimeToNtfy but missing config for it; ignoring")
         }
         Tinker.steadily
     }

@@ -75,7 +75,7 @@ object ChimeActor {
                 behavior(host, noteRef)
 
               case other =>
-                context.actorContext.log.warn(s"Expected a string host, found $other (ignoring)")
+                context.actorContext.log.info(s"Expected a string host, found $other (ignoring)")
                 Tinker.steadily
             }
         }
