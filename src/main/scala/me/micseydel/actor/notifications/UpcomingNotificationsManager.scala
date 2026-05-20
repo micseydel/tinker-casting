@@ -22,8 +22,6 @@ object UpcomingNotificationsManager {
 
   sealed trait Message
 
-  private case class ItsMidnight(forDay: ZonedDateTime) extends Message
-
   private case class ReceiveNotePing(ping: Ping) extends Message
 
   case class UpcomingNotification(notification: Notification) extends Message
@@ -37,8 +35,6 @@ object UpcomingNotificationsManager {
   def apply(notificationCenterManager: SpiritRef[NotificationCenterManager.Message])(implicit Tinker: Tinker): Ability[Message] =
     AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, Purple, "⏳", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
       implicit val c: TinkerContext[_] = context
-
-      context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
 
       import NotificationCenterManagerJsonFormat.notificationJsonFormat
 
@@ -91,45 +87,11 @@ object UpcomingNotificationsManager {
         }
         Tinker.steadily
 
-      case ItsMidnight(_) =>
-        context.actorContext.log.info(s"It's midnight, adding today's plans to the notification center ")
-        val midnight = nearestMidnightToNow(context.system.clock)
-        val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-        val id = formatter.format(midnight)
-
-        // FIXME: this actor should be in a lib, this behavior needs to be moved to userspace
-        val notifications = List(
-          Notification(midnight, s"- ![[Plans#^$id]]", None, NotificationId(id), Nil),
-          Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(s"withoutack-$id"), Nil)
-        )
-
-        for (notification <- notifications) {
-          notificationCenterManager !! NotificationCenterManager.NewNotification(notification)
-        }
-
-
-        Tinker.steadily
-
       case ReceiveNotePing(_) =>
         context.actorContext.log.debug("Note update detected but not doing anything with it yet")
         Tinker.steadily
     }
   }
-
-  private def nearestMidnightToNow(tinkerClock: TinkerClock): ZonedDateTime = {
-    nearestMidnightTo(tinkerClock.now())
-  }
-
-  private def nearestMidnightTo(time: ZonedDateTime): ZonedDateTime = {
-    MillisFromMidnight(time) match {
-      case MillisUntil(_) =>
-        MillisFromMidnight.midnightFor(time.plusDays(1))
-
-      case MillisSince(_) =>
-        MillisFromMidnight.midnightFor(time)
-    }
-  }
-
 
   private object TimeForNotificationJsonFormat extends DefaultJsonProtocol {
     def apply(implicit notificationJsonFormat: RootJsonFormat[Notification]): RootJsonFormat[TimeForNotification] = {

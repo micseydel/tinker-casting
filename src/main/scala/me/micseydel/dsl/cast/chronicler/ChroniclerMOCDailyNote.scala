@@ -1,31 +1,33 @@
 package me.micseydel.dsl.cast.chronicler
 
-import akka.actor.typed.scaladsl.Behaviors
-import me.micseydel.NoOp
+import me.micseydel.actor.notifications.NotificationCenterManager
+import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.{NoteState, TranscribedMobileNoteEntry}
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{Operator, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
 import org.slf4j.Logger
 
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, ZonedDateTime}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object ChroniclerMOCDailyNote {
-  sealed trait Message
-
-  sealed trait PostInitMessage extends Message {
+  sealed trait Message {
     def time: ZonedDateTime
   }
 
-  case class AddNote(noteEntry: TranscribedMobileNoteEntry) extends PostInitMessage {
+  case class ReceiveMidnight(time: ZonedDateTime) extends Message
+
+  sealed trait MarkdownMutatingMessage extends Message
+
+  case class AddNote(noteEntry: TranscribedMobileNoteEntry) extends MarkdownMutatingMessage {
     override def time: ZonedDateTime = noteEntry.time
   }
 
-  case class ListenerAcknowledgement(noteRef: NoteId, forDay: LocalDate, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends PostInitMessage {
+  case class ListenerAcknowledgement(noteRef: NoteId, forDay: LocalDate, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends MarkdownMutatingMessage {
     override def time: ZonedDateTime = timeOfAck
   }
 
@@ -34,20 +36,23 @@ object ChroniclerMOCDailyNote {
   def apply(forDate: LocalDate)(implicit Tinker: Tinker): Ability[Message] = {
     val noteName = s"$BaseNoteName (${forDate.format(DateTimeFormatter.ISO_LOCAL_DATE)})"
     NoteMakingTinkerer(noteName, TinkerColor.random(), "👨‍💻") { (context, noteRef) =>
+      implicit val tc: TinkerContext[?] = context
+
+      context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ReceiveMidnight))
+
       context.actorContext.log.info(s"Starting daily transcriptions note for $forDate")
       behavior(forDate, noteRef)
     }
   }
 
-  private def behavior(forDate: LocalDate, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] = {
-    // FIXME: remove forDate?
+  private def behavior(forDate: LocalDate, noteRef: NoteRef)(implicit Tinker: Tinker): Ability[Message] =
     Tinker.receive { (context, message) =>
+      implicit val tc: TinkerContext[?] = context
       implicit val l: Logger = context.actorContext.log
       l.info(s"Received PostInitMessage of type ${message.getClass.getCanonicalName}")
 
       message match {
-        case message: PostInitMessage =>
-
+        case message: MarkdownMutatingMessage =>
           (noteRef.readMarkdownSafer() match {
             case NoteRef.Contents(Success(markdown)) =>
               val latestMarkdown = ChroniclerMOCDailyMarkdown.updatedMarkdown(markdown, message)
@@ -62,16 +67,38 @@ object ChroniclerMOCDailyNote {
               Success(ChroniclerMOCDailyMarkdown.updatedMarkdown("", message))
           }).flatMap(noteRef.setMarkdown)
 
-
 //          noteRef.updateWith(message) match {
 //            case Failure(exception) => context.actorContext.log.warn("Failed to set markdown", exception)
 //            case Success(NoOp) =>
 //          }
 
           Tinker.steadily
+
+        case ReceiveMidnight(midnight) =>
+          val notesWithoutAck = noteRef.readMarkdownSafer() match {
+            case NoteRef.FileDoesNotExist =>
+              context.actorContext.log.warn(s"No transcriptions for $forDate?")
+              false
+            case NoteRef.Contents(s) =>
+              s match {
+                case Failure(exception) =>
+                  context.actorContext.log.warn(s"Unexpected failure for $forDate", exception)
+                  false
+                case Success(value) =>
+                  value.contains("# Notes without acknowledgements")
+              }
+          }
+
+          if (notesWithoutAck) {
+            val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+            val id = formatter.format(midnight)
+            val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(s"withoutack-$id"), Nil)
+            context.system.notifier !! NotificationCenterManager.NewNotification(notification)
+          }
+
+          Tinker.steadily
       }
     }
-  }
 
 //  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
 //    def updateWith(message: PostInitMessage)(implicit log: Logger): Try[NoOp.type] = {

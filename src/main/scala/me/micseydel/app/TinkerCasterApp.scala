@@ -126,6 +126,8 @@ object UserTinkerCast {
       context.actorContext.log.info("no OpenAI/Anthropic keys found")
     }
 
+    context.cast(PlansNotifierActor(), "PlansNotifierActor")
+
     Tinker.receiveMessage {
       case NoOp =>
         context.actorContext.log.warn("didn't expect to receive a message")

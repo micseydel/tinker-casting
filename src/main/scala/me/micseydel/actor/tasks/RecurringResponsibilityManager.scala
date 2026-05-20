@@ -6,6 +6,7 @@ import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
+import me.micseydel.actor.perimeter.NtfyerActor
 import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.app.{AppConfiguration, MyCentralCast}
 import me.micseydel.dsl.Tinker.Ability
@@ -128,7 +129,7 @@ object RecurringResponsibilityManagerDemo {
   def run(config: AppConfig): Unit = {
     @unused
     val container =
-      TinkerContainer(config, NotificationCenterAbilities.Defaults, "RecurringResponsibilityManagerDemo")(
+      TinkerContainer(config, NotificationCenterAbilities.None.copy(ntfy = NtfyerActor()(_)), "RecurringResponsibilityManagerDemo")(
         centralCastFactory()(_, _),
         RecurringResponsibilityManager()(_: EnhancedTinker[MyCentralCast])
       )

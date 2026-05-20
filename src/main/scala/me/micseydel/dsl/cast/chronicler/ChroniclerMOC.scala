@@ -46,11 +46,11 @@ object ChroniclerMOC {
     behavior(Map.empty)
   }
 
-  private def behavior(noteKeepers: Map[LocalDate, SpiritRef[ChroniclerMOCDailyNote.PostInitMessage]])(implicit Tinker: Tinker): Ability[Message] =
+  private def behavior(noteKeepers: Map[LocalDate, SpiritRef[ChroniclerMOCDailyNote.MarkdownMutatingMessage]])(implicit Tinker: Tinker): Ability[Message] =
     Tinker.receive { (context, incomingMessage) =>
       val day = incomingMessage.time.toLocalDate
 
-      val outgoingMessage: ChroniclerMOCDailyNote.PostInitMessage = incomingMessage match {
+      val outgoingMessage: ChroniclerMOCDailyNote.MarkdownMutatingMessage = incomingMessage match {
         case AddNote(noteEntry) =>
           context.actorContext.log.info(s"Forwarding AddNote ${noteEntry.ref}")
           ChroniclerMOCDailyNote.AddNote(noteEntry)
