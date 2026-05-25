@@ -48,7 +48,7 @@ object PlansNotifierActor {
 
         val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
         val id = formatter.format(midnight)
-        NotificationCenterManager.NewNotification(Notification(midnight, s"- ![[Plans#^$id]]", None, NotificationId(id), Nil))
+        context.system.notifier !! NotificationCenterManager.NewNotification(Notification(midnight, s"- ![[Plans#^$id]]", None, NotificationId(id), Nil))
 
         Tinker.steadily
     }

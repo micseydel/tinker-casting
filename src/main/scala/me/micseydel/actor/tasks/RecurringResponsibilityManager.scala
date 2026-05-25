@@ -11,9 +11,11 @@ import me.micseydel.app.AppConfiguration.AppConfig
 import me.micseydel.app.{AppConfiguration, MyCentralCast}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.Gossiper
+import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{EnhancedTinker, Tinker, TinkerColor, TinkerContainer, TinkerContext}
 import me.micseydel.util.TimeUtil
+import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
 
 import java.time.{LocalDate, ZonedDateTime}
@@ -130,17 +132,17 @@ object RecurringResponsibilityManagerDemo {
     @unused
     val container =
       TinkerContainer(config, NotificationCenterAbilities.None.copy(ntfy = NtfyerActor()(_)), "RecurringResponsibilityManagerDemo")(
-        centralCastFactory()(_, _),
+        centralCastFactory(config.vaultRoot)(_, _),
         RecurringResponsibilityManager()(_: EnhancedTinker[MyCentralCast])
       )
 
     println(s"[${TimeUtil.zonedDateTimeToISO8601(ZonedDateTime.now())}] Demo system done starting")
   }
 
-  private def centralCastFactory()(implicit Tinker: Tinker, context: TinkerContext[?]): MyCentralCast = {
+  private def centralCastFactory(vaultRoot: VaultPath)(implicit Tinker: Tinker, context: TinkerContext[?]): MyCentralCast = {
     context.actorContext.log.info("Creating central cast with Chronicler, Gossiper and INERT Rasa")
     val gossiper = context.cast(Gossiper(), "Gossiper") // FIXME: this has not been tested, relies on mqtt which I have not yet configured for this testing
-    val chronicler = context.cast(InertActor(), "INERTChroniclerFORTESTING")
+    val chronicler = context.cast(Chronicler(vaultRoot, gossiper), "Chronicler")
     val rasaActor = context.cast(InertActor(), "INERTRasaActorFORTESTING")
     MyCentralCast(chronicler, gossiper, rasaActor)
   }

@@ -6,6 +6,7 @@ import me.micseydel.actor.*
 import me.micseydel.actor.google.GoogleAuthManager
 import me.micseydel.actor.hue.HueListener
 import me.micseydel.actor.kitties.CatsHelper
+import me.micseydel.actor.llmsaas.LLMSaaSTesting
 import me.micseydel.actor.notifications.NotificationCenterManager.NotificationCenterAbilities
 import me.micseydel.actor.ollama.OllamaActor
 import me.micseydel.actor.perimeter.HomeMonitorActor

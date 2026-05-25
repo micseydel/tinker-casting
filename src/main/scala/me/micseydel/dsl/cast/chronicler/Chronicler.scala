@@ -192,43 +192,6 @@ object Chronicler {
     implicit val listenerAcknowledgementJsonFormat: JsonFormat[ListenerAcknowledgement] = jsonFormat5(ListenerAcknowledgement(_, _, _, _, _))
   }
 
-  // util
-  private val mp3Pattern = """mobile_audio_capture_(\d{8}-\d{6})\.mp3""".r
-
-  // e.g. desktop_audio_capture_20240417-184238.wav
-  private val desktopPattern = """desktop_audio_capture_(\d{8}-\d{6})\.wav""".r
-
-  // e.g. mobile_audio_capture_20240416-204756.wav
-  private val mobilePattern = """mobile_audio_capture_(\d{8}-\d{6})\.wav""".r
-  private val formatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
-
-  private def tryParse(dateTimeStr: String): Either[String, ZonedDateTime] = {
-    Try(LocalDateTime.parse(dateTimeStr, formatter)) match {
-      case Success(localDateTime) =>
-        // FIXME: get the timezone by location of the device at the time; assumed California for foreseeable future
-        Right(ZonedDateTime.of(localDateTime, ZoneId.systemDefault()))
-      case Failure(e) =>
-        Left(s"Invalid date format:\n${Common.getStackTraceString(e)}")
-    }
-  }
-
-  // FIXME: should only be used in one place
-  def getCaptureTimeFromAndroidAudioPath(wavPath: Path): Either[String, ZonedDateTime] = {
-    // e.g. desktop_audio_capture_2024-04-17_13_45_26.wav
-    //    val desktopPattern = """desktop_audio_capture_(\d{4}-\d{2}-\d{2}_\d{2}_\d{2}_\d{2})\.wav""".r
-
-    getCaptureTimeFromAndroidAudioPath(wavPath.getFileName.toString)
-  }
-
-  def getCaptureTimeFromAndroidAudioPath(filename: String): Either[String, ZonedDateTime] = filename match {
-    case mobilePattern(dateTimeStr) => tryParse(dateTimeStr)
-    case desktopPattern(dateTimeStr) => tryParse(dateTimeStr)
-    case mp3Pattern(dateTimeStr) => tryParse(dateTimeStr)
-    case it if it.startsWith(".evr_recently_deleted_") => Left(s"Ignoring recently deleted recording")
-
-    case _ => Left(s"Filename does not match the expected formats: $mobilePattern or $desktopPattern")
-  }
-
   object ListenerAcknowledgement {
     def justIntegrated(noteId: NoteId, forDay: LocalDate, details: String)(implicit tinkerContext: TinkerContext[_]): ListenerAcknowledgement = {
       ListenerAcknowledgement(noteId, forDay, tinkerContext.system.clock.now(), details, Some(AutomaticallyIntegrated))

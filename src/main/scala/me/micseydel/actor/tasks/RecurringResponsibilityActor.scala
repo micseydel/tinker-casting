@@ -1,6 +1,7 @@
 package me.micseydel.actor.tasks
 
 import cats.data.Validated
+import cats.data.Validated.{Invalid, Valid}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.notifications.NotificationCenterManager
@@ -15,8 +16,8 @@ import me.micseydel.dsl.cast.{Gossiper, TimeKeeper}
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.model.{NotedTranscription, TranscriptionCapture, WhisperResult}
 import me.micseydel.util.TimeUtil
-import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.vault.{Note, NoteId}
+import me.micseydel.vault.persistence.{BasicNoteRef, NoteRef}
+import me.micseydel.vault.{Note, NoteId, VaultPath}
 import me.micseydel.{Common, NoOp}
 import net.jcazevedo.moultingyaml.*
 import org.slf4j.Logger
@@ -245,10 +246,10 @@ object RecurringResponsibilityActor {
             config.ntfy_if_late.foreach { case ntfyif@NtfyIfLate(_, _, _) =>
               ntfyif.nextTrigger(context.system.clock.now()) match {
                 case Validated.Valid(at: ZonedDateTime) =>
-                  context.actorContext.log.warn(s"[CANARY] Scheduling ntfy at $at")
+                  context.actorContext.log.info(s"Scheduling ntfy at $at")
                   timeKeeper !! TimeKeeper.RemindMeAt(at, context.self, TimeToNtfy, Some(TimeToNtfy))
                 case Validated.Invalid(e) =>
-                  context.actorContext.log.warn(s"[CANARY] ntfy config was present but failed to get next trigger: $e")
+                  context.actorContext.log.warn(s"ntfy config was present but failed to get next trigger: $e")
               }
             }
 
@@ -258,11 +259,11 @@ object RecurringResponsibilityActor {
       case TimeToNtfy =>
         config.ntfy_if_late match {
           case Some(NtfyIfLate(channel, _, message)) =>
-            context.actorContext.log.warn("[CANARY] Sending push notification!")
+            context.actorContext.log.info("Sending push notification!")
             val sideEffect = PushNotification(channel, message)
             context.system.notifier !! NotificationCenterManager.JustSideEffect(sideEffect)
           case None =>
-            context.actorContext.log.warn("[CANARY] TimeToNtfy but missing config for it; ignoring")
+            context.actorContext.log.warn("TimeToNtfy but missing config for it; ignoring")
         }
         Tinker.steadily
     }

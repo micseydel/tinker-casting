@@ -1,26 +1,33 @@
 package me.micseydel.actor
 
 import akka.actor.typed.ActorRef
+import cats.data.Validated
+import cats.data.Validated.{Invalid, Valid}
 import com.softwaremill.quicklens.*
 import me.micseydel.Common
+import me.micseydel.actor.AudioNoteCapturer.{Config, FolderToWatch, RawFolderToWatch, ReceiveAudioFileCapture}
 import me.micseydel.actor.AudioNoteCapturerHelpers.*
 import me.micseydel.actor.FolderWatcherActor.{PathCreatedEvent, PathModifiedEvent, Ping}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.chronicler.Chronicler
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor}
+import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.model.WhisperResultJsonProtocol.*
 import me.micseydel.model.{BaseModel, LargeModel, TurboModel, WhisperResult}
 import me.micseydel.vault.VaultPath
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.vault.persistence.NoteRef.FileDoesNotExist
+import net.jcazevedo.moultingyaml.{PimpedString, *}
 import spray.json.*
 
 import java.io.File
-import java.nio.file.{Path, Paths}
-import java.time.ZonedDateTime
+import java.nio.file.{Files, InvalidPathException, Path}
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
+import java.time.zone.ZoneRulesException
+import java.time.*
 import scala.annotation.unused
 import scala.concurrent.ExecutionContextExecutorService
+import scala.util.matching.Regex
 import scala.util.{Failure, Success, Try}
 
 object AudioNoteCapturer {
@@ -28,38 +35,30 @@ object AudioNoteCapturer {
 
   case class TranscriptionEvent(payload: String) extends Message
 
-  private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
-
   private case class ReceivePing(ping: Ping) extends Message
 
-  //  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
+  final case class ReceiveAudioFileCapture(captureTime: ZonedDateTime, audioPath: Path) extends Message
 
   // behavior
 
   private val NoteName = "Audio Note Capture"
 
   def apply(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing](NoteName, TinkerColor.random(), "🎤", ReceivePing, Some("_actor_notes")) { case (context, noteRef) =>
-    noteRef.properties match {
-      case Failure(exception) => throw exception
-      case Success(None) =>
-        context.actorContext.log.warn(s"No note found for ${noteRef.noteId}, going to sleep since no config is available...")
-        Tinker.ignore
+    noteRef.config match {
+      case Invalid(problems) =>
+        context.actorContext.log.warn(s"Something(s) went wrong: $problems")
+        Tinker.ignore // FIXME: watch for fixed using ReceivePing; good test for eavesdropping on logging? or just write the $problems to the noteRef?
 
-      case Success(Some(properties)) =>
-        context.actorContext.log.info(s"Using properties $properties")
-        finishInitializing(vaultRoot, properties, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
+      case Valid(foldersToWatch) =>
+        context.actorContext.log.info(s"Using foldersToWatch $foldersToWatch")
+        finishInitializing(vaultRoot, foldersToWatch, chronicler)(Tinker, noteRef, context.system.httpExecutionContext)
     }
   }
 
-  private def finishInitializing(vaultRoot: VaultPath, config: AudioNoteCaptureProperties, chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
-    val newFileCreationEventAdapter = context.messageAdapter(AudioPathUpdatedEvent).underlying
-    @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
-    val folderWatcherActor = context.spawn(
-      FolderWatcherActor(
-        config.audioWatchPath, newFileCreationEventAdapter
-      ),
-      "MobileAudioFolderWatcherActor"
-    )
+  private def finishInitializing(vaultRoot: VaultPath, foldersToWatch: List[FolderToWatch], chronicler: ActorRef[Chronicler.Message])(implicit Tinker: Tinker, noteRef: NoteRef, ec: ExecutionContextExecutorService): Ability[Message] = Tinker.setup { context =>
+    foldersToWatch.foreach { ftw =>
+      context.castAnonymous(FolderWatcherActorDelegate(ftw, context.self))
+    }
 
     // FIXME: these need to keep track of queued message, track/log things that don't come back in time
     val recipients: List[SpiritRef[WhisperMqttActor.Message]] = List(
@@ -68,50 +67,28 @@ object AudioNoteCapturer {
       context.cast(WhisperMqttActor(context.self.underlying, LargeModel), "WhisperMqttActor_large")
     )
 
-    val clock = context.system.clock
-
-    def triggerTranscriptionForAudioPath(audioPath: Path): Unit = {
-      Chronicler.getCaptureTimeFromAndroidAudioPath(audioPath) match {
-        case Left(msg) =>
-          if (audioPath.toString.toLowerCase.endsWith(".tmp")) {
-            context.actorContext.log.debug(s"Because of .tmp, ignoring would-be message:::Failed to get capture time for wavPath $audioPath: $msg")
-          } else {
-            context.actorContext.log.error(s"Failed to get capture time for wavPath $audioPath: $msg")
-          }
-        case Right(captureTime) =>
-          context.actorContext.log.debug("Sending TranscriptionStartedEvent to {}", recipients)
-
-          val transcriptionStartTime = clock.now()
-          val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
-          chronicler ! Chronicler.TranscriptionStartedEvent(capture)
-
-          val vaultPath = audioPath.toString.replace(vaultRoot.toString + "/", "")
-          val enqueueRequest = WhisperMqttActor.Enqueue(vaultPath)
-          recipients.foreach(_ !!!! enqueueRequest)
-      }
-    }
-
     behavior(
       vaultRoot,
       chronicler,
-      triggerTranscriptionForAudioPath,
-      config.audioWatchPath
+      recipients
     )(Tinker, noteRef)
   }
 
-  private def behavior(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], triggerTranscriptionForWavPath: Path => Unit, audioWatchPath: Path)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
+  private def behavior(vaultRoot: VaultPath, chronicler: ActorRef[Chronicler.Message], recipients: List[SpiritRef[WhisperMqttActor.Message]])(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.receive { (context, message) =>
     message match {
-      case AudioPathUpdatedEvent(PathCreatedEvent(audioPath)) if validPath(audioPath) =>
+      case ReceiveAudioFileCapture(captureTime, audioPath) =>
         context.actorContext.log.info(s"New audio ${audioPath.getFileName} (size=${new File(audioPath.toString).length()})")
 
-        Try(Common.getWavLength(audioPath.toString)) match {
-          case Failure(exception) =>
-            context.actorContext.log.warn(s"Failed to get .wav length for $audioPath", exception)
-          case Success(seconds) =>
-            context.actorContext.log.debug(s"wavPath $audioPath is $seconds seconds long, triggering transcription")
-        }
+        context.actorContext.log.debug("Sending TranscriptionStartedEvent to {}", recipients)
 
-        triggerTranscriptionForWavPath(audioPath)
+        val transcriptionStartTime = context.system.clock.now()
+        // FIXME Common.getWavLength can throw
+        val capture = NoticedAudioNote(audioPath, captureTime, Common.getWavLength(audioPath.toString), transcriptionStartTime)
+        chronicler ! Chronicler.TranscriptionStartedEvent(capture)
+
+        val vaultPath = audioPath.toString.replace(vaultRoot.toString + "/", "")
+        val enqueueRequest = WhisperMqttActor.Enqueue(vaultPath)
+        recipients.foreach(_ !!!! enqueueRequest)
 
         val transcriptionNoteName = AudioNoteCapturerHelpers.transcriptionNoteName(audioPath)
         noteRef.addToList(s"[[$transcriptionNoteName]]") match {
@@ -124,17 +101,6 @@ object AudioNoteCapturer {
             }
         }
 
-        Tinker.steadily
-
-      case AudioPathUpdatedEvent(PathModifiedEvent(modifiedPath)) if validPath(modifiedPath) =>
-        context.actorContext.log.warn(s"Detected but ignoring modified path: $modifiedPath")
-        Tinker.steadily
-
-      case AudioPathUpdatedEvent(PathModifiedEvent(modifiedPath)) =>
-        context.actorContext.log.debug(s"MODIFICATION ${modifiedPath.getFileName} (was this Syncthing doing a partial sync? size=${new File(modifiedPath.toString).length()})")
-        Tinker.steadily
-      case AudioPathUpdatedEvent(other) =>
-        context.actorContext.log.debug(s"Ignoring event $other")
         Tinker.steadily
 
       case TranscriptionEvent(payload) =>
@@ -169,11 +135,6 @@ object AudioNoteCapturer {
         context.actorContext.log.debug("Ignoring ping, already initialized")
         Tinker.steadily
 
-      //      case m@ReceiveWavFile(filename, bytes) =>
-      ////        writeWavWithJavax(audioWatchPath.resolve(filename), bytes)
-      //        // FIXME
-      //        context.actorContext.log.warn(s"Ignoring $m, never finished impl")
-      //        Tinker.steadily
     }
   }
 
@@ -181,25 +142,73 @@ object AudioNoteCapturer {
   // model
 
   case class NoticedAudioNote(wavPath: Path, captureTime: ZonedDateTime, lengthSeconds: Double, transcriptionStartedTime: ZonedDateTime)
+
+  case class RawFolderToWatch(path: String, regex: String, javaStringFormat: String, timeZone: String)
+
+  case class Config(foldersToWatch: List[RawFolderToWatch])
+
+  case class FolderToWatch(path: Path, pattern: Regex, formatter: DateTimeFormatter, zoneId: ZoneId)
 }
 
 object AudioNoteCapturerHelpers {
-  case class AudioNoteCaptureProperties(audioWatchPath: Path)
-
   def fixWhisper(whisperResultEvent: WhisperResult): WhisperResult = {
     whisperResultEvent
       .modify(_.whisperResultContent.text)
-      .using(_.replace("f***ing", "fucking"))
+      .using(_.replace("f***ing", "fucking")) // FIXME: can censorship be disabled upstream through Whisper? if not, document it better
   }
 
   private case class Entry(line: String)
 
+  private object YamlProtocol extends DefaultYamlProtocol {
+    implicit val rawFolderToWatchYamlFormat: YamlFormat[RawFolderToWatch] = yamlFormat4(RawFolderToWatch)
+    implicit val configYamlFormat: YamlFormat[Config] = yamlFormat1(Config)
+  }
+
   implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def properties: Try[Option[AudioNoteCaptureProperties]] = {
-      noteRef.readNote().flatMap(_.yamlFrontMatter).map { properties =>
-        for {
-          audioWatchPath <- properties.get("audioWatchPath").map(_.asInstanceOf[String]).map(Paths.get(_))
-        } yield AudioNoteCaptureProperties(audioWatchPath)
+    def config: Validated[String, List[FolderToWatch]] = {
+      import YamlProtocol.configYamlFormat
+      noteRef.read().map(_.maybeFrontmatter).flatMap {
+        case Some(frontmatter) => Try(frontmatter.parseYaml.convertTo[Config])
+        case None => Failure(new RuntimeException(s"no frontmatter for ${noteRef.noteId}"))
+      } match {
+        case Failure(exception) => Invalid(Common.getStackTraceString(exception))
+        case Success(config) =>
+          val (problems: List[String], successes: List[FolderToWatch]) = config.foldersToWatch.partitionMap {
+            case RawFolderToWatch(rawPath, regex, javaStringFormat, timeZone) =>
+              Try((new Regex(regex), DateTimeFormatter.ofPattern(javaStringFormat))) match {
+                case Failure(exception) =>
+                  Left(s"Something went wrong compiling the regex or time format ${Common.getStackTraceString(exception)}")
+                case Success((pattern, formatter)) =>
+                  Try(Path.of(rawPath)) match {
+                    case Failure(exception: InvalidPathException) =>
+                      Left(s"Invalid path: ${Common.getStackTraceString(exception)}")
+                    case Failure(exception) =>
+                      // FIXME: if the path DOESN'T start with a slash, use the vault path?
+                      Left(s"Unexpected exception: ${Common.getStackTraceString(exception)}")
+                    case Success(path) =>
+                      if (Files.exists(path)) {
+                        Try(ZoneId.of(timeZone)) match {
+                          case Failure(exception: ZoneRulesException) =>
+                            Left(s"It appears that $timeZone is a region that cannot be found: ${Common.getStackTraceString(exception)}")
+                          case Failure(exception: DateTimeException) =>
+                            Left(s"It appears that $timeZone has an invalid format: ${Common.getStackTraceString(exception)}")
+                          case Failure(exception) =>
+                            Left(s"Unexpected exception: ${Common.getStackTraceString(exception)}")
+                          case Success(offset) =>
+                            Right(FolderToWatch(path, pattern, formatter, offset))
+                        }
+                      } else {
+                        Left(s"Path does not exist: $rawPath")
+                      }
+                  }
+              }
+          }
+
+          if (problems.nonEmpty) {
+            Invalid(s"Something(s) went wrong while trying to get config from ${noteRef.noteId}: $problems")
+          } else {
+            Valid(successes)
+          }
       }
     }
 
@@ -261,4 +270,108 @@ object AudioNoteCapturerHelpers {
   }
 
   def transcriptionNoteName(wavPath: Path): String = s"Transcription for ${wavPath.getFileName.toString}"
+}
+
+private object FolderWatcherActorDelegate {
+  sealed trait Message
+
+  private case class AudioPathUpdatedEvent(event: FolderWatcherActor.PathUpdatedEvent) extends Message
+
+  def apply(folderToWatch: FolderToWatch, manager: SpiritRef[ReceiveAudioFileCapture])(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[?] = context
+
+    val newFileCreationEventAdapter = context.messageAdapter(AudioPathUpdatedEvent).underlying
+    @unused // receives messages from a thread it creates, we don't send it messages but the adapter lets it reply to us
+    val folderWatcherActor = context.spawn(FolderWatcherActor(folderToWatch.path, newFileCreationEventAdapter), "FolderWatcherActor")
+    Tinker.receiveMessage {
+      case AudioPathUpdatedEvent(PathCreatedEvent(audioPath)) if validPath(audioPath) =>
+        // FIXME: pretty sure this is often wrong, test it!
+        Try(Common.getWavLength(audioPath.toString)) match {
+          case Failure(exception) =>
+            context.actorContext.log.warn(s"Failed to get .wav length for $audioPath", exception)
+          case Success(seconds) =>
+            context.actorContext.log.debug(s"wavPath $audioPath is $seconds seconds long, triggering transcription")
+        }
+
+        if (audioPath.toString.toLowerCase.endsWith(".tmp")) {
+          context.actorContext.log.debug(s"Because it ends with .tmp, ignoring: $audioPath")
+        } else {
+          TimestampExtractor.extractTimestamp(
+            audioPath.getFileName.toString,
+            folderToWatch.pattern, folderToWatch.formatter, folderToWatch.zoneId
+          ) match {
+            case Valid(captureTime) =>
+              manager !! ReceiveAudioFileCapture(captureTime, audioPath)
+            case Invalid(msg) =>
+              context.actorContext.log.error(s"Failed to get capture time for wavPath $audioPath: $msg")
+          }
+        }
+
+        Tinker.steadily
+
+      case AudioPathUpdatedEvent(PathModifiedEvent(modifiedPath)) if validPath(modifiedPath) =>
+        context.actorContext.log.warn(s"Detected but ignoring modified path: $modifiedPath")
+        Tinker.steadily
+
+      case AudioPathUpdatedEvent(PathModifiedEvent(modifiedPath)) =>
+        context.actorContext.log.debug(s"MODIFICATION ${modifiedPath.getFileName} (was this Syncthing doing a partial sync? size=${new File(modifiedPath.toString).length()})")
+        Tinker.steadily
+      case AudioPathUpdatedEvent(other) =>
+        context.actorContext.log.debug(s"Ignoring event $other")
+        Tinker.steadily
+    }
+  }
+}
+
+
+// FIXME: testing
+object TimestampExtractor {
+  def main(args: Array[String]): Unit = {
+    val filename = "mobile_audio_capture_20250906-173527.wav"
+
+//    val offset = ZoneId.of("America/Los_Angeles") //ZoneOffset.ofHours(-7)//doesn't respect seasonal changes
+//    val offset = ZoneId.of(ZoneId.SHORT_IDS.get("MST")) fails
+    //meh
+//    val offset = ZoneId.of("Z")
+//    val offset = ZoneId.of("GMT")
+//    val offset = ZoneId.of("UTC")
+
+//    val offset = ZoneId.of(ZoneId.SHORT_IDS.get("PST"))
+    val zoneId = ZoneId.of("America/Denver")
+//    val offset = ZoneId.of("America/Salt Lake City") (fails)
+
+//    val genericRegexToTest = new Regex("""(\d{8}-\d{6})""")
+//    val genericDateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+
+    val genericRegexToTest = new Regex("""(\d{14})""")
+    val genericDateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+
+    println(TimestampExtractor.extractTimestamp("20260525094231", genericRegexToTest, genericDateTimeFormatter, zoneId))
+  }
+
+  def extractTimestamp(
+                        input: String,
+                        pattern: Regex,
+                        formatter: DateTimeFormatter,
+                        zoneId: ZoneId
+                      ): Validated[String, ZonedDateTime] = {
+    Try {
+      val matchResult = pattern.findFirstMatchIn(input).get
+      val extracted = if (matchResult.groupCount > 0) {
+        matchResult.group(1)
+      } else {
+        matchResult.matched
+      }
+
+      val localDateTime = LocalDateTime.parse(extracted, formatter)
+
+      ZonedDateTime.of(localDateTime, zoneId)
+    } match {
+      case Failure(_: NoSuchElementException) => Invalid(s"regex ($pattern) failed to match")
+      case Failure(e: DateTimeParseException) => Invalid(s"regex succeeded but time parsing failed: ${Common.getStackTraceString(e)}")
+      case Failure(exception: IllegalArgumentException) => Invalid(s"regex succeeded but something went wrong - was the format string valid?- ${Common.getStackTraceString(exception)}")
+      case Failure(exception) => Invalid(s"an exception was thrown unexpectedly ${Common.getStackTraceString(exception)}")
+      case Success(time) => Valid(time)
+    }
+  }
 }
