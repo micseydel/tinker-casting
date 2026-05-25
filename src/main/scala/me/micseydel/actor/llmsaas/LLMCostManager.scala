@@ -1,27 +1,41 @@
-package me.micseydel.actor
+package me.micseydel.actor.llmsaas
 
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
 import me.micseydel.Common.RichNoteRef
 import me.micseydel.actor.FolderWatcherActor.Ping
+import me.micseydel.actor.llmsaas.LLMCostManager.{LLMCostTrackingFailure, LLMCostTrackingResult, LLMCostTrackingSuccess, TrackUse}
 import me.micseydel.dsl.Tinker.Ability
-import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
+import me.micseydel.dsl.tinkerer.{AttentiveNoteMakingTinkerer, NoteMakingTinkerer}
 import me.micseydel.dsl.{SpiritRef, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.util.JsonUtil
 import me.micseydel.vault.persistence.NoteRef
 import me.micseydel.{Common, NoOp}
 import net.jcazevedo.moultingyaml.*
-import spray.json.enrichAny
+import spray.json.{DefaultJsonProtocol, DeserializationException, JsString, JsValue, JsonFormat, RootJsonFormat, enrichAny}
 
+import java.time.ZonedDateTime
 import scala.util.{Failure, Success, Try}
 
 object LLMCostManager {
   sealed trait Message
 
-  private case class ReceiveAnthropic(response: ClaudeActor.Response) extends Message
+  final case class TrackUse(promptId: String, time: ZonedDateTime, provider: String, model: String, result: LLMCostTrackingResult) extends Message
 
+  // FIXME just for the models - maybe create wrappers, with the existing ones as API?
+  private case class ReceiveAnthropic(response: ClaudeActor.Response) extends Message
   private case class ReceiveOpenAI(response: OpenAIActor.Response) extends Message
 
   private case class NotePing(ping: Ping) extends Message
+
+  ///
+
+  sealed trait LLMCostTrackingResult
+
+  final case class LLMCostTrackingFailure(message: String) extends LLMCostTrackingResult
+  final case class LLMCostTrackingSuccess(inputTokens: Int, outputTokens: Int) extends LLMCostTrackingResult
+
+  ///
 
   val NoteName = "LLMCostManager"
   val Emoji = "💸"
@@ -32,6 +46,8 @@ object LLMCostManager {
       implicit val nr: NoteRef = noteRef
 
       noteRef.refreshMarkdown()
+
+      val ledger = context.cast(LLMCostManagerHistory(), "LLMCostManagerHistory")
 
       import YamlProtocol.frontMatterYamlFormat
 
@@ -102,6 +118,10 @@ object LLMCostManager {
           }
 
           Tinker.steadily
+
+        case track@TrackUse(_, _, _, _, _) =>
+          ledger !! track
+          Tinker.steadily
       }
     }
 
@@ -138,7 +158,7 @@ object LLMCostManager {
                           latestRawAnthropic: String,
                           latestRawOpenai: String
                         ) {
-    import SharedDomainJsonProtocol.modelInfoListJsonFormat
+    import me.micseydel.actor.llmsaas.SharedDomainJsonProtocol.modelInfoListJsonFormat
 
     def integrateAnthropic(models: List[ModelInfo]): FrontMatter = {
       this.copy(
@@ -171,6 +191,7 @@ object LLMCostManager {
          |- ...then: update manually using-
          |    - https://claude.com/pricing#api
          |    - https://developers.openai.com/api/docs/pricing
+         |- see also: [[LLMCostManagerHistory]]
          |""".stripMargin
     )
 
@@ -195,5 +216,46 @@ object LLMCostManager {
           validatedConfig
       }
     }
+  }
+}
+
+private object LLMCostManagerHistory {
+
+  private val NoteName = "LLMCostManagerHistory"
+  private val Emoji = "📒"
+
+  def apply()(implicit Tinker: Tinker): Ability[TrackUse] = NoteMakingTinkerer(NoteName, TinkerColor.random(), Emoji) { (context, noteRef) =>
+    import LLMCostManagerHistoryJsonProtocol.trackUseJsonFormat
+    Tinker.receiveMessage {
+      case track@TrackUse(time, _, _, _, _) =>
+        val serialized = track.toJson.compactPrint
+        // FIXME: should de-dupe this, since it can be adding an updated record but the old one is kept
+        noteRef.append(s"- $serialized\n") match {
+          case Failure(exception) => context.actorContext.log.warn(s"Uh oh failed to append cost for inference that started at $time; $serialized", exception)
+          case Success(NoOp) =>
+        }
+        Tinker.steadily
+    }
+  }
+
+  private object LLMCostManagerHistoryJsonProtocol extends DefaultJsonProtocol {
+    import JsonUtil.ZonedDateTimeJsonFormat
+
+    implicit val llmCostTrackingFailureJsonFormat: JsonFormat[LLMCostTrackingFailure] = jsonFormat1(LLMCostTrackingFailure)
+    implicit val llmCostTrackingSuccessJsonFormat: JsonFormat[LLMCostTrackingSuccess] = jsonFormat2(LLMCostTrackingSuccess)
+
+    implicit object LLMCostTrackingResultJsonFormat extends RootJsonFormat[LLMCostTrackingResult] {
+      def write(wm: LLMCostTrackingResult): JsString = JsString(wm.toString)
+
+      def read(value: JsValue): LLMCostTrackingResult = {
+        value.asJsObject.getFields("type") match {
+          case Seq(JsString("LLMCostTrackingFailure")) => value.convertTo[LLMCostTrackingFailure]
+          case Seq(JsString("LLMCostTrackingSuccess")) => value.convertTo[LLMCostTrackingSuccess]
+          case other => throw DeserializationException(s"Unknown type, expected Seq(JsString(_)) for one of {TranscriptionEvent, ReceiveAranetResult} but got $other")
+        }
+      }
+    }
+
+    implicit val trackUseJsonFormat: JsonFormat[TrackUse] = jsonFormat5(TrackUse)
   }
 }
