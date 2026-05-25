@@ -34,14 +34,6 @@ object AppRestartTracker {
       case Success(NoOp) =>
     }
 
-    noteRef.readMarkdown().flatMap { markdown =>
-      // FIXME: quadratic behavior
-      noteRef.setMarkdown(newLine + markdown)
-    } match {
-      case Failure(exception) => context.actorContext.log.warn("Startup tracking failed", exception)
-      case Success(NoOp) =>
-    }
-
     Tinker.ignore
   }
 }
