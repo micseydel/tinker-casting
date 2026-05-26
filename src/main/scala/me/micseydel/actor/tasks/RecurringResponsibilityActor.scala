@@ -197,13 +197,16 @@ object RecurringResponsibilityActor {
                 context.system.notifier !! CompleteNotification(notificationId)
 
                 val today = context.system.clock.today()
-                val nextTrigger = context.system.clock.today().plusDays(config.interval_days)
+                val nextTrigger = today.plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
                 timeKeeper !! TimeKeeper.RemindMeAt(nextTrigger, context.self, MidnightForNextNotificationDayTimer, Some(MidnightForNextNotificationDayTimer))
                 context.actorContext.log.info(s"Prepending today ($today), setting timer for $nextTrigger, and ack'ing as done ${noteRef.noteId}")
                 noteRef.prepend(today, Some(nextTrigger), Some(noteId))
                 val ack = Chronicler.ListenerAcknowledgement(noteId, captureTime.toLocalDate, context.system.clock.now(), "marked as done", Some(AutomaticallyIntegrated))
                 Tinker.userExtension.chronicler !! ack
+
+                // FIXME: refactor so that completion ALWAYS cancels the notification, along with prepending
+                timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy))
               } else {
                 context.actorContext.log.info("Mark as completion request detected, but not a match")
               }
