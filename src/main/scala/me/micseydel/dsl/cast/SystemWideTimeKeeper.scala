@@ -36,7 +36,7 @@ object SystemWideTimeKeeper {
             case MillisUntil(_) => now.plusDays(1)
             case MillisSince(_) => now
           }
-        }.withHour(0).withMinute(0)
+        }.withHour(0).withMinute(0).withSecond(0).withNano(0)
 
         context.log.info(s"Notifying ${subscribers.size} subscribers that it's midnight: $subscribers")
         implicit val sender: Sender = Sender(context.self.path)
