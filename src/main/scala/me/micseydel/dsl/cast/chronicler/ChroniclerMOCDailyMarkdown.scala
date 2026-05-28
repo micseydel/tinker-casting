@@ -46,7 +46,7 @@ object ChroniclerMOCDailyMarkdown {
           val noteId = "Transcription for " + contents.dropRight("|ref]])~~~~".length).split(" ").last
           noteEntry.ref.id == noteId
         case other =>
-          log.warn("CANARY" + other.toString)
+          log.info(s"[CANARY] $other")
           false
       }
       if (exists) {
@@ -82,6 +82,7 @@ object ChroniclerMOCDailyMarkdown {
     }
 
     private def getNoteId(contents: String)(implicit log: Logger): Option[NoteId] = {
+      // FIXME: this is too inflexible, an extra space in the filename causes problems
       ParseUtil.getNoteId(contents.split(' ').takeRight(3).toList) match {
         case Validated.Valid(extractedNoteId: NoteId) => Some(extractedNoteId)
         case Validated.Invalid(e) =>

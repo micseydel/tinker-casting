@@ -77,23 +77,29 @@ object ChroniclerMOCDailyNote {
         case ReceiveMidnight(midnight) =>
           val notesWithoutAck = noteRef.readMarkdownSafer() match {
             case NoteRef.FileDoesNotExist =>
-              context.actorContext.log.warn(s"No transcriptions for $forDate?")
+              context.actorContext.log.warn(s"[CANARY] No transcriptions for $forDate?")
               false
             case NoteRef.Contents(s) =>
               s match {
                 case Failure(exception) =>
-                  context.actorContext.log.warn(s"Unexpected failure for $forDate", exception)
+                  context.actorContext.log.warn(s"[CANARY] Unexpected failure for $forDate", exception)
                   false
-                case Success(value) =>
-                  value.contains("# Notes without acknowledgements")
+                case Success(markdown) =>
+                  val hasNotesWithoutAck = markdown.contains("# Notes without acknowledgements")
+                  context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck")
+                  hasNotesWithoutAck
               }
           }
 
           if (notesWithoutAck) {
             val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
             val id = formatter.format(midnight)
-            val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(s"withoutack-$id"), Nil)
+            val notificationId = s"withoutack-$id"
+            context.actorContext.log.info(s"[CANARY] creating notification $notificationId")
+            val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(notificationId), Nil)
             context.system.notifier !! NotificationCenterManager.NewNotification(notification)
+          } else {
+            context.actorContext.log.info(s"[CANARY] no notes without ack, so not sending any notification")
           }
 
           Tinker.steadily

@@ -97,12 +97,12 @@ private[kitties] object DailyLitterSummaryActor {
 
       maybeUpdatedDocument match {
         case None =>
-          context.actorContext.log.warn(s"(CANARY) no need to update ${noteRef.noteId}")
+          context.actorContext.log.info(s"[CANARY] no need to update ${noteRef.noteId}")
           Tinker.steadily
         case Some(document) =>
           noteRef.setMarkdown(document.toMarkdown) match {
             case Failure(exception) => context.actorContext.log.warn(s"Failed to refresh markdown!", exception)
-            case Success(NoOp) => context.actorContext.log.warn(s"(CANARY) refreshed markdown for ${noteRef.noteId}")
+            case Success(NoOp) => context.actorContext.log.info(s"[CANARY] refreshed markdown for ${noteRef.noteId}")
           }
           val summaryForDay = document.toSummary(parser.day)
           monthlyLitterGraphActor !! summaryForDay
