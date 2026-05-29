@@ -154,7 +154,7 @@ object RecurringResponsibilityActor {
               case (true, Some(Today)) =>
                 val notificationId = noteRef.notificationIdForNoteId()
                 context.system.notifier !! CompleteNotification(notificationId)
-                timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy)) // fire and forget just in case
+                timeKeeper !! TimeKeeper.Cancel(TimeToNtfy) // fire and forget just in case
 
                 context.actorContext.log.info("Button was pushed but there's already an entry for today, clearing button")
                 val triggerDay = Today.plusDays(config.interval_days)
@@ -164,7 +164,7 @@ object RecurringResponsibilityActor {
               case (true, _) =>
                 val notificationId = noteRef.notificationIdForNoteId()
                 context.system.notifier !! CompleteNotification(notificationId)
-                timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy)) // fire and forget just in case
+                timeKeeper !! TimeKeeper.Cancel(TimeToNtfy) // fire and forget just in case
 
                 val nextTrigger = Today.plusDays(config.interval_days)
                 manager !! RecurringResponsibilityManager.Track(noteRef.noteId.id, nextTrigger)
@@ -206,7 +206,7 @@ object RecurringResponsibilityActor {
                 Tinker.userExtension.chronicler !! ack
 
                 // FIXME: refactor so that completion ALWAYS cancels the notification, along with prepending
-                timeKeeper !! TimeKeeper.Cancel(Some(TimeToNtfy))
+                timeKeeper !! TimeKeeper.Cancel(TimeToNtfy)
               } else {
                 context.actorContext.log.info("Mark as completion request detected, but not a match")
               }
