@@ -184,7 +184,7 @@ object RecurringResponsibilityActor {
         Tinker.steadily
 
       case ReceiveTranscription(NotedTranscription(TranscriptionCapture(WhisperResult(whisperResultContent, whisperResultMetadata), captureTime), noteId)) =>
-        context.actorContext.log.info(s"Received transcription $noteId")
+        context.actorContext.log.debug(s"Received transcription $noteId")
         val loweredText = whisperResultContent.text.toLowerCase
 
         config.voice_completion match {
