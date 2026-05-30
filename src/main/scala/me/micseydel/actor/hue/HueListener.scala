@@ -86,6 +86,7 @@ object HueListener {
         if (isStale) {
           log.info(s"Ignored $noteId because it was more than $IgnoredMinutesAgo minutes ago, even though it was a valid light-changing request")
           context.system.notifier !! JustSideEffect(NotificationCenterManager.Chime(ChimeActor.Warning(Material)), Some(("isstale", 1)))
+          Tinker.userExtension.chronicler !! genAckMessage(noteId, capturedTime, model, s"Request was stale")
           Tinker.steadily
         } else {
           validated match {
@@ -156,13 +157,12 @@ object HueListener {
     }
   }
 
-  // FIXME: can chronicler act as a "final" tracker of what happens after voting?!
   private def genAckMessage(noteId: NoteId, captureTime: ZonedDateTime, model: WhisperModel, text: String)(implicit clock: TinkerClock): Chronicler.ListenerAcknowledgement = {
     val ackText = model match {
       case BaseModel =>
-        s"Updated the lights (fast): $text"
+        s"Noticed update to change the lights (fast): $text"
       case LargeModel =>
-        s"Updated the lights (accurate): $text"
+        s"Noticed update to change the lights (accurate): $text"
       case TurboModel => ???
     }
 
