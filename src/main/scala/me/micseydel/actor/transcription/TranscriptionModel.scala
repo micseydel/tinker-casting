@@ -13,7 +13,7 @@ private case class TimedWhisperResult(whisperResult: WhisperResult, startTime: Z
 
 private[transcription] object TranscriptionModel {
   def toMarkdown(messages: List[Message])(capture: NoticedAudioNote): String = {
-    val model = TranscriptionModel.MarkdownModel(capture.wavPath, capture.captureTime, capture.lengthSeconds, capture.transcriptionStartedTime)
+    val model = TranscriptionModel.MarkdownModel(capture.audioFilePath, capture.captureTime, capture.lengthSeconds, capture.transcriptionStartedTime)
 
     messages.foldRight(model) { (message, accumulatingResult) =>
       message match {

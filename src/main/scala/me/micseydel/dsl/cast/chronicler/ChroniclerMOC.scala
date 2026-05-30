@@ -11,25 +11,14 @@ import java.time.{DateTimeException, LocalDate, ZonedDateTime}
 object ChroniclerMOC {
 
   sealed trait Message {
-    def time: ZonedDateTime
-
-    //    def key: String
+    def forDay: LocalDate
   }
 
-  /**
-   * Idempotent - keyed off of noteEntry.time
-   */
   case class AddNote(noteEntry: TranscribedMobileNoteEntry) extends Message {
-    override def time: ZonedDateTime = noteEntry.time
-
-    //    override def key: String = time.toString // Common.zonedDateTimeToISO8601Date(time)
+    override def forDay: LocalDate = noteEntry.time.toLocalDate
   }
 
-  case class ListenerAcknowledgement(noteRef: NoteId, forDay: LocalDate, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends Message {
-    override def time: ZonedDateTime = timeOfAck
-
-    //    override def key: String = s"${Common.zonedDateTimeToISO8601Date(time)}"
-  }
+  case class ListenerAcknowledgement(noteRef: NoteId, forDay: LocalDate, timeOfAck: ZonedDateTime, details: String, setState: Option[NoteState]) extends Message
 
   // note state
 
@@ -48,7 +37,7 @@ object ChroniclerMOC {
 
   private def behavior(noteKeepers: Map[LocalDate, SpiritRef[ChroniclerMOCDailyNote.MarkdownMutatingMessage]])(implicit Tinker: Tinker): Ability[Message] =
     Tinker.receive { (context, incomingMessage) =>
-      val day = incomingMessage.time.toLocalDate
+      val day = incomingMessage.forDay
 
       val outgoingMessage: ChroniclerMOCDailyNote.MarkdownMutatingMessage = incomingMessage match {
         case AddNote(noteEntry) =>

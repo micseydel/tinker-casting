@@ -26,7 +26,7 @@ object TranscriptionNoteWrapper {
     setup(capture, listener)
 
   private def setup(capture: NoticedAudioNote, listener: SpiritRef[Chronicler.ReceiveNotedTranscription])(implicit Tinker: Tinker): Ability[Message] = {
-    val transcriptionNoteName = AudioNoteCapturerHelpers.transcriptionNoteName(capture.wavPath)
+    val transcriptionNoteName = AudioNoteCapturerHelpers.transcriptionNoteName(capture.audioFilePath)
     val jsonFilenameWithoutExtension = transcriptionNoteName.replace(" ", "_").toLowerCase
     Tinker.withPersistedMessages(jsonFilenameWithoutExtension, TranscriptionMessageListJsonProtocol.TranscriptionNoteWrapperMessageJsonFormat) { jsonlRef =>
       NoteMakingTinkerer[Message](transcriptionNoteName, TinkerColor.Purple, "🎵") { (context, noteRef) =>

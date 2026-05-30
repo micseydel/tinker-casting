@@ -141,7 +141,7 @@ object AudioNoteCapturer {
 
   // model
 
-  case class NoticedAudioNote(wavPath: Path, captureTime: ZonedDateTime, lengthSeconds: Double, transcriptionStartedTime: ZonedDateTime)
+  case class NoticedAudioNote(audioFilePath: Path, captureTime: ZonedDateTime, lengthSeconds: Double, transcriptionStartedTime: ZonedDateTime)
 
   case class RawFolderToWatch(path: String, regex: String, javaStringFormat: String, timeZone: String)
 

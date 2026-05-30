@@ -38,7 +38,7 @@ object Chronicler {
 
   case class ListenerAcknowledgement(noteId: NoteId, noteCreationDate: LocalDate, timeOfAck: ZonedDateTime, details: String, setNoteState: Option[NoteState]) extends Message
 
-//  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
+  //  final case class ReceiveWavFile(filename: String, bytes: Array[Byte]) extends Message
 
   final case class ReceiveNotePing(ping: Ping) extends Message
 
@@ -52,15 +52,15 @@ object Chronicler {
   private val Topic = s"[[$NoteName]]"
 
   private def initializing(
-                        vaultRoot: VaultPath,
-                        gossiper: SpiritRef[Gossiper.Message]
-                      )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(135, 206, 235), "✍️", ReceiveNotePing, Some("_actor_notes")) { case (context, noteRef) =>
+                            vaultRoot: VaultPath,
+                            gossiper: SpiritRef[Gossiper.Message]
+                          )(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](NoteName, rgb(135, 206, 235), "✍️", ReceiveNotePing, Some("_actor_notes")) { case (context, noteRef) =>
+    implicit val tc: TinkerContext[_] = context
 
     context.system.mqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
 
-    // FIXME: remove noteref if it stays unused
-    implicit val tc: TinkerContext[_] = context
     context.self !! ReceiveNotePing(NoOp) // bootstrap
+
     Tinker.receiveMessage {
       case ReceiveNotePing(_) =>
         finishInitializing(vaultRoot, gossiper)
@@ -72,10 +72,9 @@ object Chronicler {
   }
 
   private def finishInitializing(
-                        vaultRoot: VaultPath,
-                        gossiper: SpiritRef[Gossiper.Message]
-                      )(implicit Tinker: Tinker): Ability[Message] =  Tinker.setup { context =>
-    // FIXME: I can send voice files to Chronicler, who can pass it to this
+                                  vaultRoot: VaultPath,
+                                  gossiper: SpiritRef[Gossiper.Message]
+                                )(implicit Tinker: Tinker): Ability[Message] = Tinker.setup { context =>
     @unused
     val audioNoteCapturer: ActorRef[AudioNoteCapturer.Message] = context.spawn(AudioNoteCapturer(
       vaultRoot, context.self.underlying
@@ -91,38 +90,41 @@ object Chronicler {
                        gossiper: SpiritRef[Gossiper.Message],
                        moc: ActorRef[ChroniclerMOC.Message],
                        audioNoteCapturer: ActorRef[AudioNoteCapturer.Message]
-                      ): Ability[Message] =  Tinker.setup { context =>
+                      ): Ability[Message] = Tinker.setup { context =>
     context.actorContext.log.info(s"Currently have ${wavNameToTranscriptionNoteOwner.size} elements")
     Tinker.receiveMessage { message =>
       implicit val c: TinkerContext[_] = context
       context.actorContext.log.debug(s"Chronicler received message $message")
       message match {
-        case e@TranscriptionStartedEvent(capture@NoticedAudioNote(wavPath, captureTime, durationSeconds, transcriptionStartedTime)) =>
-          context.actorContext.log.info(s"$e")
+        case e@TranscriptionStartedEvent(capture@NoticedAudioNote(audioFilePath, captureTime, durationSeconds, transcriptionStartedTime)) =>
+          val audioFileName = audioFilePath.getFileName.toString
+          if (!audioFileName.startsWith(".")) {
+            context.actorContext.log.info(s"$e")
+            val updatedNoteNameToTranscriptionNoteOwner: Map[String, SpiritRef[TranscriptionNoteWrapper.Message]] = wavNameToTranscriptionNoteOwner.get(audioFileName) match {
+              case Some(wrapper) =>
+                // FIXME: kinda hacky, but let's just not send any redundant events to the wrapper for now (though later)
+                wavNameToTranscriptionNoteOwner
+              case None =>
+                val name = s"TranscriptionNoteWrapper_${audioFilePath.getFileName.toString.slice(21, 36)}"
+                val behavior = TranscriptionNoteWrapper(capture, context.self)
+                context.actorContext.log.debug(
+                  s"Creating note wrapper actor with name $name (wavPath $audioFilePath); " +
+                    s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(audioFileName)}")
+                try {
+                  val wrapper = context.cast(behavior, name)
+                  wavNameToTranscriptionNoteOwner.updated(audioFileName, wrapper)
+                } catch {
+                  case _: InvalidActorNameException =>
+                    context.actorContext.log.error(s"Failed to create already-existing actor name $name for wav $audioFileName; ignoring, but this should be looked into")
+                    wavNameToTranscriptionNoteOwner
+                }
+            }
 
-          val wavName = wavPath.getFileName.toString
-
-          val updatedNoteNameToTranscriptionNoteOwner: Map[String, SpiritRef[TranscriptionNoteWrapper.Message]] = wavNameToTranscriptionNoteOwner.get(wavName) match {
-            case Some(wrapper) =>
-              // FIXME: kinda hacky, but let's just not send any redundant events to the wrapper for now (though later)
-              wavNameToTranscriptionNoteOwner
-            case None =>
-              val name = s"TranscriptionNoteWrapper_${wavPath.getFileName.toString.slice(21, 36)}"
-              val behavior = TranscriptionNoteWrapper(capture, context.self)
-              context.actorContext.log.debug(
-                s"Creating note wrapper actor with name $name (wavPath $wavPath); " +
-                  s"already in wavNameToTranscriptionNoteOwner? ${wavNameToTranscriptionNoteOwner.contains(wavName)}")
-              try {
-                val wrapper = context.cast(behavior, name)
-                wavNameToTranscriptionNoteOwner.updated(wavName, wrapper)
-              } catch {
-                case _: InvalidActorNameException =>
-                  context.actorContext.log.warn(s"Failed to create already-existing actor name $name for wav $wavName")
-                  wavNameToTranscriptionNoteOwner
-              }
+            behavior(updatedNoteNameToTranscriptionNoteOwner)
+          } else {
+            Tinker.steadily
           }
 
-          behavior(updatedNoteNameToTranscriptionNoteOwner)
 
         case TranscriptionCompletedEvent(result) =>
           val wavName = Path.of(result.whisperResultMetadata.vaultPath).getFileName.toString
@@ -131,8 +133,6 @@ object Chronicler {
               context.actorContext.log.info(s"Tried to update transcription for $wavName but it wasn't in $wavNameToTranscriptionNoteOwner")
               Tinker.steadily
             case Some(ref) =>
-              // FIXME: new ChroniclerMOCActor, has an AmendLine(captureTime) message
-              //                ChroniclerMOC.AppendToLine(captureTime, contents)
               context.actorContext.log.info(s"Notifying wrapper actor for $wavName of transcription completion")
               ref !! TranscriptionNoteWrapper.TranscriptionCompletedEvent(result)
               Tinker.steadily
@@ -163,10 +163,6 @@ object Chronicler {
           context.actorContext.log.warn("Ignoring note ping")
           Tinker.steadily
 
-//        case ReceiveWavFile(filename, bytes) =>
-//          audioNoteCapturer ! AudioNoteCapturer.ReceiveWavFile(filename, bytes)
-//          Tinker.steadily
-
         case ReceiveMqtt(MqttMessage(Topic, payload)) =>
           Try(new String(payload).parseJson.convertTo[ListenerAcknowledgement]) match {
             case Failure(exception) => context.actorContext.log.warn(s"mqtt message deserialization failed of size ${payload.length}", exception)
@@ -185,10 +181,12 @@ object Chronicler {
   }
 
   object ChroniclerJsonProtocol extends DefaultJsonProtocol {
+
     import me.micseydel.dsl.cast.chronicler.ChroniclerMOC.NoteStateJsonFormat
     import me.micseydel.util.JsonUtil.ZonedDateTimeJsonFormat
     import me.micseydel.vault.LinkIdJsonProtocol.noteIdFormat
     import me.micseydel.util.JsonUtil.CommonJsonProtocol.LocalDateTypeJsonFormat
+
     implicit val listenerAcknowledgementJsonFormat: JsonFormat[ListenerAcknowledgement] = jsonFormat5(ListenerAcknowledgement(_, _, _, _, _))
   }
 
