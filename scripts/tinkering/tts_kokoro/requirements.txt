@@ -1,2 +1,4 @@
-kokoro>=0.9.4
-soundfile
+kokoro==0.9.4
+soundfile==0.13.1
+paho-mqtt==2.1.0
+watchdog==6.0.0
