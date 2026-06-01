@@ -244,7 +244,7 @@ object ArchivalGroceryNoteActor {
 
   def apply(noteName: String)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer(noteName, TinkerColor.random(), "✅️") { (context, noteRef) =>
     Tinker.receiveMessage {
-      case AddContents(lines, maybeThreadId) =>
+      case AddContents(lines, maybeGmailHyperlink) =>
         val toAppend = lines.mkString("\n")
 
         noteRef.readMarkdown().flatMap { markdown =>
@@ -257,8 +257,8 @@ object ArchivalGroceryNoteActor {
           }
         }.recoverWith {
           case _: FileNotFoundException =>
-            noteRef.setMarkdown(maybeThreadId match {
-              case Some(threadId) => s"- ([gmail](https://mail.google.com/mail/u/0/#inbox/$threadId))\n" + toAppend
+            noteRef.setMarkdown(maybeGmailHyperlink match {
+              case Some(url) => s"- ([gmail]($url))\n" + toAppend
               case None => toAppend
             })
         }
