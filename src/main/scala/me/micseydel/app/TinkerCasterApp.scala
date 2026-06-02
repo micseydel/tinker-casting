@@ -129,6 +129,8 @@ object UserTinkerCast {
 
     context.cast(PlansNotifierActor(), "PlansNotifierActor")
 
+    context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
+
     Tinker.receiveMessage {
       case NoOp =>
         context.actorContext.log.warn("didn't expect to receive a message")

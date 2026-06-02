@@ -3,11 +3,13 @@ package me.micseydel.actor
 import me.micseydel.NoOp
 import FolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, TypedMqtt}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
+import java.nio.file.Path
 import javax.sound.sampled.{AudioFormat, Clip, DataLine, Mixer, AudioSystem as JVMAudioSystem}
 import scala.util.{Failure, Success, Try}
 
@@ -18,13 +20,19 @@ object SoundPlayerActor {
 
   final case class ReceiveNotePing(ping: Ping) extends Message
 
+  private case class ReceiveMqtt(mqttMessage: MqttMessage) extends Message
+
   def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player", TinkerColor.random(), "🎙️", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
+    implicit val tc: TinkerContext[?] = context
     context.actorContext.log.info("Refreshing note Markdown")
     noteRef.refreshNote(None)
 
+    val topic = noteRef.noteId.toString
+    context.actorContext.log.info(s"Subscribing to mqtt topic $topic")
+    context.system.mqtt ! TypedMqtt.Subscribe(topic, context.messageAdapter(ReceiveMqtt).underlying)
+
     Tinker.receiveMessage {
       case PlaySound(path) =>
-
         noteRef.getPreferredDevice() match {
           case Failure(exception) => throw exception
           case Success(maybeUserPreferredDevice) =>
@@ -38,7 +46,6 @@ object SoundPlayerActor {
 
             Tinker.steadily
         }
-
 
       case ReceiveNotePing(_) =>
         noteRef.checkForNoteUpdates().flatMap {
@@ -57,6 +64,12 @@ object SoundPlayerActor {
           case Success(_) =>
         }
 
+        Tinker.steadily
+
+      case ReceiveMqtt(MqttMessage(topic, payload)) =>
+        val path = Path.of(new String(payload)) // FIXME: should use json or something instead
+        context.actorContext.log.info(s"Playing sound for $path")
+        context.self !! PlaySound(path.toString)
         Tinker.steadily
     }
   }

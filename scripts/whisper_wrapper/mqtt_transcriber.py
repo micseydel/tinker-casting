@@ -126,6 +126,7 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
     print_with_time(f"Starting long-runnning process with pid {pid}, mqtt client id {client_id} and process title {proc_title}")
     try:
         transcriber = Transcriber(model_choice)
+        # FIXME: this needs to run a .loop_start() to prevent the dropping issues!!! (will probably re-use the kokoro pythonactor tinkering)
         mqtt_manager = MqttManager(q, client_id, broker, port, username, password)
     except Exception:
         print_with_time(f"Something went wrong starting the transcriber: {traceback.format_exc()}")
@@ -220,7 +221,7 @@ def run():
     
     worker = Process(target=long_running, args=(q, model_choice, broker, port, username, password, client_num))
     worker.start()
-    
+
     try:
         mqtt_manager.loop_forever()
     except KeyboardInterrupt:
