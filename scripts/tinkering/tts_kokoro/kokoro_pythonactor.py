@@ -188,7 +188,7 @@ class PythonActor:
         logging.info("[PythonActor] initialized")
 
     def setup(self, mqtt_q):
-        logging.info("[PythonActor.setup] initializing kokoro.KPipeline...")
+        logging.info("[PythonActor.setup] initializing kokoro.KPipeline...\n")
         self.pipeline = KPipeline(lang_code='a')
         logging.info("[PythonActor.setup] initialized kokoro.KPipeline :)")
         self.yaml = YAML(typ='safe')
@@ -202,17 +202,17 @@ class PythonActor:
         if isinstance(message, FileModifiedEvent) and message.src_path == self.note_path:
             logging.info(f"[PythonActor.on_message] Received FileModifiedEvent for self note [[{NOTE_NAME}]]")
             self.mqtt_q.publish("test/PythonActor/output", f"Modified detected ~{ctime()}")
-            self.f()
+            self.run_kokoro_with_frontmatter()
         else:
             logging.info(f"[PythonActor.on_message] Received {message}")
 
-    def f(self):
+    def run_kokoro_with_frontmatter(self):
         with open(self.note_path) as f:
             #presumptuous, poor error handling
             try:
                 next(f) # discard "---"
             except StopIteration:
-                logging.exception(f"No lines in {self.note_path}? (weird bug, wtf)")
+                logging.exception(f"No lines in {self.note_path}? (weird bug, wtf... Python seems to catch more events than Java, does Obsidian BRIEFLY clear it or something?)")
                 return
             json_lines = []
             for line in f:
@@ -221,12 +221,14 @@ class PythonActor:
             first_markdown_line = next(f)
             if first_markdown_line[3] == 'x':
                 logging.info("Trigger detected!")
-                # FIXME: how to retain comments?
+                # FIXME: how to retain comments on edit? I have to ALSO detect Obsidian clobbering them, and replace them... dotfiles? (haven't used those in my system yet...) git? library or actor? stateful?
                 config = self.yaml.load("\n".join(json_lines))
             else: return
 
+            # FIXME: hash+cache? (oooh - demo would show second time is faster)
             voice = config["voice"]
             text = config["text"]
+
             output_dir = config["output_dir"]
             play_after_creation = config.get("play_after_creation", False)
 
@@ -247,6 +249,7 @@ class PythonActor:
 
 
 if __name__ == "__main__":
+    # FIXME: technically this is problematic because it can interlaced with the process started by the runner
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')

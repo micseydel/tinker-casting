@@ -54,6 +54,7 @@ class EventHandler(FileSystemEventHandler):
 
 # FIXME: wrap this q
 def long_running(note_dir, note_path, actor_factory, q, mqtt_q):
+    # FIXME: technically this is problematic because it can be interlaced with the logging done by the main process
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
@@ -82,8 +83,6 @@ def long_running(note_dir, note_path, actor_factory, q, mqtt_q):
             python_actor.on_message(incoming_data)
         except:
             logging.exception("There was an exception while processing a message")
-
-        # print(4, ctime())
 
 
 def runner(mqtt_config, note_dir, note_path, actor_factory):
