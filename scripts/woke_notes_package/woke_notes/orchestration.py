@@ -2,22 +2,22 @@ import logging
 import os
 
 import pykka
-
 from watchdog.events import FileModifiedEvent
 
-from woke_note import WokeNote
-from wrappers.file_watcher import VaultWatcher, FolderWatcher, VaultNoteSubscription
-from wrappers.external_messages import ExternalMessages, MqttSubscription
+from literate_note import LiterateNote
 from note_api import NoteAPI
+from wrappers.external_messages import ExternalMessages, MqttSubscription
+from wrappers.file_watcher import VaultWatcher, FolderWatcher, VaultNoteSubscription
 
 
 def formatted_note_contents(woke_notes) -> str:
-    formatted_woke_notes = "\n".join(f"    - [[{note}]]\n" for note in woke_notes)
+    # fixme when I have non-literate WokeNotes, include them as a separate section
+    formatted_woke_notes = "\n".join(f"    - [[{note}]]" for note in woke_notes)
     return f"""- [ ] (inert button to later gate hot reloading)
 - see also:
     - [[Woke Notes Mqtt Orchestrator]]
     - [[Woke Notes VaultWatcher]]
-- woke notes-
+- Literate Notes:
 {formatted_woke_notes}"""
 
 
@@ -55,9 +55,9 @@ class Orchestrator(pykka.ThreadingActor):
         # FIXME: populate a note that doesn't start the hotreloading until a button is pushed
 
         for note_name in note_names_for_scripts:
-            self.woke_notes[note_name] = WokeNote.start(self.vault_path, self.scripts_dir, note_name, self.mqtt)
-            self.vault_watcher.tell(VaultNoteSubscription(note_name, self.woke_notes[note_name]))
             topic = f"{self.vault_name}/[[{note_name}]]"
+            self.woke_notes[note_name] = LiterateNote.start(self.vault_path, self.scripts_dir, note_name, self.mqtt, topic)
+            self.vault_watcher.tell(VaultNoteSubscription(note_name, self.woke_notes[note_name]))
             self.mqtt.tell(MqttSubscription(topic, self.woke_notes[note_name]))
             logging.info(f"Subscribed [[{note_name}]] to topic {topic}")
 

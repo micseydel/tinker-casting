@@ -78,8 +78,6 @@ class ExternalMessages(pykka.ThreadingActor):
         self.my_note.set_contents(f"- started {ctime()}\n")
 
     def on_receive(self, msg):
-        logging.info(f"received {msg}")
-
         if isinstance(msg, MqttSubscription):
             self.mqtt_client.subscribe(msg.topic)
             self.subscribers[msg.topic].add(msg.subscriber)
