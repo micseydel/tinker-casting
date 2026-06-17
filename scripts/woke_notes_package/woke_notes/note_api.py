@@ -1,4 +1,5 @@
 import logging
+from time import ctime
 
 from ruamel.yaml import YAML
 
@@ -47,6 +48,30 @@ class NoteAPI:
         else:
             return None
 
+    def reset_button_at_start_of_markdown(self):
+        with open(self.note_path) as f:
+            frontmatter_start = next(f)
+            if frontmatter_start != "---\n":
+                logging.warning(f"Expected frontmatter but first line was {frontmatter_start}")
+                return None
+
+            frontmatter_lines = []
+            for line in f:
+                if line == "---\n":
+                    # done with frontmatter
+                    break
+                frontmatter_lines.append(line)
+
+            frontmatter = ''.join(frontmatter_lines)
+            markdown_lines = list(f)
+            markdown_lines[0] = markdown_lines[0].replace("- [x]", "- [ ]")
+
+        with open(self.note_path, 'w') as f:
+            f.write(
+                f"""---
+{frontmatter}---
+{''.join(markdown_lines)}""")
+
     def upsert_markdown(self, upserter):
         with open(self.note_path) as f:
             frontmatter_start = next(f)
@@ -91,3 +116,6 @@ class NoteAPI:
         frontmatter = ''.join(frontmatter_lines)
 
         return self.yaml.load(frontmatter)
+
+    def append_timestamped_markdown_list_line(self, line):
+        self.append(f"- \\[{ctime()}] {line}\n")

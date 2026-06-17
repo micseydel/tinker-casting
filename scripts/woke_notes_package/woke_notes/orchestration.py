@@ -1,19 +1,30 @@
-import logging
 import os
+
+import logging
 
 import pykka
 from watchdog.events import FileModifiedEvent
 
+from DemonNotes import DemonNotesManager
 from literate_note import LiterateNote
 from note_api import NoteAPI
-from wrappers.external_messages import ExternalMessages, MqttSubscription
+from wrappers.external_messages import ExternalMessages, MqttSubscription, MqttPublish
 from wrappers.file_watcher import VaultWatcher, FolderWatcher, VaultNoteSubscription
 
 
-def formatted_note_contents(woke_notes) -> str:
+def formatted_note_contents(woke_notes, include_demon_note: bool) -> str:
     # fixme when I have non-literate WokeNotes, include them as a separate section
     formatted_woke_notes = "\n".join(f"    - [[{note}]]" for note in woke_notes)
-    return f"""- [ ] (inert button to later gate hot reloading)
+    if include_demon_note:
+        return f"""- [ ] (inert button to later gate hot reloading)
+        - see also:
+            - [[Woke Notes Mqtt Orchestrator]]
+            - [[Woke Notes VaultWatcher]]
+            - ==[[Demon Notes]]==
+        - Literate Notes:
+        {formatted_woke_notes}"""
+    else:
+        return f"""- [ ] (inert button to later gate hot reloading)
 - see also:
     - [[Woke Notes Mqtt Orchestrator]]
     - [[Woke Notes VaultWatcher]]
@@ -35,6 +46,7 @@ class Orchestrator(pykka.ThreadingActor):
         # rstrip() here is a hacky way to get os.path.split to treat the directory like a file
         self.vault_name = os.path.split(vault_path.rstrip("/"))[1]
         self.mqtt_config = mqtt_config
+        self.demon_notes_manager = None
 
         self.woke_notes = {}  # from note name to ActorRef
 
@@ -60,8 +72,11 @@ class Orchestrator(pykka.ThreadingActor):
             self.vault_watcher.tell(VaultNoteSubscription(note_name, self.woke_notes[note_name]))
             self.mqtt.tell(MqttSubscription(topic, self.woke_notes[note_name]))
             logging.info(f"Subscribed [[{note_name}]] to topic {topic}")
+        deploy_demon_notes = os.path.isfile(os.path.join(self.vault_path, "Demon Notes.md"))
+        self.my_note.set_contents(formatted_note_contents(self.woke_notes.keys(), deploy_demon_notes))
 
-        self.my_note.set_contents(formatted_note_contents(self.woke_notes.keys()))
+        if deploy_demon_notes:
+            self.demon_notes_manager = DemonNotesManager.start(self.vault_path, self.mqtt, self.vault_watcher)
 
     def on_receive(self, message):
         if isinstance(message, FileModifiedEvent):
@@ -80,3 +95,4 @@ class Orchestrator(pykka.ThreadingActor):
 
     def on_stop(self):
         pass
+

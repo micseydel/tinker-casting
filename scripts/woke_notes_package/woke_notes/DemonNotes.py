@@ -1,22 +1,52 @@
+import logging
 import os
 import time
 import json
-import logging
 
+import pykka
 from watchdog.events import FileModifiedEvent
 
 from woke_note import WokeNote
-from wrappers.external_messages import MqttPublish
+from wrappers.external_messages import MqttPublish, MqttSubscription
+from wrappers.file_watcher import VaultNoteSubscription
 
 
-# hot-reload variant of WokeNote
-class LiterateNote(WokeNote):
-    def __init__(self, vault_path, scripts_dir, note_name, mqtt, default_topic):
-        super().__init__(vault_path, note_name, mqtt, default_topic)
-        self.scripts_dir = scripts_dir
-        self.script_path = os.path.join(scripts_dir, f"{note_name}.py")
-        self.default_topic = default_topic
+class DemonNotesManager(pykka.ThreadingActor):
+    def __init__(self, vault_path, mqtt, vault_watcher):
+        super().__init__()
+        self.note_name = "Demon Notes"
+        self.note_path = os.path.join(vault_path, f"{self.note_name}.md")
 
+        self.mqtt = mqtt
+        self.vault_watcher = vault_watcher
+        self.vault_path = vault_path
+        self.vault_name = os.path.split(vault_path.rstrip("/"))[1]
+
+    def on_start(self):
+        super().on_start()
+
+        to_spawn = []
+        with open(self.note_path) as f:
+            for line_number, line in enumerate(f, 1):
+                if not (line.startswith("- [[") and line.endswith("]]\n")):
+                    logging.info(f"Expected a list of wikilinks but line {line_number} was {line}")
+                    return
+                to_spawn.append(line[4:-3])
+
+        for note_name in to_spawn:
+            topic = f"{self.vault_name}/[[{note_name}]]"
+            demon = DemonNote.start(self.vault_path, note_name, self.mqtt)
+            self.vault_watcher.tell(VaultNoteSubscription(note_name, demon))
+            self.mqtt.tell(MqttSubscription(topic, demon))
+
+
+class DemonNote(WokeNote):
+    def __init__(self, vault_path, note_name, mqtt):
+        self.vault_name = os.path.split(vault_path.rstrip("/"))[1]
+        super().__init__(vault_path, note_name, mqtt, f"{self.vault_name}/[[{note_name}]]")
+        self.script_path = None
+
+    # FIXME: this was copy-paste from LiterateNote, think more about it
     def on_start(self):
         # defines note_api
         super().on_start()
@@ -37,16 +67,17 @@ class LiterateNote(WokeNote):
 
             "my_note": self.note_api,
             # DSL and lifecycle tinkering - to be expanded as needed
-            "default_topic": self.default_topic,
+            "default_topic": self.topic,
             "on_mqtt_message": lambda topic, message: None,
             "on_note_modified": lambda: None,
             "on_start": lambda: None,
             "on_timer": lambda payload: None,
-            # FIXME: set_timer and on_timer?
         }
 
+        self.script_path = f"{self.note_path}#Code"
+
         self.compiled_script = None
-        self.__load_script_from_disk()
+        self.__load_script_from_note()
         try:
             self.script_scope["on_start"]()
         except Exception as e:
@@ -68,7 +99,7 @@ class LiterateNote(WokeNote):
                 logging.exception(f"on_mqtt_message call failed", e)
         elif message == "SCRIPT_MODIFIED":
             logging.info(f"Hot reloading [[{self.note_name}]]")
-            self.__load_script_from_disk()
+            self.__load_script_from_note()
         else:
             try:
                 message_type, payload = message
@@ -82,9 +113,27 @@ class LiterateNote(WokeNote):
             except ValueError:
                 logging.warning(f"Unexpected type {type(message)} {message}")
 
-    def __load_script_from_disk(self):
-        with open(self.script_path) as f:
-            script = f.read()
+    def __load_script_from_note(self):
+        with open(self.note_path) as f:
+            # consume until the right header
+            for line in f:
+                if line == "# Code\n":
+                    break
+
+            # consume until the code
+            for line in f:
+                if line == "```python\n":
+                    break
+
+            script_lines = []
+            for line in f:
+                if line == "```\n":
+                    break
+                else:
+                    script_lines.append(line)
+
+            script = "".join(script_lines)
+            logging.info(f"Using script:\n```{script}```")
 
         try:
             self.compiled_script = compile(script, self.script_path, "exec")

@@ -70,7 +70,11 @@ class WokeNote(pykka.ThreadingActor):
 
     # util
 
-    def _delayed_function_call(self, seconds, function):
-        threading.Timer(seconds, function).start()
+    def set_timer(self, delay_seconds: float, payload: bytes):
+        # FIXME test; also realistically need a key or label or something
+        threading.Timer(delay_seconds, lambda: self.actor_ref.tell(("TIMER", payload))).start()
+
+    # def _delayed_function_call(self, seconds, function):
+    #     threading.Timer(seconds, function).start()
 
 

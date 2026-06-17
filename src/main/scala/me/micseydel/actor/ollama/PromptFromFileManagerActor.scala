@@ -82,13 +82,13 @@ object PromptFromFileManagerActor {
         noteRef.append(
           s"""## Response
              |
-             |> [!abstract] Metadata
-             |> - total_duration: ${total_duration / 1000 / 1000}s
-             |> - load_duration: ${load_duration / 1000 / 1000}s
+             |> [!abstract] Metadata (completed ${context.system.clock.now().toString.dropRight(31)})
+             |> - total_duration: $total_duration
+             |> - load_duration: $load_duration
              |> - prompt_eval_count: $prompt_eval_count
-             |> - prompt_eval_duration: ${prompt_eval_duration / 1000 / 1000}s
+             |> - prompt_eval_duration: $prompt_eval_duration
              |> - eval_count: $eval_count
-             |> - eval_duration: ${eval_duration / 1000 / 1000}s
+             |> - eval_duration: $eval_duration
              |
              |$text
              |""".stripMargin)
