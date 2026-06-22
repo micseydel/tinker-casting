@@ -1,98 +1,44 @@
-import os
-
 import logging
+import os
+from time import ctime
 
-import pykka
-from watchdog.events import FileModifiedEvent
-
-from DemonNotes import DemonNotesManager
-from literate_note import LiterateNote
-from note_api import NoteAPI
-from wrappers.external_messages import ExternalMessages, MqttSubscription, MqttPublish
-from wrappers.file_watcher import VaultWatcher, FolderWatcher, VaultNoteSubscription
+from literate_note import LiterateNotesManager
+from scripted_note import ScriptedNotesOrchestrator
+from woke_note import WokeNote
 
 
-def formatted_note_contents(woke_notes, include_demon_note: bool) -> str:
-    # fixme when I have non-literate WokeNotes, include them as a separate section
-    formatted_woke_notes = "\n".join(f"    - [[{note}]]" for note in woke_notes)
-    if include_demon_note:
-        return f"""- [ ] (inert button to later gate hot reloading)
-        - see also:
-            - [[Woke Notes Mqtt Orchestrator]]
-            - [[Woke Notes VaultWatcher]]
-            - ==[[Demon Notes]]==
-        - Literate Notes:
-        {formatted_woke_notes}"""
-    else:
-        return f"""- [ ] (inert button to later gate hot reloading)
-- see also:
-    - [[Woke Notes Mqtt Orchestrator]]
-    - [[Woke Notes VaultWatcher]]
-- Literate Notes:
-{formatted_woke_notes}"""
-
-
-class Orchestrator(pykka.ThreadingActor):
-    def __init__(self, mqtt_config, vault_path, scripts_dir):
+class Orchestrator(WokeNote):
+    def __init__(self, note_name, scripts_dir, *args, **kwargs):
         # this runs in the spawner's context, whereas on_start runs in the actor thread
-        super().__init__()
-        self.my_note = None
-        self.vault_watcher = None
-        self.scripts_watcher = None
-        self.mqtt = None
+        super().__init__(note_name, *args, **kwargs)
 
-        self.vault_path = vault_path
         self.scripts_dir = scripts_dir
-        # rstrip() here is a hacky way to get os.path.split to treat the directory like a file
-        self.vault_name = os.path.split(vault_path.rstrip("/"))[1]
-        self.mqtt_config = mqtt_config
-        self.demon_notes_manager = None
-
-        self.woke_notes = {}  # from note name to ActorRef
 
     def on_start(self):
-        self.my_note = NoteAPI(os.path.join(self.vault_path, "Woke Notes Orchestrator.md"))
-        self.vault_watcher = VaultWatcher.start(self.vault_path)
-        self.scripts_watcher = FolderWatcher.start(self.scripts_dir, ".py", self.actor_ref)
-        self.mqtt = ExternalMessages.start(self.mqtt_config, os.path.join(self.vault_path, "Woke Notes Mqtt Orchestrator.md"))
-
         logging.basicConfig(level=logging.INFO,
                             format='%(asctime)s - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
+        super().on_start()
 
-        python_scripts = [script for script in os.listdir(self.scripts_dir) if script.lower().endswith(".py")]
-        note_names_for_scripts = [os.path.splitext(script)[0] for script in python_scripts]
+        ScriptedNotesOrchestrator_note_name = "ScriptedNotesOrchestrator"
+        LiterateNotesManager_note_name = "LiterateNotesManager (EXPERIMENTAL)"
 
-        logging.info(f"Starting with scripts {python_scripts}; spawning WokeNotes now")
-        # FIXME: populate a note that doesn't start the hotreloading until a button is pushed
+        ScriptedNotesOrchestrator.wake(ScriptedNotesOrchestrator_note_name, scripts_dir=self.scripts_dir)
 
-        for note_name in note_names_for_scripts:
-            topic = f"{self.vault_name}/[[{note_name}]]"
-            self.woke_notes[note_name] = LiterateNote.start(self.vault_path, self.scripts_dir, note_name, self.mqtt, topic)
-            self.vault_watcher.tell(VaultNoteSubscription(note_name, self.woke_notes[note_name]))
-            self.mqtt.tell(MqttSubscription(topic, self.woke_notes[note_name]))
-            logging.info(f"Subscribed [[{note_name}]] to topic {topic}")
-        deploy_demon_notes = os.path.isfile(os.path.join(self.vault_path, "Demon Notes.md"))
-        self.my_note.set_contents(formatted_note_contents(self.woke_notes.keys(), deploy_demon_notes))
+        deploy_experimental_literate_notes = os.path.isfile(
+            os.path.join(self.support.vault_path, f"{LiterateNotesManager_note_name}.md"))
+        self.my_note.set_contents(f"""- generated {ctime()}
+- [[{ScriptedNotesOrchestrator_note_name}]]
+- [[{LiterateNotesManager_note_name}]]
+""" if deploy_experimental_literate_notes else f"""- generated {ctime()}
+- [[{ScriptedNotesOrchestrator_note_name}]]
+""")
 
-        if deploy_demon_notes:
-            self.demon_notes_manager = DemonNotesManager.start(self.vault_path, self.mqtt, self.vault_watcher)
+        if deploy_experimental_literate_notes:
+            LiterateNotesManager.wake(LiterateNotesManager_note_name)
 
-    def on_receive(self, message):
-        if isinstance(message, FileModifiedEvent):
-            if message.src_path.startswith(self.scripts_dir):
-                _, filename = os.path.split(message.src_path)
-                maybe_note_name, maybe_md = os.path.splitext(filename)
-                if maybe_md.lower() == ".py":
-                    self.woke_notes[maybe_note_name].tell("SCRIPT_MODIFIED")
-                    logging.warning(f"NOT HOT RELOADING {message.src_path}")
-                else:
-                    logging.info(f"Did not recognize file ext {maybe_md}, ignoring {message.src_path}")
-            else:
-                logging.warning(f"unexpected path `{message.src_path}` (did not start with scripts dir `{self.scripts_dir}`)")
-        else:
-            logging.warning(f"Unexpected message, type {type(message)}: {message}")
+    def on_note_modified(self):
+        pass  # ignore
 
     def on_stop(self):
         pass
-

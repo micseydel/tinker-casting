@@ -10,7 +10,7 @@ import pykka
 from paho.mqtt import client as mqtt_client
 from paho.mqtt.client import Client
 
-from note_api import NoteAPI
+from wrappers.note_api import NoteAPI
 
 
 @dataclass
@@ -79,6 +79,7 @@ class ExternalMessages(pykka.ThreadingActor):
 
     def on_receive(self, msg):
         if isinstance(msg, MqttSubscription):
+            logging.debug(f"Subscribing to {msg.topic}: {msg.subscriber}")
             self.mqtt_client.subscribe(msg.topic)
             self.subscribers[msg.topic].add(msg.subscriber)
             self.my_note.append(f"- \\[{ctime()}] subscribed to `{msg.topic}`: {msg.subscriber}\n")
@@ -86,7 +87,7 @@ class ExternalMessages(pykka.ThreadingActor):
             self.mqtt_client.publish(msg.topic, msg.payload)
             msg = f"published {len(msg.payload)} bytes to `{msg.topic}`"
             self.my_note.append(f"- \\[{ctime()}] {msg}\n")
-            logging.info(msg)
+            logging.debug(msg)
         else:
             logging.warning(f"Unknown message type: {type(msg)}")
 

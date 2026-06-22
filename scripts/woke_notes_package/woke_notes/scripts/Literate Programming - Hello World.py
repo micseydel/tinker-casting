@@ -44,6 +44,6 @@ def on_note_modified():
 def upserter(out_topic, message_to_send, markdown):
     lines = markdown.splitlines()
     lines[0] = f"- [ ] Send (last sent ~{ctime()})"
-    lines.append_timestamped_markdown_list_line(f"sending on `{out_topic}`: {message_to_send}")
+    lines.append(timestamped_markdown_list_line(f"sending on `{out_topic}`: {message_to_send}"))
 
     return "\n".join(lines)

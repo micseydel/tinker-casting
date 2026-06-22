@@ -1,17 +1,16 @@
 import logging
+import os
 from time import ctime
 
 from ruamel.yaml import YAML
 
 
-# FIXME: note_if_markdown_starts_with_pressed_button is being used in the Introvert script in place of something simpler
-
-
 # https://docs.python.org/3/library/functions.html#open
-# FIXME: can this open the note once and flush where it relies on quick open+closes?
+# FIXME: can this open the note once and flush where it relies on quick open+closes? could make this a context manager
 class NoteAPI:
     def __init__(self, note_path):
         self.note_path = note_path
+        self.note_name = os.path.splitext(os.path.split(note_path)[1])[0]
         self.yaml = YAML(typ='safe')  # FIXME - round trip is probably preferable; also, is this thread safe?
 
     def append(self, string):
@@ -117,5 +116,15 @@ class NoteAPI:
 
         return self.yaml.load(frontmatter)
 
-    def append_timestamped_markdown_list_line(self, line):
-        self.append(f"- \\[{ctime()}] {line}\n")
+    def append_timestamped_markdown_list_line(self, line) -> None:
+        self.append(timestamped_markdown_list_line(line))
+
+    def note_if_button_pressed(self) -> (dict, str):  # FIXME not really a dict, yaml
+        return self.note_if_markdown_starts_with_pressed_button()
+
+    def append_md_ll(self, line) -> None:
+        self.append_timestamped_markdown_list_line(line)
+
+
+def timestamped_markdown_list_line(line) -> str:
+    return f"- \\[{ctime()}] {line}\n"

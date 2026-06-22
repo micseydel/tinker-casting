@@ -2,6 +2,7 @@ import logging
 import sys
 
 from orchestration import Orchestrator
+from woke_note import WokeNote
 from wrappers.external_messages import get_config_from_env
 
 if __name__ == "__main__":
@@ -9,9 +10,8 @@ if __name__ == "__main__":
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     try:
-        vault_path = sys.argv[1]
-        scripts_dir = sys.argv[2]
-    except IndexError:
+        _, vault_path, scripts_dir = sys.argv
+    except ValueError:
         print("Expected two CLI args, vault path and then scripts dir\n", sys.stderr)
         raise
 
@@ -19,5 +19,9 @@ if __name__ == "__main__":
 
     logging.info(f"Using vault {vault_path}, mqtt broker {mqtt_config.broker}:{mqtt_config.port} for user {mqtt_config.username}, and scripts_dir {scripts_dir}")
 
+    # FIXME: update the readme!
+    WokeNote.start_background_actors(vault_path, mqtt_config)
+    # FIXME: can I delete the password to let it get garbage collected?
+
     # pykka.DeadLetterRouter.default_router().start() #?
-    hot_reloader = Orchestrator.start(mqtt_config, vault_path, scripts_dir)
+    threaded_pykka_actors = Orchestrator.wake("Woke Notes Orchestrator", scripts_dir)

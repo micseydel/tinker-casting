@@ -8,7 +8,7 @@ import pykka
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileSystemEvent
 
-from note_api import NoteAPI
+from wrappers.note_api import NoteAPI
 
 
 @dataclass
@@ -50,7 +50,7 @@ class VaultWatcher(pykka.ThreadingActor):
                 logging.warning(f"overwriting [[{note_name}]] subscriber {existing_subscriber} with {msg.subscriber}")
                 self.my_note.append(f"- \\[{ctime()}] overwriting [[{note_name}]] subscriber {existing_subscriber} with {msg.subscriber}\n")
             else:
-                logging.info(f"Setting [[{note_name}]] subscriber to {msg.subscriber}")
+                logging.info(f"Setting [[{note_name}]] file watcher to {msg.subscriber}")
                 self.my_note.append(f"- \\[{ctime()}] Setting [[{note_name}]] subscriber to {msg.subscriber}\n")
 
             self.subscribers[msg.note_name.lower()] = msg.subscriber
@@ -98,7 +98,7 @@ class FolderWatcher(pykka.ThreadingActor):
         self.handler = FolderWatcherEventHandler(self.actor_ref)
         self.observer = Observer()
         self.observer.schedule(self.handler, self.watch_path, recursive=True)
-        # import to start the observer thread here rather than in __init__()
+        # starting the observer thread here rather than in __init__() means it's started in the actor thread context, not the start()ing thread's context
         self.observer.start()
         logging.info(f"Watching: {self.watch_path}")
 
