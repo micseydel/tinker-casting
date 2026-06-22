@@ -7,6 +7,7 @@ import base64
 import traceback
 import pathlib
 import random
+import logging
 
 from multiprocessing import Process, Manager
 from tempfile import NamedTemporaryFile
@@ -108,7 +109,9 @@ class MqttManager:
         client.subscribe(topic)
         client.on_message = on_message
 
-    def loop_forever(self): self.client.loop_forever()
+    # def loop_forever(self): self.client.loop_forever()
+
+    def loop_start(self): self.client.loop_start()
 
     def publish(self, topic, msg): return self.client.publish(topic, msg)
 
@@ -118,7 +121,45 @@ class MqttManager:
     def reconnect(self): return self.client.reconnect()
 
 
-def long_running(q, model_choice, broker, port, username, password, client_num) -> None:
+def worker_function(transcriber, main_queue, incoming_data):
+    vault_path = incoming_data["vaultPath"]
+    response_topic = incoming_data["responseTopic"]
+    contents = incoming_data["b64Encoded"]
+
+    temp = NamedTemporaryFile()
+    temp.write(base64.b64decode(contents))
+
+    print_with_time(f"📝 {vault_path}... ", end='', flush=True)
+
+    transcription_result = transcriber(temp.file.name)
+    if transcription_result is None:
+        print_with_time("Transcription failed")
+        return
+
+    elapsed, whisper_result = transcription_result
+    print(f"completed in {elapsed:.1f}s")
+
+    data = json.dumps({
+            "whisperResultContent": whisper_result,
+            "whisperResultMetadata": {
+                "model": transcriber.model_choice,
+                "performedOn": socket.gethostname(),
+                "vaultPath": vault_path,
+                "perfCounterElapsed": elapsed,
+            },
+        })
+
+    outgoing_message = data.encode()
+    print_with_time(f"Publishing {len(outgoing_message)} bytes to mqtt QUEUE now on {response_topic}")
+    main_queue.put((response_topic, outgoing_message))
+
+
+def long_running(worker_queue, main_queue, model_choice, broker, port, username, password, client_num) -> None:
+    # FIXME: logging between procs can conflict!
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
     pid = os.getpid()
     proc_title = f"transcriber_for_{pid}"
     setproctitle.setproctitle(proc_title)
@@ -126,80 +167,27 @@ def long_running(q, model_choice, broker, port, username, password, client_num) 
     print_with_time(f"Starting long-runnning process with pid {pid}, mqtt client id {client_id} and process title {proc_title}")
     try:
         transcriber = Transcriber(model_choice)
-        # FIXME: this needs to run a .loop_start() to prevent the dropping issues!!! (will probably re-use the kokoro pythonactor tinkering)
-        mqtt_manager = MqttManager(q, client_id, broker, port, username, password)
     except Exception:
+        # FIXME: compare this to logging.exception - can either one use the "Exception as e" object like in Java?
         print_with_time(f"Something went wrong starting the transcriber: {traceback.format_exc()}")
         return
 
     prior_message = None
+    incoming_data = None
     while True:
         try:
-            incoming_data = q.get()
+            incoming_data = worker_queue.get()
             if VERBOSE: print_with_time(f"Processing incoming data; there are approximately {q.qsize()} items waiting")
-            vault_path = incoming_data["vaultPath"]
-            response_topic = incoming_data["responseTopic"]
-            contents = incoming_data["b64Encoded"]
-
-            temp = NamedTemporaryFile()
-            temp.write(base64.b64decode(contents))
-
-            print_with_time(f"📝 {vault_path}... ", end='', flush=True)
-
-            transcription_result = transcriber(temp.file.name)
-            if transcription_result is None:
-                print_with_time("Transcription failed")
-                return
-
-            elapsed, whisper_result = transcription_result
-            print(f"completed in {elapsed:.1f}s")
-
-            data = json.dumps({
-                    "whisperResultContent": whisper_result,
-                    "whisperResultMetadata": {
-                        "model": transcriber.model_choice,
-                        "performedOn": socket.gethostname(),
-                        "vaultPath": vault_path,
-                        "perfCounterElapsed": elapsed,
-                    },
-                })
-
-            outgoing_message = data.encode()
-            print_with_time(f"Publishing {len(outgoing_message)} bytes to mqtt now on {response_topic}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
-            mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
-            # FIXME: retain the prior recipient, and say "hey I just finished the next thing so if you didn't get your thing you should have gotten it by now so ask me to resend it" (and store some prior JSON)
-            status_code, message_n = mqtt_publish_result
-            if status_code == 0:
-                if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
-                prior_message = (message_n, response_topic, outgoing_message)
-            else:
-                if status_code == 7:
-                    if prior_message is None:
-                        print_with_time("Status code 7, but no prior message!")
-                    else:
-                        print_with_time(f"Result #{message_n} failed publishing to {response_topic} with status_code=7, will reconnect, then retry the PRIOR message then the current one")
-                else:
-                    print_with_time(f"Result #{message_n} failed publishing ({status_code}) (mqtt_manager.is_connected={mqtt_manager.is_connected()}), trying to reconnect now...")
-
-                mqtt_manager.reconnect()
-
-                if status_code == 7 and prior_message is not None:
-                    (prior_message_n, prior_response_topic, prior_outgoing_message) = prior_message
-                    print_with_time(f"Retrying prior message {prior_message_n} now, sending {len(prior_outgoing_message)} bytes to {prior_response_topic}")
-                    mqtt_publish_result = mqtt_manager.publish(prior_response_topic, prior_outgoing_message)
-                    print_with_time("FYI, the result was:", mqtt_publish_result)
-
-                print_with_time(f"Trying #{message_n} now...")
-                status_code, message_n = mqtt_publish_result = mqtt_manager.publish(response_topic, outgoing_message)
-                print_with_time("FYI, the result was:", mqtt_publish_result)
-                prior_message = None # FIXME hack to fix duplicate message sends
+            worker_function(transcriber, main_queue, incoming_data)
         except:
-            print_with_time(f"Something went wrong processing a message: {traceback.format_exc()}; mqtt_manager.is_connected() = {mqtt_manager.is_connected()}")
-
-
+            logging.exception(f"Something went wrong processing a message: {incoming_data};")
 
 
 def run():
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
     setproctitle.setproctitle(sys.argv[0])
     _, model_choice = sys.argv
 
@@ -216,14 +204,30 @@ def run():
     print_with_time(f"pid {os.getpid()}, subscribing client {client_id} to {topic}...")
 
     manager = Manager()
-    q = manager.Queue()
-    mqtt_manager = MqttManager(q, client_id, broker, port, username, password, topic)
+    # FIXME: try a pipe instead (not that the speed change would be noticeable here)
+    worker_queue = manager.Queue()
+    main_queue = manager.Queue()
+    mqtt_manager = MqttManager(worker_queue, client_id, broker, port, username, password, topic)
     
-    worker = Process(target=long_running, args=(q, model_choice, broker, port, username, password, client_num))
+    worker = Process(target=long_running, args=(worker_queue, main_queue, model_choice, broker, port, username, password, client_num))
     worker.start()
 
+    mqtt_manager.loop_start()
+
     try:
-        mqtt_manager.loop_forever()
+        while True:
+            publish_request = main_queue.get()
+            try:
+                topic, message = publish_request
+            except ValueError:
+                logging.exception(f"Fetched from queue should have been a tuple (topic, message) but was {publish_request}")
+            else:
+                mqtt_publish_result = mqtt_manager.publish(topic, message)
+                status_code, message_n = mqtt_publish_result
+                if status_code != 0:
+                    logging.warning(f"Unexpected status code {status_code} from mqtt publish to {topic} with {len(message)} bytes for message {message_n}")
+                else:
+                    if VERBOSE: print_with_time(f"Result #{message_n} published successfully (mqtt_manager.is_connected() = {mqtt_manager.is_connected()})")
     except KeyboardInterrupt:
         print_with_time("(KeyboardInterrupt) Done; any output like 'There appear to be 1 leaked semaphore objects to clean up at shutdown' can be ignored")
 
