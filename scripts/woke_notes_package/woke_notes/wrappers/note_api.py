@@ -119,11 +119,33 @@ class NoteAPI:
     def append_timestamped_markdown_list_line(self, line) -> None:
         self.append(timestamped_markdown_list_line(line))
 
-    def note_if_button_pressed(self) -> (dict, str):  # FIXME not really a dict, yaml
+    def frontmatter_and_markdown_if_button_pressed(self) -> (any, str):
         return self.note_if_markdown_starts_with_pressed_button()
 
     def append_md_ll(self, line) -> None:
         self.append_timestamped_markdown_list_line(line)
+
+    def markdown_if_starts_with_pressed_button(self):
+        with open(self.note_path) as f:
+            try:
+                maybe_frontmatter_start = next(f)
+            except StopIteration:
+                return None
+
+            # just get past the front matter
+            if maybe_frontmatter_start == "---\n":
+                for line in f:
+                    if line == "---\n":
+                        # done with frontmatter
+                        break
+                markdown = ''.join(f)
+            else:
+                markdown = maybe_frontmatter_start + ''.join(f)
+
+        if markdown.startswith("- [x] "):
+            return markdown
+        else:
+            return None
 
 
 def timestamped_markdown_list_line(line) -> str:

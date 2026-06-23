@@ -92,7 +92,7 @@ class ExternalMessages(pykka.ThreadingActor):
             logging.warning(f"Unknown message type: {type(msg)}")
 
     def on_stop(self):
-        logging.info(f"[on_stop] calling loop_end()")
+        logging.info(f"[ExternalMessages.on_stop] calling loop_stop()")
         self.mqtt_client.loop_stop()
         self.my_note.set_contents(f"- done {ctime()}\n")
 

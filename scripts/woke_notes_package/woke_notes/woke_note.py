@@ -40,8 +40,11 @@ class WokeNoteSupport:
         self.file_path = os.path.join(self.vault_path, "Woke Notes Mqtt Orchestrator.md")
         self.external_messages_actor_ref = ExternalMessages.start(mqtt_config, self.file_path)
 
+    def stop(self):
+        self.vault_watcher.stop()
+        self.external_messages_actor_ref.stop()
 
-# FIXME: consider multiprocessing - mqtt needs to be on a separate process from cpu-bound procs
+
 class WokeNote(pykka.ThreadingActor):
     support: ClassVar[WokeNoteSupport] = None
 
@@ -53,6 +56,10 @@ class WokeNote(pykka.ThreadingActor):
     ):
         assert cls.support is None, "Background actors already started"  # FIXME: make this idempotent?
         cls.support = WokeNoteSupport(vault_path, mqtt_config)
+
+    @classmethod
+    def stop_background_actors(cls):
+        cls.support.stop()
 
     # FIXME: because a user might accidentally call start(), I should consider NOT subclassing ThreadingActor here
     #   ...that might fit the multiprocessing model better anyway
