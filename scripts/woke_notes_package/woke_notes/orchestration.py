@@ -2,9 +2,9 @@ import logging
 import os
 from time import ctime
 
-from literate_note import LiterateNotesManager
-from scripted_note import ScriptedNotesOrchestrator
-from woke_note import WokeNote
+from .literate_note import LiterateNotesManager
+from .scripted_note import ScriptedNotesOrchestrator
+from .woke_note import WokeNote
 
 
 class Orchestrator(WokeNote):
@@ -27,7 +27,7 @@ class Orchestrator(WokeNote):
 
         deploy_experimental_literate_notes = os.path.isfile(
             os.path.join(self.support.vault_path, f"{LiterateNotesManager_note_name}.md"))
-        self.my_note.set_contents(f"""- generated {ctime()}
+        self.my_note.set_file_contents(f"""- generated {ctime()}
 - [[{ScriptedNotesOrchestrator_note_name}]]
 - [[{LiterateNotesManager_note_name}]]
 """ if deploy_experimental_literate_notes else f"""- generated {ctime()}

@@ -5,10 +5,10 @@ from typing import TypeVar
 
 from watchdog.events import FileModifiedEvent
 
-from wrappers.scripting import CompiledScript
-from woke_note import WokeNote
-from wrappers.external_messages import MqttPublish
-from wrappers.file_watcher import FolderWatcher
+from .woke_note import WokeNote
+from .wrappers.scripting import CompiledScript
+from .wrappers.external_messages import MqttPublish
+from .wrappers.file_watcher import FolderWatcher
 
 SN = TypeVar("SN", bound="ScriptedNote")
 
@@ -69,11 +69,11 @@ class ScriptedNotesOrchestrator(WokeNote):
         logging.info(f"Starting with scripts {python_scripts}; spawning WokeNotes now")
 
         for note_name in note_names_for_scripts:
-            # FIXME: save the actor ref?
-            ScriptedNote.wake(note_name, os.path.join(self.scripts_dir, f"{note_name}.py"))
+            actor_ref = ScriptedNote.wake(note_name, os.path.join(self.scripts_dir, f"{note_name}.py"))
+            self.woke_notes[note_name] = actor_ref
 
         scripted_notes_list = "\n".join(f"    - [[{nn}]]" for nn in note_names_for_scripts)
-        self.my_note.set_contents(f"""- generated {ctime()}
+        self.my_note.set_file_contents(f"""- generated {ctime()}
 - scripted notes:
 {scripted_notes_list}
 """)

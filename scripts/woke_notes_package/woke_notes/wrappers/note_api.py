@@ -1,6 +1,7 @@
 import logging
 import os
 from time import ctime
+from typing import Tuple
 
 from ruamel.yaml import YAML
 
@@ -17,11 +18,22 @@ class NoteAPI:
         with open(self.note_path, 'a') as f:
             f.write(string)
 
-    def set_contents(self, contents):
+    def set_file_contents(self, contents):
         with open(self.note_path, 'w') as f:
             f.write(contents)
 
-    def note_if_markdown_starts_with_pressed_button(self):
+    def set_markdown(self, markdown) -> None:
+        raw_front_matter = self.get_raw_frontmatter().rstrip()
+        with open(self.note_path, 'w') as f:
+            f.write(f"---\n"
+                    f"{raw_front_matter}\n"
+                    f"---\n"
+                    f"{markdown}")
+
+    def already_exists(self) -> bool:
+        return os.path.exists(self.note_path)
+
+    def note_if_markdown_starts_with_pressed_button(self) -> None | Tuple[object, str]:
         with open(self.note_path) as f:
             try:
                 frontmatter_start = next(f)
@@ -94,7 +106,7 @@ class NoteAPI:
 {frontmatter}---
 {upserter(markdown)}""")
 
-    def get_frontmatter(self):
+    def get_raw_frontmatter(self) -> str | None:
         with open(self.note_path) as f:
             try:
                 frontmatter_start = next(f)
@@ -112,18 +124,45 @@ class NoteAPI:
                     break
                 frontmatter_lines.append(line)
 
-        frontmatter = ''.join(frontmatter_lines)
+        return ''.join(frontmatter_lines)
 
-        return self.yaml.load(frontmatter)
+    def get_frontmatter(self):
+        return self.yaml.load(self.get_raw_frontmatter())
 
     def append_timestamped_markdown_list_line(self, line) -> None:
         self.append(timestamped_markdown_list_line(line))
 
-    def note_if_button_pressed(self) -> (dict, str):  # FIXME not really a dict, yaml
+    def frontmatter_and_markdown_if_button_pressed(self) -> None | Tuple[object, str]:
         return self.note_if_markdown_starts_with_pressed_button()
 
     def append_md_ll(self, line) -> None:
         self.append_timestamped_markdown_list_line(line)
+
+    def markdown_if_starts_with_pressed_button(self):
+        with open(self.note_path) as f:
+            try:
+                maybe_frontmatter_start = next(f)
+            except StopIteration:
+                return None
+
+            # just get past the front matter
+            if maybe_frontmatter_start == "---\n":
+                for line in f:
+                    if line == "---\n":
+                        # done with frontmatter
+                        break
+                markdown = ''.join(f)
+            else:
+                markdown = maybe_frontmatter_start + ''.join(f)
+
+        if markdown.startswith("- [x] "):
+            return markdown
+        else:
+            return None
+
+    # def simple_reset_button_at_start_of_markdown_and_append(self, line):
+    #     with open(self.note_path) as f:
+    #         pass  # FIXME - or standard upserters...?
 
 
 def timestamped_markdown_list_line(line) -> str:

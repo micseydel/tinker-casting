@@ -1,16 +1,21 @@
 package me.micseydel.actor
 
 import me.micseydel.NoOp
-import FolderWatcherActor.Ping
+import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
 import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext, TypedMqtt}
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
+import org.slf4j.Logger
 
+import java.io.File
 import java.nio.file.Path
-import javax.sound.sampled.{AudioFormat, Clip, DataLine, Mixer, AudioSystem as JVMAudioSystem}
+import java.time.ZonedDateTime
+import javax.sound.sampled.{AudioFormat, Clip, DataLine, LineEvent, Mixer, AudioSystem as JVMAudioSystem}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future, Promise}
 import scala.util.{Failure, Success, Try}
 
 object SoundPlayerActor {
@@ -22,15 +27,30 @@ object SoundPlayerActor {
 
   private case class ReceiveMqtt(mqttMessage: MqttMessage) extends Message
 
+  private case object PlayerFinished extends Message
+
+  //
+
+  private type Stopper = () => Unit
+
+  //
+
   def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player", TinkerColor.random(), "🎙️", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
-    implicit val tc: TinkerContext[?] = context
     context.actorContext.log.info("Refreshing note Markdown")
-    noteRef.refreshNote(None)
 
     val topic = noteRef.noteId.toString
     context.actorContext.log.info(s"Subscribing to mqtt topic $topic")
     context.system.mqtt ! TypedMqtt.Subscribe(topic, context.messageAdapter(ReceiveMqtt).underlying)
 
+    implicit val nr: NoteRef = noteRef
+
+    waiting()
+  }
+
+  private def waiting()(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    implicit val tc: TinkerContext[?] = context
+//    implicit val l: Logger = context.actorContext.log
+    noteRef.refreshNote(None)
     Tinker.receiveMessage {
       case PlaySound(path) =>
         noteRef.getPreferredDevice() match {
@@ -38,13 +58,22 @@ object SoundPlayerActor {
           case Success(maybeUserPreferredDevice) =>
             context.actorContext.log.info(s"Playing sound at $path (currently ignoring maybeUserPreferredDevice $maybeUserPreferredDevice, just using the default)")
 
-            val audioSystem = new AudioSystem
-            audioSystem.playClip(path, maybeUserPreferredDevice) match {
-              case Failure(exception) => context.actorContext.log.warn("Failed to play clip", exception)
-              case Success(_) =>
-            }
+            // FIXME: any reason to keep the old stuff? (maybe merge?)
+//            val audioSystem = new AudioSystem
+//            audioSystem.playClip(path, maybeUserPreferredDevice) match {
+//              case Failure(exception) => context.actorContext.log.warn("Failed to play clip", exception)
+//              case Success(_) => context.actorContext.log.info(s"started clip $path")
+//            }
 
-            Tinker.steadily
+//            implicit val ec: ExecutionContextExecutorService = context.system.httpExecutionContext // FIXME: can I figure out where this artifact came from?
+            val wavFile = new File(path)
+            val (fut: Future[Unit], stopper: Stopper, lengthMicroseconds: Long) = JvmAudioPlayer.playAsync(wavFile)
+            context.pipeToSelf(fut)(_ => PlayerFinished)
+            noteRef.refreshNote(
+              None, // FIXME - should cache the thing
+              Some((wavFile.getName, lengthMicroseconds)))
+
+            playing(stopper)
         }
 
       case ReceiveNotePing(_) =>
@@ -71,24 +100,52 @@ object SoundPlayerActor {
         context.actorContext.log.info(s"Playing sound for $path")
         context.self !! PlaySound(path.toString)
         Tinker.steadily
+
+      case PlayerFinished =>
+        Tinker.steadily
+    }
+  }
+
+  private def playing(stopper: Stopper)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
+    Tinker.receiveMessage {
+      case ReceiveNotePing(_: Ping) =>
+        if (noteRef.checkBoxIsChecked()) {
+          // FIXME: provide ways over mqtt to - stop, detect a scheduled end time, to receive a finished event
+          stopper()
+          waiting()
+        } else {
+          Tinker.steadily
+        }
+
+      case PlayerFinished =>
+        waiting()
+
+      case other =>
+        context.actorContext.log.warn(s"ignoring $other")
+        Tinker.steadily
     }
   }
 
   //
 
   private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-    def refreshNote(maybePreferredDeviceName: Option[String]): Try[NoOp.type] = {
+    def refreshNote(maybePreferredDeviceName: Option[String], playing: Option[(String, Long)] = None): Try[NoOp.type] = {
       val audioSystem = new AudioSystem
 
       val (_, fullList) = audioSystem.getMixers
 
-      val markdown = ("Click to refresh" ::
-        fullList
-          .map(_.getName)
-          .filterNot(_.contains("Microphone"))
-          .filterNot(_.contains("Port")) // Port mixers work unreliably, in my experience; consider commenting this out though
-          .distinct
-      ).map("- [ ] " + _).mkString("", "\n", "\n")
+      val markdown = playing match {
+        case None => ("Click to refresh" ::
+          fullList
+            .map(_.getName)
+            .filterNot(_.contains("Microphone"))
+            .filterNot(_.contains("Port")) // Port mixers work unreliably, in my experience; consider commenting this out though
+            .distinct
+          ).map("- [ ] " + _).mkString("", "\n", "\n")
+        case Some((filename, microseconds)) =>
+          val now = TimeUtil.WithinDayDateTimeFormatter.format(ZonedDateTime.now())
+          s"- [ ] Stop /\\ playing: [[$filename]] for ${microseconds}µs (started at $now)\n"
+      }
 
       maybePreferredDeviceName match {
         case Some(newPreferredDeviceName) =>
@@ -113,6 +170,12 @@ object SoundPlayerActor {
         .find(_.startsWith("- [x] "))
         .map(_.drop("- [x] ".length))
     }
+
+    def checkBoxIsChecked(): Boolean =
+      noteRef.readMarkdown().map(markdown => markdown.startsWith("- [x] ")) match {
+        case Failure(exception) => throw exception
+        case Success(result) => result
+      }
   }
 
   private class AudioSystem {
@@ -139,7 +202,7 @@ object SoundPlayerActor {
 
           fallbackFormats.find(format =>
             mixer.isLineSupported(new DataLine.Info(classOf[Clip], format))
-          )//.getOrElse(targetFormat) // return original if no fallback works
+          ) //.getOrElse(targetFormat) // return original if no fallback works
         }
       }
 
@@ -212,4 +275,37 @@ object SoundPlayerTestActor {
   }
 
   private val Path = "" // FIXME
+}
+
+
+object JvmAudioPlayer {
+  def playAsync(file: File): (scala.concurrent.Future[Unit], () => Unit, Long) = {
+    val clip = JVMAudioSystem.getClip()
+    clip.open(JVMAudioSystem.getAudioInputStream(file))
+    val lengthMicroseconds = clip.getMicrosecondLength
+
+    val donePromise = Promise[Unit]()
+
+    // Listener fires on both natural completion AND manual stop()
+    clip.addLineListener(e =>
+      if (e.getType == LineEvent.Type.STOP && !donePromise.isCompleted) {
+        Try(clip.close())
+        donePromise.success(())
+      }
+    )
+
+    // Start playback in a background thread
+    new Thread(() => Try(clip.start())).start()
+
+    val stop: () => Unit = () => {
+      if (!donePromise.isCompleted) {
+        // FIXME: how hacky is this?
+        Try(clip.stop())
+        Try(clip.close())
+        Try(donePromise.success(()))
+      }
+    }
+
+    (donePromise.future, stop, lengthMicroseconds)
+  }
 }

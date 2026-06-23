@@ -98,9 +98,6 @@ object UserTinkerCast {
 //    @unused
 //    val taskManager = context.cast(TaskManager(taskNotesTasksPath), "TaskManager")
 
-//    @unused // driven internally by a note
-//    val soundPlayerTestActor = context.cast(SoundPlayerTestActor(), "SoundPlayerTestActor")
-
     @unused // subscribes to gmail via operator
     val groceryManagerActor = context.cast(GroceryManagerActor(), "GroceryManagerActor")
 

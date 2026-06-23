@@ -1,5 +1,5 @@
 def on_start():
-    my_note.set_contents(f"""---
+    my_note.set_file_contents(f"""---
 in_topic: {default_topic}
 out_topic: {default_topic}/publish
 message_to_send: "Hello :)"
@@ -27,6 +27,7 @@ def on_note_modified():
     
     if (out_topic := frontmatter.get("out_topic")) is None:
         logging.warning("Button pressed but Frontmatter out_topic was empty")
+        return
 
     if (message_to_send := frontmatter.get("message_to_send")) is None:
         logging.warning("Button pressed but Frontmatter message_to_send was empty")
@@ -40,6 +41,9 @@ def on_note_modified():
     sleep(.25) # hack to prevent a race condition with Obsidian's display
     my_note.upsert_markdown(lambda markdown: upserter(out_topic, message_to_send, markdown))
     logging.info(f"[{note_name}] Markdown reset")
+
+
+# util
 
 def upserter(out_topic, message_to_send, markdown):
     lines = markdown.splitlines()

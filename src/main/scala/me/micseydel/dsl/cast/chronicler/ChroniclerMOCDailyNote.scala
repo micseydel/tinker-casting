@@ -95,7 +95,7 @@ object ChroniclerMOCDailyNote {
             val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
             val id = formatter.format(midnight)
             val notificationId = s"withoutack-$id"
-            context.actorContext.log.info(s"[CANARY] creating notification $notificationId")
+            context.actorContext.log.info(s"[CANARY] creating notification $notificationId for midnight $midnight")
             val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(notificationId), Nil)
             context.system.notifier !! NotificationCenterManager.NewNotification(notification)
           } else {
