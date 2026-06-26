@@ -10,7 +10,7 @@ import pykka
 from paho.mqtt import client as mqtt_client
 from paho.mqtt.client import Client
 
-from wrappers.note_api import NoteAPI
+from ..wrappers.note_api import NoteAPI
 
 
 @dataclass
@@ -47,7 +47,7 @@ class ExternalMessages(pykka.ThreadingActor):
 
     def __init__(self, config: MqttConfig, note_path: str):
         super().__init__()
-        self.my_note = None
+        self.my_note: NoteAPI = None
         self.mqtt_config = config
         self.mqtt_connected = False
         self.note_path = note_path
@@ -75,7 +75,7 @@ class ExternalMessages(pykka.ThreadingActor):
         # starts mqtt thread in the background (necessary for keep alive)
         self.mqtt_client.loop_start()
 
-        self.my_note.set_contents(f"- started {ctime()}\n")
+        self.my_note.set_file_contents(f"- started {ctime()}\n")
 
     def on_receive(self, msg):
         if isinstance(msg, MqttSubscription):
@@ -94,7 +94,7 @@ class ExternalMessages(pykka.ThreadingActor):
     def on_stop(self):
         logging.info(f"[ExternalMessages.on_stop] calling loop_stop()")
         self.mqtt_client.loop_stop()
-        self.my_note.set_contents(f"- done {ctime()}\n")
+        self.my_note.set_file_contents(f"- done {ctime()}\n")
 
     # mqtt stuff
 

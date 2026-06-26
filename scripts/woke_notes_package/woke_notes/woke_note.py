@@ -6,9 +6,9 @@ import pykka
 from pykka import Actor, ActorRef
 from watchdog.events import FileModifiedEvent
 
-from wrappers.note_api import NoteAPI
-from wrappers.external_messages import MqttPublish, MqttSubscription, MqttConfig, ExternalMessages
-from wrappers.file_watcher import VaultWatcher, VaultNoteSubscription
+from .wrappers.note_api import NoteAPI
+from .wrappers.external_messages import MqttPublish, MqttSubscription, MqttConfig, ExternalMessages
+from .wrappers.file_watcher import VaultWatcher, VaultNoteSubscription
 
 
 class MqttWrapper:

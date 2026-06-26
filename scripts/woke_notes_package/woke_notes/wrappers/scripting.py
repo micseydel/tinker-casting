@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 
-from wrappers.note_api import NoteAPI, timestamped_markdown_list_line
+from ..wrappers.note_api import NoteAPI, timestamped_markdown_list_line
 
 
 class CompiledScript:

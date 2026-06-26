@@ -2,9 +2,9 @@ import logging
 
 from watchdog.events import FileModifiedEvent
 
-from woke_note import WokeNote
-from wrappers.external_messages import MqttPublish
-from wrappers.scripting import CompiledScript
+from .woke_note import WokeNote
+from .wrappers.external_messages import MqttPublish
+from .wrappers.scripting import CompiledScript
 
 
 class LiterateNotesManager(WokeNote):

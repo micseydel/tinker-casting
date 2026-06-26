@@ -1,5 +1,5 @@
 def on_start():
-    my_note.set_contents(f"""---
+    my_note.set_file_contents(f"""---
 in_topic: {default_topic}
 reply_with: "👋"
 ---

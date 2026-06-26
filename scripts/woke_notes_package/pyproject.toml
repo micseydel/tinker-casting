@@ -4,6 +4,10 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+# FIXME: double-check
+[tool.setuptools.packages.find]
+include = ["woke_notes*"]
+
 [project]
 name = "woke-notes"
 version = "0.1.0"

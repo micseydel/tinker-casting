@@ -1,3 +1,6 @@
+Needs updates per recent refactoring and updates
+---
+
 This rudimentary module combines the *actor model* (1973) with *notes* that could for example be read and written with apps like Obsidian, along with mqtt for interprocess communication and file-watching so human note interactions can result in asynchronous alerts. This is an early draft that I am not quite yet recommending people run, but it's nearly there...
 
 This results in something like literate programming (Knuth 1984) especially with hot reloading that lets you
@@ -16,7 +19,38 @@ TODO
 
 LIMITATIONS
 - Pykka's thread/GIL limits are inherited, no multiprocessing support
+  - FIXME
 - globals are shared between hot-reloaded LiterateNotes (actors)
     - this is an attack vector if you run untrusted code
 
 Like the rest of the code base, this is released under the MIT license. This module will be split out into a separate code base, but still retain the MIT license.
+
+---
+
+# Quickstart
+
+- pip install from git
+- OR- clone, install from local
+- `python -m` to `example_scripts`
+  - create scripts
+  - create notes
+  - (how much RAM do this use?)
+- extend the class
+  - 
+- use multi-processing
+  - 
+
+# Inbox
+
+- [[Woke Notes Orchestrator]] (contains)
+  - [[ScriptedNotesOrchestrator]]
+    - subscriber should use a LIST
+    - ...button to refresh the subscribers?
+  - [[LiterateNotesManager (EXPERIMENTAL)]] # FIXME
+- limitations
+    - if someone removes a function from a hot reloading script, they should replace it with `pass` in the body before removing it
+    - circuit breakers
+- future work
+  - my_note to allow file-like behavior, e.g. print()s
+  - way for thrown exceptions to be shown in the note more easily
+

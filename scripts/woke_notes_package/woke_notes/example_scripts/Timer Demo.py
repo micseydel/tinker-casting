@@ -1,5 +1,5 @@
 def on_start():
-    my_note.set_contents(f"""---
+    my_note.set_file_contents(f"""---
 duration_seconds: 1
 ---
 - [ ] Start timer

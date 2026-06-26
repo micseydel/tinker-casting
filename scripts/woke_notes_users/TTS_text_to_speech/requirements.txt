@@ -1,0 +1,3 @@
+-e /Users/micseydel/coding/tinker-casting/scripts/woke_notes_package
+soundfile==0.13.1
+kokoro==0.9.4
