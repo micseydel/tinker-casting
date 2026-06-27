@@ -38,6 +38,7 @@ object SoundPlayerActor {
   def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player", TinkerColor.random(), "🎙️", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
     context.actorContext.log.info("Refreshing note Markdown")
 
+    // FIXME: topic should be scoped to the vault, not MERELY use the note id
     val topic = noteRef.noteId.toString
     context.actorContext.log.info(s"Subscribing to mqtt topic $topic")
     context.system.mqtt ! TypedMqtt.Subscribe(topic, context.messageAdapter(ReceiveMqtt).underlying)
@@ -248,7 +249,9 @@ object SoundPlayerTestActor {
 
   final case class ReceiveNotePing(ping: Ping) extends Message
 
-  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player Testing", TinkerColor.random(), "🥼", ReceiveNotePing, Some("_actor_notes")) { (context, noteRef) =>
+  def apply()(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceiveNotePing]("Sound Player Testing", TinkerColor.random(), "🥼", ReceiveNotePing,
+    Some("_actor_notes")  // FIXME: remove
+  ) { (context, noteRef) =>
     implicit val tc: TinkerContext[_] = context
 
     val soundPlayerActor = context.cast(SoundPlayerActor(), "SoundPlayerActor")
