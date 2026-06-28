@@ -2,7 +2,7 @@ import hashlib
 import logging
 import os
 import sys
-from time import ctime, time
+from time import ctime, time, sleep
 
 from kokoro import KPipeline
 import soundfile as sf
@@ -59,7 +59,8 @@ class WokeKokoroProcess(WokeProcess):
 
                         existing_work.append(CompletedTTS(voice, text, full_folder_path, wavs, cached=True))
 
-                    markdown_table = "\n".join(existing.to_markdown(self.support.vault_path) for existing in existing_work)
+                    markdown_table = "\n".join(
+                        existing.to_markdown(self.support.vault_path) for existing in existing_work)
 
                     self.my_note.set_markdown(
                         f"- [ ] Generate\n\n"
@@ -76,18 +77,18 @@ class WokeKokoroProcess(WokeProcess):
         if maybe_note is not None:
             config, markdown = maybe_note
             self.worker_conn.send(config)
+            sleep(0.25)  # just in case 🙄
+            # FIXME: ideally this would wait until the work item is done
+            self.my_note.reset_button_at_start_of_markdown()
 
     def on_work_item_complete(self, result):
         completed_tts: CompletedTTS
         play_after_creation: bool
         completed_tts, play_after_creation = result
-        # logging.info(f"received{play_after_creation},  {completed_tts}")
-
-        # sleep(0.25)  # just in case 🙄
 
         # FIXME: stop ignoring after the first wav, even though it's so much easier
         first_wav = completed_tts.wavs[0]
-        self.my_note.reset_button_at_start_of_markdown()  # FIXME: do more of an upsert!
+        # FIXME: do more of an upsert!
         if play_after_creation:
             self.my_note.append_timestamped_markdown_list_line(
                 f"Playing {first_wav} (completed_tts.cached={completed_tts.cached}")
