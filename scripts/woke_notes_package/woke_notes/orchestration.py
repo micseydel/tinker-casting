@@ -21,7 +21,7 @@ class Orchestrator(WokeNote):
         super().on_start()
 
         ScriptedNotesOrchestrator_note_name = "ScriptedNotesOrchestrator"
-        LiterateNotesManager_note_name = "LiterateNotesManager (EXPERIMENTAL)"
+        LiterateNotesManager_note_name = "LiterateNotesManager"
 
         ScriptedNotesOrchestrator.wake(ScriptedNotesOrchestrator_note_name, scripts_dir=self.scripts_dir)
 

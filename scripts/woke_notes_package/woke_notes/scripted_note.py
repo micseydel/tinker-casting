@@ -3,7 +3,7 @@ import os
 from time import ctime
 from typing import TypeVar
 
-from watchdog.events import FileModifiedEvent
+from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .woke_note import WokeNote
 from .wrappers.scripting import CompiledScript
@@ -32,7 +32,9 @@ class ScriptedNote(WokeNote):
     def on_receive(self, message):
         # super on_receive ignored intentionally, those things are managed explicitly here
 
-        if isinstance(message, FileModifiedEvent):
+        if (isinstance(message, FileModifiedEvent)
+                # FIXME: on_note_created ?
+                or isinstance(message, FileCreatedEvent)):
             self.script_wrapper.on_note_modified()
         elif isinstance(message, MqttPublish):
             self.script_wrapper.on_mqtt_message(message.topic, message.payload)
@@ -72,11 +74,7 @@ class ScriptedNotesOrchestrator(WokeNote):
             actor_ref = ScriptedNote.wake(note_name, os.path.join(self.scripts_dir, f"{note_name}.py"))
             self.woke_notes[note_name] = actor_ref
 
-        scripted_notes_list = "\n".join(f"    - [[{nn}]]" for nn in note_names_for_scripts)
-        self.my_note.set_file_contents(f"""- generated {ctime()}
-- scripted notes:
-{scripted_notes_list}
-""")
+        self.__update_note()
 
     def on_receive(self, message):
         if isinstance(message, FileModifiedEvent):
@@ -86,13 +84,33 @@ class ScriptedNotesOrchestrator(WokeNote):
                 _, filename = os.path.split(message.src_path)
                 maybe_note_name, maybe_md = os.path.splitext(filename)
                 if maybe_md.lower() == ".py":
-                    self.woke_notes[maybe_note_name].tell("SCRIPT_MODIFIED")
+                    try:
+                        self.woke_notes[maybe_note_name].tell("SCRIPT_MODIFIED")
+                    except KeyError:
+                        logging.warning(f"{maybe_note_name} was not in {list(self.woke_notes.keys())}")
+                        raise
                     logging.warning(f"NOT HOT RELOADING {message.src_path}")
                 else:
                     logging.info(f"Did not recognize file ext {maybe_md}, ignoring {message.src_path}")
             else:
                 logging.warning(
-                    f"unexpected path `{message.src_path}` (did not start with scripts dir `{self.scripts_dir}` or vault dir `{self.support.vault_path}`)")
+                    f"unexpected modified path `{message.src_path}` (did not start with scripts dir `{self.scripts_dir}` or vault dir `{self.support.vault_path}`)")
+        elif isinstance(message, FileCreatedEvent):
+            if message.src_path.startswith(self.support.vault_path):
+                pass  # FIXME - on_note_created event?
+            elif message.src_path.startswith(self.scripts_dir):
+                script_path = message.src_path
+                note_name = os.path.splitext(os.path.split(script_path)[1])[0]
+                if note_name in self.woke_notes:
+                    logging.warning(f"Got a file created event for script {script_path} but it was already created (ignoring)")
+                else:
+                    logging.info(f"Detected new script {script_path}, loading it and adding it for hotreloading...")
+                    actor_ref = ScriptedNote.wake(note_name, script_path)
+                    self.woke_notes[note_name] = actor_ref
+                    self.__update_note()
+            else:
+                logging.warning(
+                    f"unexpected new path `{message.src_path}` (did not start with scripts dir `{self.scripts_dir}` or vault dir `{self.support.vault_path}`)")
         elif isinstance(message, MqttPublish):
             self.on_mqtt_message(message.topic, message.payload)
         else:
@@ -100,6 +118,13 @@ class ScriptedNotesOrchestrator(WokeNote):
 
     def on_note_modified(self):
         pass  # does not matter to this orchestrator right now
+
+    def __update_note(self):
+        scripted_notes_list = "\n".join(f"    - [[{nn}]]" for nn in self.woke_notes.keys())
+        self.my_note.set_file_contents(f"""- generated {ctime()}
+- scripted notes:
+{scripted_notes_list}
+""")
 
 
 class ScriptedNoteScriptWrapper(CompiledScript):

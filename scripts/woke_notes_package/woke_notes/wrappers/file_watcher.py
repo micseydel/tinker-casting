@@ -1,12 +1,15 @@
 import os
 import logging
+import typing
 from time import ctime
 from dataclasses import dataclass
 
 import pykka
+from pykka import ActorRef
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileSystemEvent
+from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileSystemEvent, FileCreatedEvent, \
+    DirModifiedEvent
 
 from ..wrappers.note_api import NoteAPI
 
@@ -24,8 +27,9 @@ class VaultWatcher(pykka.ThreadingActor):
         self.vault_path = vault_path
 
         self.observer = None
-        self.handler = None
-        self.subscribers = {}
+        # noinspection PyTypeChecker
+        self.handler: FolderWatcherEventHandler = None
+        self.subscribers: typing.Dict[str, ActorRef] = {}
 
     def on_start(self):
         logging.basicConfig(level=logging.INFO,
@@ -54,7 +58,7 @@ class VaultWatcher(pykka.ThreadingActor):
                 self.my_note.append(f"- \\[{ctime()}] Setting [[{note_name}]] subscriber to {msg.subscriber}\n")
 
             self.subscribers[msg.note_name.lower()] = msg.subscriber
-        elif isinstance(msg, FileModifiedEvent):
+        elif isinstance(msg, (FileModifiedEvent, FileCreatedEvent)):
             path_to, file_name = os.path.split(msg.src_path)
             maybe_note_name, ext = os.path.splitext(file_name)
             if ext.lower() == ".md":
@@ -68,7 +72,7 @@ class VaultWatcher(pykka.ThreadingActor):
         elif isinstance(msg, FileSystemEvent):
             logging.debug(f"Ignoring message type {type(msg)}")
         else:
-            logging.warning(f"Unexpected message type {type(msg)}, expected VaultNoteSubscription or FileModifiedEvent (with support for more FileSystemEvents coming later)")
+            logging.warning(f"Unexpected message type {type(msg)}, expected VaultNoteSubscription or FileModifiedEvent (with support for more FileSystemEvents coming later) ;; {msg}")
 
     def on_stop(self):
         if self.observer:
@@ -103,13 +107,17 @@ class FolderWatcher(pykka.ThreadingActor):
         logging.info(f"Watching: {self.watch_path}")
 
     def on_receive(self, msg):
-        if isinstance(msg, FileModifiedEvent):
+        if (isinstance(msg, FileModifiedEvent)
+        # FIXME
+                or isinstance(msg, FileCreatedEvent)):
             path_to, file_name = os.path.split(msg.src_path)
             maybe_note_name, ext_under_test = os.path.splitext(file_name)
             if self.ext.lower() == ext_under_test.lower():
                 self.subscriber.tell(msg)
             else:
                 logging.debug(f"expected .md but got: {msg.src_path}")
+        elif isinstance(msg, (DirModifiedEvent)):
+            pass  # FIXME: should I care about these?
         else:
             logging.warning(f"Unexpected message type {type(msg)}, expected FileModifiedEvent")
 
@@ -129,6 +137,5 @@ class FolderWatcherEventHandler(FileSystemEventHandler):
     def on_modified(self, event):
         self.actor_ref.tell(event)
 
-    # def on_created(self, event):
-    #     self.actor_ref.tell({"type": "created", "path": event.src_path})
-    # etc
+    def on_created(self, event):
+        self.actor_ref.tell(event)

@@ -1,6 +1,6 @@
 import logging
 
-from watchdog.events import FileModifiedEvent
+from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .woke_note import WokeNote
 from .wrappers.external_messages import MqttPublish
@@ -10,20 +10,31 @@ from .wrappers.scripting import CompiledScript
 class LiterateNotesManager(WokeNote):
     def __init__(self, note_name, *args, **kwargs):
         super().__init__(note_name, *args, **kwargs)
+        self.note_names = []
 
     def on_start(self):
         super().on_start()
 
-        to_spawn = []
+        self.note_names = list(self.__get_note_names_from_note())
+        for note_name in self.note_names:
+            LiterateNote.wake(note_name)
+
+    def on_note_modified(self):
+        latest_note_names = list(self.__get_note_names_from_note())
+        # FIXME do something interesting with removed ones?
+        new_note_names = set(latest_note_names) - set(self.note_names)
+        for note_name in new_note_names:
+            LiterateNote.wake(note_name)
+
+        self.note_names.extend(new_note_names)
+
+    def __get_note_names_from_note(self):
         with open(self.note_path) as f:
             for line_number, line in enumerate(f, 1):
                 if not (line.startswith("- [[") and line.endswith("]]\n")):
                     logging.info(f"Expected a list of wikilinks but line {line_number} was {line}")
                     return
-                to_spawn.append(line[4:-3])
-
-        for note_name in to_spawn:
-            LiterateNote.wake(note_name)
+                yield line[4:-3]
 
 
 class LiterateNote(WokeNote):
@@ -44,7 +55,10 @@ class LiterateNote(WokeNote):
     def on_receive(self, message):
         # super on_receive ignored intentionally, those things are managed explicitly here
 
-        if isinstance(message, FileModifiedEvent):
+        if (isinstance(message, FileModifiedEvent)
+                # FIXME hacky
+                or isinstance(message, FileCreatedEvent))\
+                :
             logging.debug(f"[LiterateNote.on_receive] calling on_note_modified")
             try:
                 self.script_wrapper.on_note_modified()
