@@ -2,6 +2,7 @@ package me.micseydel.actor
 
 import cats.data.{Validated, ValidatedNel}
 import cats.implicits.catsSyntaxValidatedId
+import me.micseydel.Common
 import me.micseydel.actor.google.GmailActor
 import me.micseydel.actor.google.GmailActor.{Email, Hyperlink}
 import me.micseydel.app.GoogleSlideUpdater
@@ -11,7 +12,6 @@ import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.vault.persistence.NoteRef
-import me.micseydel.{Common, NoOp}
 import net.jcazevedo.moultingyaml.*
 
 import scala.concurrent.duration.DurationInt
@@ -221,12 +221,44 @@ object ACAUpdater {
            |
            |*${matching.footer}*""".stripMargin
 
+      // FIXME: this should be written to the speaker notes too!
+      val formattedForZoom = formattedChunks(s"${matching.title}\n\n**${matching.brb}**\n\n${matching.body}\n\n*${matching.footer}*") match {
+        case Validated.Valid(formatted) => formatted
+        case Validated.Invalid(e) => s"Something went wrong chunking: $e"
+      }
+
       noteRef.setMarkdown(
         s"""- Generated: ${context.system.clock.now()}
            |$provenance
            |$markdownWithoutProvenance
+           |
+           |# Chunked for Zoom copy-paste
+           |
+           |$formattedForZoom
            |""".stripMargin
       ).map(_ => markdownWithoutProvenance)
+    }
+  }
+
+  private def formattedChunks(text: String): ValidatedNel[String, String] = {
+    val chunked = chunkText(text)
+    val chunks = chunked.size
+
+    chunked.zipWithIndex.map {
+      case (chunk, i) =>
+        s"""(${i+1}/$chunks) $chunk"""
+    }.mkString("\n\n\n").validNel
+  }
+
+  private def chunkText(text: String, maxChars: Int = 1000): List[String] = {
+    text.linesIterator.foldLeft((List.empty[String], "")) { case ((chunks, current), line) =>
+      val candidate = if (current.isEmpty) line else s"$current\n$line"
+      if (candidate.length <= maxChars) (chunks, candidate)
+      else (current :: chunks, line)
+    } match {
+      case (chunks, last) =>
+        val result = if (last.nonEmpty) last :: chunks else chunks
+        result.reverse
     }
   }
 

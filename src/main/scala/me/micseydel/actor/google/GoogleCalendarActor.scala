@@ -126,7 +126,7 @@ object GoogleCalendarActor {
         Try(new String(payload).parseJson.asJsObject.getFields("type", "replyTo") match {
           case Seq(JsString("get_two_weeks"), JsString(replyTo)) =>
             val start = context.system.clock.now()
-            
+
             // FIXME magic numbers
             val end = start.plusDays(14)
 
