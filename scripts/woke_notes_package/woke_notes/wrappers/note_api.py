@@ -23,12 +23,21 @@ class NoteAPI:
             f.write(contents)
 
     def set_markdown(self, markdown) -> None:
-        raw_front_matter = self.get_raw_frontmatter().rstrip()
-        with open(self.note_path, 'w') as f:
-            f.write(f"---\n"
-                    f"{raw_front_matter}\n"
-                    f"---\n"
-                    f"{markdown}")
+        raw_front_matter = None
+        try:
+            raw_front_matter = self.get_raw_frontmatter()
+        except FileNotFoundError:
+            pass
+
+        if raw_front_matter is not None:
+            with open(self.note_path, 'w') as f:
+                f.write(f"---\n"
+                        f"{raw_front_matter.rstrip()}\n"
+                        f"---\n"
+                        f"{markdown}")
+        else:
+            with open(self.note_path, 'w') as f:
+                f.write(markdown)
 
     def already_exists(self) -> bool:
         return os.path.exists(self.note_path)

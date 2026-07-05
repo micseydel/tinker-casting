@@ -11,9 +11,12 @@ import me.micseydel.actor.FolderWatcherActor.Ping
 import me.micseydel.actor.google.GoogleAuthManager.GoogleApplicationName
 import me.micseydel.actor.notifications.NotificationCenterManager.{NewNotification, Notification, NotificationId}
 import me.micseydel.dsl.Tinker.Ability
+import me.micseydel.dsl.TypedMqtt.MqttMessage
 import me.micseydel.dsl.tinkerer.AttentiveNoteMakingTinkerer
-import me.micseydel.dsl.{Operator, Tinker, TinkerColor, TinkerContext}
+import me.micseydel.dsl.*
 import me.micseydel.vault.persistence.NoteRef
+import spray.json.*
+import spray.json.DefaultJsonProtocol.{StringJsonFormat, listFormat}
 
 import java.time.ZonedDateTime
 import scala.concurrent.{ExecutionContextExecutorService, Future}
@@ -23,6 +26,7 @@ import scala.util.{Failure, Success, Try}
 object GoogleCalendarActor {
   sealed trait Message
 
+  private case class ReceiveMqtt(mqttMessage: TypedMqtt.MqttMessage) extends Message
 
   private case class ItsMidnight(midnight: ZonedDateTime) extends Message
 
@@ -30,18 +34,33 @@ object GoogleCalendarActor {
 
   private case class ReceivePing(ping: Ping) extends Message
 
-  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = AttentiveNoteMakingTinkerer[Message, ReceivePing]("Google Calendar Tinkering", TinkerColor.random(), "🗓️", ReceivePing) { (context, noteRef) =>
+  //
+
+  val Topic = "[[Google Calendar]]"
+
+  def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] =
+    AttentiveNoteMakingTinkerer[Message, ReceivePing]("Google Calendar Tinkering", TinkerColor.random(), "🗓️", ReceivePing) { (context, noteRef) =>
+      implicit val tc: TinkerContext[?] = context
+
+      context.system.mqtt ! TypedMqtt.Subscribe(Topic, context.messageAdapter(ReceiveMqtt).underlying)
+
+      val service: Calendar = TinkerGoogleCalendarService.createCalendarService(credential)
+
+      context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
+
+      noteRef.setMarkdown("- [ ] Click to fetch today's calendar events\n") match {
+        case Failure(ex) => context.actorContext.log.error("failed to set markdown", ex)
+        case Success(NoOp) =>
+      }
+
+      implicit val nr: NoteRef = noteRef
+
+      behavior(service)
+    }
+
+  private def behavior(service: Calendar)(implicit Tinker: Tinker, noteRef: NoteRef): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     implicit val ex: ExecutionContextExecutorService = context.system.httpExecutionContext
-
-    val service: Calendar = TinkerGoogleCalendarService.createCalendarService(credential)
-
-    context.system.operator !! Operator.SubscribeMidnight(context.messageAdapter(ItsMidnight))
-
-    noteRef.setMarkdown("- [ ] Click to fetch today's calendar events\n") match {
-      case Failure(ex) => context.actorContext.log.error("failed to set markdown", ex)
-      case Success(NoOp) =>
-    }
 
     Tinker.receiveMessage {
       case ItsMidnight(midnight) =>
@@ -56,12 +75,32 @@ object GoogleCalendarActor {
             if (events.isEmpty) {
               context.actorContext.log.warn(s"No events!")
             } else {
-              val details = events
+              val details: String = events
                 .map { event =>
-                  event.toString // FIXME
+
+                  val lines = List(
+                    s"## ${event.getSummary}\n",
+                    "```json",
+                    event.toPrettyString,
+                    "```\n"
+                  )
+
+                  Option(event.getRecurringEventId) match {
+                    case Some(recurringEventId) =>
+                      // FIXME hack, this should probably be wrapped in a future and everything
+                      val series = service.events.get("primary", recurringEventId).execute()
+                      (lines ++ List(
+                        "### Series",
+                        "```json",
+                        series.toPrettyString,
+                        "```\n"
+                      )).mkString("\n")
+                    case None =>
+                      lines.mkString("\n")
+                  }
                 }
-                .mkString("- ", "\n- ", "\n")
-              
+                .mkString("\n")
+
               noteRef.setMarkdown(s"- [ ] Click to fetch today's calendar events\n\n$details") match {
                 case Failure(ex) => context.actorContext.log.error("failed to set markdown", ex)
                 case Success(NoOp) =>
@@ -82,16 +121,51 @@ object GoogleCalendarActor {
         }
 
         Tinker.steadily
+
+      case ReceiveMqtt(MqttMessage(Topic, payload)) =>
+        Try(new String(payload).parseJson.asJsObject.getFields("type", "replyTo") match {
+          case Seq(JsString("get_two_weeks"), JsString(replyTo)) =>
+            val start = context.system.clock.now()
+            
+            // FIXME magic numbers
+            val end = start.plusDays(14)
+
+            // FIXME: this does I/O!
+            val events = service.getEvents(start, end, 150)
+
+            val json = JsObject(
+              "type" -> JsString("google_calendar_events"),
+              "events" -> JsArray(events.map(_.toString.parseJson).toVector),
+              // FIXME: grab the recurring events while at it
+            )
+
+            context.system.mqtt ! TypedMqtt.Publish(replyTo, json.compactPrint.getBytes)
+          case other =>
+            context.actorContext.log.warn(s"""Expected ["get_two_weeks", replyTo] but got $other""")
+        }) match {
+          case Failure(exception) => context.actorContext.log.warn("extracting payload failed", exception)
+          case Success(_) =>
+        }
+
+        Tinker.steadily
+
+      case ReceiveMqtt(MqttMessage(unexpectedTopic, payload)) =>
+        context.actorContext.log.warn(s"Received ${payload.length} bytes on unexpected topic $unexpectedTopic")
+        Tinker.steadily
     }
   }
 
   //
 
   private implicit class RichService(val service: Calendar) extends AnyVal {
-    def getEvents(from: DateTime, to: DateTime): List[Event] = {
+    def getEvents(from: ZonedDateTime, to: ZonedDateTime, maxResults: Int): List[Event] = {
+      getEvents(new DateTime(from.toInstant.toEpochMilli), new DateTime(to.toInstant.toEpochMilli), maxResults)
+    }
+
+    def getEvents(from: DateTime, to: DateTime, maxResults: Int = 10): List[Event] = {
       val events = service.events
         .list("primary")
-        .setMaxResults(10)
+        .setMaxResults(maxResults)
         .setTimeMin(from)
         .setTimeMax(to)
         .setOrderBy("startTime")
