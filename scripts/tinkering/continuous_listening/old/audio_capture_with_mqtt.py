@@ -2,22 +2,18 @@ import io
 import os
 import sys
 import json
-import shutil
 import random
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass
-from string import ascii_letters
 from datetime import datetime, timedelta
-from typing import Optional, Generator, List
+from typing import Generator
 from base64 import b64encode
 
 from pydub import AudioSegment
 import speech_recognition as sr
 import setproctitle
 
-from time import perf_counter
-
-from mqtt_manager import MqttPublisher
+from old.mqtt_manager import MqttPublisher
 from util import print_with_time, TEST_TOPIC, TRANSCRIBER_TOPIC
 
 

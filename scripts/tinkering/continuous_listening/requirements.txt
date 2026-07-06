@@ -1,5 +1,6 @@
 setproctitle
-paho-mqtt==2.1.0
+
+-e /Users/micseydel/coding/tinker-casting/scripts/woke_notes_package
 
 pyaudio
 SpeechRecognition

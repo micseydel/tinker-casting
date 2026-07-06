@@ -21,7 +21,7 @@ def on_note_modified():
     my_note.upsert_markdown(lambda markdown: upserter(duration_seconds, markdown))
 
 def on_timer(duration_seconds):
-    my_note.append_timestamped_markdown_list_line(f"Finished {duration_seconds}s timer")
+    my_note.append_datetimestamped_markdown_list_line(f"Finished {duration_seconds}s timer")
 
 def upserter(duration_seconds, markdown):
     lines = markdown.splitlines()

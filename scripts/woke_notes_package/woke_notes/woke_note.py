@@ -4,7 +4,7 @@ from typing import TypeVar, Any, ClassVar
 
 import pykka
 from pykka import Actor, ActorRef
-from watchdog.events import FileModifiedEvent
+from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .wrappers.note_api import NoteAPI
 from .wrappers.external_messages import MqttPublish, MqttSubscription, MqttConfig, ExternalMessages
@@ -110,7 +110,7 @@ class WokeNote(pykka.ThreadingActor):
 
     def on_receive(self, message):
         # logging.debug(f"[[{self.note_name}]] Receive {message}")
-        if isinstance(message, FileModifiedEvent):
+        if isinstance(message, (FileModifiedEvent, FileCreatedEvent)):
             self.on_note_modified()
         elif isinstance(message, MqttPublish):
             self.on_mqtt_message(message.topic, message.payload)
@@ -124,7 +124,7 @@ class WokeNote(pykka.ThreadingActor):
     def on_note_modified(self):
         logging.info(f"[woke_note.on_note_modified] override this {self}")
 
-    def on_mqtt_message(self, topic, payload):
+    def on_mqtt_message(self, topic: str, payload: bytes):
         logging.info(f"[woke_note.on_mqtt_message] override this {self} (ignoring ({len(payload)} on {topic})")
 
     def on_other_message(self, message):

@@ -11,7 +11,7 @@ message_to_send: "Hello :)"
 """)
 
 def on_mqtt_message(topic, message):
-    my_note.append_timestamped_markdown_list_line(f"Received on {topic} message: {message.decode()}")
+    my_note.append_datetimestamped_markdown_list_line(f"Received on {topic} message: {message.decode()}")
 
 def on_note_modified():
     if (maybe_note := my_note.note_if_markdown_starts_with_pressed_button()) is not None:

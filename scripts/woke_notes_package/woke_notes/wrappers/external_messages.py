@@ -86,7 +86,7 @@ class ExternalMessages(pykka.ThreadingActor):
         elif isinstance(msg, MqttPublish):
             self.mqtt_client.publish(msg.topic, msg.payload)
             msg = f"published {len(msg.payload)} bytes to `{msg.topic}`"
-            self.my_note.append(f"- \\[{ctime()}] {msg}\n")
+            # self.my_note.append(f"- \\[{ctime()}] {msg}\n")
             logging.debug(msg)
         else:
             logging.warning(f"Unknown message type: {type(msg)}")

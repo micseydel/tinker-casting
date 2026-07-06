@@ -20,11 +20,11 @@ def on_mqtt_message(topic, message):
         # sending_topic> message
         sender, what_they_sent = message.decode().split(">", 1)
     except ValueError:
-        my_note.append_timestamped_markdown_list_line(f"Received a weirdly formatted message: {message}")
+        my_note.append_datetimestamped_markdown_list_line(f"Received a weirdly formatted message: {message}")
         return
 
     if not sending:
-        my_note.append_timestamped_markdown_list_line(f"{sender} sent {what_they_sent}, not replying (sending paused)")
+        my_note.append_datetimestamped_markdown_list_line(f"{sender} sent {what_they_sent}, not replying (sending paused)")
         return
 
     delay_seconds = config.get("delay_seconds", 0)
@@ -32,12 +32,12 @@ def on_mqtt_message(topic, message):
     if (reply_with := config.get("reply_with")) is not None:
         if delay_seconds:
             set_timer(delay_seconds, (sender, reply_with))
-            my_note.append_timestamped_markdown_list_line(f"Received {what_they_sent}, replying with {reply_with} after {delay_seconds}s")
+            my_note.append_datetimestamped_markdown_list_line(f"Received {what_they_sent}, replying with {reply_with} after {delay_seconds}s")
         else:
-            my_note.append_timestamped_markdown_list_line(f"Received {what_they_sent}, replying with {reply_with}")
+            my_note.append_datetimestamped_markdown_list_line(f"Received {what_they_sent}, replying with {reply_with}")
             mqtt.publish(sender, reply_with)
     else:
-        my_note.append_timestamped_markdown_list_line(f"{sender} sent {what_they_sent}, not replying (no reply_with frontmatter)")
+        my_note.append_datetimestamped_markdown_list_line(f"{sender} sent {what_they_sent}, not replying (no reply_with frontmatter)")
 
 def on_timer(payload):
     sender, reply_with = payload

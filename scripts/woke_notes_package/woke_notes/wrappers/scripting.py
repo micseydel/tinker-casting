@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 
-from ..wrappers.note_api import NoteAPI, timestamped_markdown_list_line
+from ..wrappers.note_api import NoteAPI, datetimestamped_markdown_list_line, timestamped_markdown_list_line
 
 
 class CompiledScript:
@@ -25,6 +25,7 @@ class CompiledScript:
             # "vault_name": self.vault_name,
             "topic": topic,  # FIXME: this should change with the frontmatter
             "set_timer": self.set_timer,
+            "datetimestamped_markdown_list_line": datetimestamped_markdown_list_line,
             "timestamped_markdown_list_line": timestamped_markdown_list_line,
 
             "my_note": my_note,

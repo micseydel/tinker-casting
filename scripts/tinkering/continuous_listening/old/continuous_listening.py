@@ -1,22 +1,11 @@
 import os
 import sys
-import time
-import socket
-import json
-import base64
-import traceback
-import pathlib
 import random
 
 from multiprocessing import Process, Manager
-from tempfile import NamedTemporaryFile
-from urllib.error import URLError
-from typing import Optional, Tuple
-from pprint import pprint
 
-from mqtt_manager import MqttManager
-from util import print_with_time, TEST_TOPIC, TRANSCRIBER_TOPIC
-
+from old.mqtt_manager import MqttManager
+from util import print_with_time, TEST_TOPIC
 
 import setproctitle
 

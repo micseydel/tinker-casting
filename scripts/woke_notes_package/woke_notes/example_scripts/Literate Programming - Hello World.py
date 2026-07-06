@@ -15,7 +15,7 @@ message_to_send: "Hello :)"
 
 
 def on_mqtt_message(topic, message):
-    my_note.append_timestamped_markdown_list_line(f"received on `{topic}`: {message}")
+    my_note.append_datetimestamped_markdown_list_line(f"received on `{topic}`: {message}")
 
 
 def on_note_modified():
