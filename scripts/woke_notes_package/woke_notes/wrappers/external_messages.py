@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import pykka
 
-from paho.mqtt import client as mqtt_client
+from paho.mqtt import client as paho_mqtt_client
 from paho.mqtt.client import Client
 
 from ..wrappers.note_api import NoteAPI
@@ -21,13 +21,16 @@ class MqttConfig:
     port: int
 
 
-def get_config_from_env():
+def get_config_from_env() -> MqttConfig | None:
     username = os.environ.get("mqttUsername")
     password = os.environ.get("mqttPassword")
     broker = os.environ.get("mqttBroker")
-    port = int(os.environ.get("mqttBrokerPort"))
+    port = os.environ.get("mqttBrokerPort")
 
-    return MqttConfig(username, password, broker, port)
+    if username and password and broker and port:
+        return MqttConfig(username, password, broker, int(port))
+    else:
+        return None
 
 
 @dataclass
@@ -43,7 +46,7 @@ class MqttPublish:
 
 
 class ExternalMessages(pykka.ThreadingActor):
-    mqtt_client: Client
+    mqtt_client: Client = None
 
     def __init__(self, config: MqttConfig, note_path: str):
         super().__init__()
@@ -64,41 +67,47 @@ class ExternalMessages(pykka.ThreadingActor):
 
         self.my_note = NoteAPI(self.note_path)
 
-        client_num = random.randint(0, 100)
-        client_id = f'FIXME-TESTING-{client_num}'  # FIXME
-        self.mqtt_client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2, client_id)
-        self.mqtt_client.username_pw_set(self.mqtt_config.username, self.mqtt_config.password)
+        if self.mqtt_config is not None:
+            client_num = random.randint(0, 100)
+            client_id = f'FIXME-TESTING-{client_num}'  # FIXME
+            self.mqtt_client = paho_mqtt_client.Client(paho_mqtt_client.CallbackAPIVersion.VERSION2, client_id)
+            self.mqtt_client.username_pw_set(self.mqtt_config.username, self.mqtt_config.password)
 
-        self.mqtt_client.on_connect = self.on_mqtt_connect
-        self.mqtt_client.connect(self.mqtt_config.broker, self.mqtt_config.port)
+            self.mqtt_client.on_connect = self.on_mqtt_connect
+            self.mqtt_client.connect(self.mqtt_config.broker, self.mqtt_config.port)
 
-        # starts mqtt thread in the background (necessary for keep alive)
-        self.mqtt_client.loop_start()
+            # starts mqtt thread in the background (necessary for keep alive)
+            self.mqtt_client.loop_start()
 
         self.my_note.set_file_contents(f"- started {ctime()}\n")
 
     def on_receive(self, msg):
         if isinstance(msg, MqttSubscription):
-            logging.debug(f"Subscribing to {msg.topic}: {msg.subscriber}")
-            self.mqtt_client.subscribe(msg.topic)
-            self.subscribers[msg.topic].add(msg.subscriber)
-            self.my_note.append(f"- \\[{ctime()}] subscribed to `{msg.topic}`: {msg.subscriber}\n")
+            if self.mqtt_client is not None:
+                logging.debug(f"Subscribing to {msg.topic}: {msg.subscriber}")
+                self.mqtt_client.subscribe(msg.topic)
+                self.subscribers[msg.topic].add(msg.subscriber)
+                self.my_note.append(f"- \\[{ctime()}] subscribed to `{msg.topic}`: {msg.subscriber}\n")
+            else:
+                logging.warning(f"Ignoring subscription to {msg.topic}, no mqtt config")
         elif isinstance(msg, MqttPublish):
-            self.mqtt_client.publish(msg.topic, msg.payload)
-            msg = f"published {len(msg.payload)} bytes to `{msg.topic}`"
-            # self.my_note.append(f"- \\[{ctime()}] {msg}\n")
-            logging.debug(msg)
+            if self.mqtt_client is not None:
+                self.mqtt_client.publish(msg.topic, msg.payload)
+                logging.debug(f"published {len(msg.payload)} bytes to `{msg.topic}`")
+            else:
+                logging.warning(f"Ignoring publish to {msg.topic}, no mqtt config")
         else:
             logging.warning(f"Unknown message type: {type(msg)}")
 
     def on_stop(self):
         logging.info(f"[ExternalMessages.on_stop] calling loop_stop()")
-        self.mqtt_client.loop_stop()
+        if self.mqtt_client is not None:
+            self.mqtt_client.loop_stop()
         self.my_note.set_file_contents(f"- done {ctime()}\n")
 
     # mqtt stuff
 
-    def on_mqtt_message(self, client: mqtt_client.Client, userdata, msg: mqtt_client.MQTTMessage):
+    def on_mqtt_message(self, client: paho_mqtt_client.Client, userdata, msg: paho_mqtt_client.MQTTMessage):
         topic = msg.topic
         payload = msg.payload
 

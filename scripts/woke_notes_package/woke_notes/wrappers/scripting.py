@@ -1,23 +1,38 @@
+import datetime
 import json
 import logging
 import threading
 import time
+import requests
+from typing import Dict
+from typing import TYPE_CHECKING  # FIXME: remove
 
+from pykka import ActorRef
+
+from ..util import next_occurrence, seconds_until
+from ..vault_router import Subscribe, Publish
+from ..woke_note import MqttWrapper
 from ..wrappers.note_api import NoteAPI, datetimestamped_markdown_list_line, timestamped_markdown_list_line
 
 
 class CompiledScript:
     my_note: NoteAPI
 
-    def __init__(self, actor_ref, my_note, topic, mqtt, script_path):
+    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
         self.my_note = my_note
         self.script_path = script_path
         self.actor_ref = actor_ref
+
+        # keep in line with dsl.py!
         self.script_scope: dict = {
+            "TYPE_CHECKING": TYPE_CHECKING,
+
             "logging": logging,
             "ctime": time.ctime,
             "json": json,
             "sleep": time.sleep,
+            "requests": requests,
+            "datetime": datetime,
 
             # utils
             "mqtt": mqtt,
@@ -25,8 +40,14 @@ class CompiledScript:
             # "vault_name": self.vault_name,
             "topic": topic,  # FIXME: this should change with the frontmatter
             "set_timer": self.set_timer,
+            "cancel_timer": self.cancel_timer,
             "datetimestamped_markdown_list_line": datetimestamped_markdown_list_line,
             "timestamped_markdown_list_line": timestamped_markdown_list_line,
+            "subscribe_internal": lambda t, s: vault_router.tell(Subscribe(t, s)),
+            "publish_internal": lambda t, p: vault_router.tell(Publish(t, p)),
+            "publish_to_ntfy": publish_to_ntfy,
+            "next_occurrence": next_occurrence,
+            "seconds_until": seconds_until,
 
             "my_note": my_note,
             # DSL and lifecycle tinkering - to be expanded as needed
@@ -34,20 +55,32 @@ class CompiledScript:
             "on_mqtt_message": lambda t, message: None,
             "on_note_modified": lambda: None,
             "on_start": lambda: None,
-            "on_timer": lambda payload: None,
+            "on_timer": lambda key, payload: None,
         }
 
         self.prior_script = None
         self.compiled_script = None
         self.recompile_script()
+        self.timers: Dict[str, threading.Timer] = {}
 
     def get_script(self) -> str:
         raise NotImplementedError("subclasses need to implement this")
 
-    def set_timer(self, delay_seconds: float, payload: bytes):
-        threading.Timer(delay_seconds, lambda: self.actor_ref.tell(("TIMER", payload))).start()
+    def set_timer(self, delay_seconds: float | int, payload: bytes | None = None, key: str | None = None) -> None:
+        if key is not None and key in self.timers:
+            self.timers.pop(key).cancel()
 
-    def recompile_script(self):
+        timer = threading.Timer(delay_seconds, lambda: self.actor_ref.tell(("TIMER", key, payload)))
+        timer.start()
+        if key is not None:
+            self.timers[key] = timer
+
+    def cancel_timer(self, key: str) -> None:
+        if key in self.timers:
+            timer = self.timers.pop(key)
+            timer.cancel()
+
+    def recompile_script(self) -> None:
         script = self.get_script()
         if script == self.prior_script:
             logging.debug("ignoring recompilation request, script is unchanged (even though markdown was changed)")
@@ -65,26 +98,32 @@ class CompiledScript:
             exec(self.compiled_script, self.script_scope)
             self.prior_script = script
 
-    def on_start(self):
+    def on_start(self) -> None:
         try:
             self.script_scope["on_start"]()
         except Exception as e:
             logging.exception(f"on_start call failed {e}")
 
-    def on_note_modified(self):
+    def on_note_modified(self) -> None:
         try:
             self.script_scope["on_note_modified"]()
         except Exception as e:
             logging.exception(f"on_note_modified call failed {e}")
 
-    def on_mqtt_message(self, topic, payload):
+    def on_mqtt_message(self, topic: str, payload: bytes) -> None:
         try:
             self.script_scope["on_mqtt_message"](topic, payload)
         except Exception as e:
             logging.exception(f"on_mqtt_message call failed {e}")
 
-    def on_timer(self, payload):
+    def on_timer(self, key: str, payload: object) -> None:
         try:
-            self.script_scope["on_timer"](payload)
+            self.script_scope["on_timer"](key, payload)
         except Exception as e:
             logging.exception(f"on_timer call failed {e}")
+
+
+# FIXME: move to "services" or something, with weather, PurpleAir, etc
+def publish_to_ntfy(channel: str, message: str) -> None:
+    # from https://docs.ntfy.sh/publish/
+    requests.post(f"https://ntfy.sh/{channel}", data=message.encode(encoding='utf-8'))

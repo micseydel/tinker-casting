@@ -3,7 +3,8 @@ from .woke_note import WokeNote
 from .literate_note import LiterateNote
 from .woke_process import WokeProcess
 from multiprocessing.connection import Connection
+from . import dsl
 __all__ = [
-    "WokeNote", "LiterateNote", "WokeProcess", "get_config_from_env",
+    "WokeNote", "LiterateNote", "WokeProcess", "get_config_from_env", "dsl",
     "Connection",  # for typing
 ]

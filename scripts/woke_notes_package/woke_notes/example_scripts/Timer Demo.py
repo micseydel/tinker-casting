@@ -20,7 +20,7 @@ def on_note_modified():
     sleep(.25) # hack so Obsidian sees the update (otherwise it seems to miss it sometimes)
     my_note.upsert_markdown(lambda markdown: upserter(duration_seconds, markdown))
 
-def on_timer(duration_seconds):
+def on_timer(key, duration_seconds):
     my_note.append_datetimestamped_markdown_list_line(f"Finished {duration_seconds}s timer")
 
 def upserter(duration_seconds, markdown):

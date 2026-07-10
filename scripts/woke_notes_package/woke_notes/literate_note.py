@@ -1,8 +1,10 @@
 import logging
 
+from pykka import ActorRef
 from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
-from .woke_note import WokeNote
+from .woke_note import WokeNote, MqttWrapper
+from .wrappers.note_api import NoteAPI
 from .wrappers.external_messages import MqttPublish
 from .wrappers.scripting import CompiledScript
 
@@ -49,7 +51,8 @@ class LiterateNote(WokeNote):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = LiterateNoteScriptWrapper(self.actor_ref, self.my_note, self.topic, self.mqtt)
+        self.script_wrapper = LiterateNoteScriptWrapper(self.actor_ref, self.my_note, self.topic, self.mqtt,
+                                                        self.support.vault_router)
         self.script_wrapper.on_start()
 
     def on_receive(self, message):
@@ -57,7 +60,7 @@ class LiterateNote(WokeNote):
 
         if (isinstance(message, FileModifiedEvent)
                 # FIXME hacky
-                or isinstance(message, FileCreatedEvent))\
+                or isinstance(message, FileCreatedEvent)) \
                 :
             logging.debug(f"[LiterateNote.on_receive] calling on_note_modified")
             try:
@@ -70,10 +73,10 @@ class LiterateNote(WokeNote):
             self.script_wrapper.on_mqtt_message(message.topic, message.payload)
         else:
             try:
-                message_type, payload = message
+                message_type, key, payload = message
                 if message_type == "TIMER":
                     logging.debug(f"[LiterateNote.on_receive] calling on_timer")
-                    self.script_wrapper.on_timer(payload)
+                    self.script_wrapper.on_timer(key, payload)
                 else:
                     logging.warning(f"Unexpected type {message_type}:- {message}")
             except ValueError:
@@ -81,8 +84,8 @@ class LiterateNote(WokeNote):
 
 
 class LiterateNoteScriptWrapper(CompiledScript):
-    def __init__(self, actor_ref, my_note, topic, mqtt):
-        super().__init__(actor_ref, my_note, topic, mqtt, f"{my_note.note_path}#Code")
+    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef):
+        super().__init__(actor_ref, my_note, topic, mqtt, vault_router, f"{my_note.note_path}#Code")
 
     def get_script(self) -> str:
         with open(self.my_note.note_path) as f:

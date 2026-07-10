@@ -23,10 +23,13 @@ class Orchestrator(WokeNote):
         ScriptedNotesOrchestrator_note_name = "ScriptedNotesOrchestrator"
         LiterateNotesManager_note_name = "LiterateNotesManager"
 
-        ScriptedNotesOrchestrator.wake(ScriptedNotesOrchestrator_note_name, scripts_dir=self.scripts_dir)
+        if self.scripts_dir is not None:
+            ScriptedNotesOrchestrator.wake(ScriptedNotesOrchestrator_note_name, scripts_dir=self.scripts_dir)
 
-        deploy_experimental_literate_notes = os.path.isfile(
-            os.path.join(self.support.vault_path, f"{LiterateNotesManager_note_name}.md"))
+        experimental_literature_note_path = os.path.join(self.support.vault_path, f"{LiterateNotesManager_note_name}.md")
+        deploy_experimental_literate_notes = os.path.isfile(experimental_literature_note_path)
+
+        # FIXME: update for no scripts dir
         self.my_note.set_file_contents(f"""- generated {ctime()}
 - [[{ScriptedNotesOrchestrator_note_name}]]
 - [[{LiterateNotesManager_note_name}]]

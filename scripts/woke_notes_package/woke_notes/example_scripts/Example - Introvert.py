@@ -39,7 +39,7 @@ def on_mqtt_message(topic, message):
     else:
         my_note.append_datetimestamped_markdown_list_line(f"{sender} sent {what_they_sent}, not replying (no reply_with frontmatter)")
 
-def on_timer(payload):
+def on_timer(key, payload):
     sender, reply_with = payload
     mqtt.publish(sender, reply_with)
 

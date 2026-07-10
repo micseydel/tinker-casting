@@ -6,6 +6,7 @@ import pykka
 from pykka import Actor, ActorRef
 from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
+from .vault_router import VaultRouter
 from .wrappers.note_api import NoteAPI
 from .wrappers.external_messages import MqttPublish, MqttSubscription, MqttConfig, ExternalMessages
 from .wrappers.file_watcher import VaultWatcher, VaultNoteSubscription
@@ -31,14 +32,16 @@ class WokeNoteSupport:
     vault_name: str = None
     file_path = None
     external_messages_actor_ref = None
+    vault_router = None
 
-    def __init__(self, vault_path, mqtt_config):
+    def __init__(self, vault_path: str, mqtt_config: MqttConfig):
         self.vault_path = vault_path
         # rstrip() here is a hacky way to get os.path.split to treat the directory like a file
         self.vault_name = os.path.split(vault_path.rstrip("/"))[1]
         self.vault_watcher = VaultWatcher.start(self.vault_path)
         self.file_path = os.path.join(self.vault_path, "Woke Notes Mqtt Orchestrator.md")
         self.external_messages_actor_ref = ExternalMessages.start(mqtt_config, self.file_path)
+        self.vault_router = VaultRouter.start()
 
     def stop(self):
         self.vault_watcher.stop()
@@ -60,6 +63,7 @@ class WokeNote(pykka.ThreadingActor):
     @classmethod
     def stop_background_actors(cls):
         cls.support.stop()
+        cls.support = None
 
     # FIXME: because a user might accidentally call start(), I should consider NOT subclassing ThreadingActor here
     #   ...that might fit the multiprocessing model better anyway

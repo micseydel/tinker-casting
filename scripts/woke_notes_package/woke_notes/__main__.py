@@ -1,25 +1,38 @@
-import sys
 import logging
+import argparse
 
 from .orchestration import Orchestrator
 from .woke_note import WokeNote
 from .wrappers.external_messages import get_config_from_env
 
+
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
-try:
-    _, vault_path, scripts_dir = sys.argv
-except ValueError:
-    print("Expected two CLI args, vault path and then example_scripts dir\n", file=sys.stderr)
-    raise
+
+parser = argparse.ArgumentParser()
+parser.add_argument("vault_path", help="Path to the vault directory", type=str)
+
+# FIXME: need to make sure this is properly optional, in the Orchestrator
+parser.add_argument("--scripts", help="The directory for scripts")
+
+args = parser.parse_args()
 
 mqtt_config = get_config_from_env()
+if mqtt_config:
+    logging.info(f"Using vault {args.vault_path}, mqtt broker {mqtt_config.broker}:{mqtt_config.port} for user {mqtt_config.username}, and scripts_dir {args.scripts}")
+else:
+    logging.info(f"Failed to get mqtt config, proceeding with None config...")
 
-logging.info(f"Using vault {vault_path}, mqtt broker {mqtt_config.broker}:{mqtt_config.port} for user {mqtt_config.username}, and scripts_dir {scripts_dir}")
-
-WokeNote.start_background_actors(vault_path, mqtt_config)
+WokeNote.start_background_actors(args.vault_path, mqtt_config)
 # FIXME: can I delete the password to let it get garbage collected?
 
 # pykka.DeadLetterRouter.default_router().start() #?
-threaded_pykka_actors = Orchestrator.wake("Woke Notes Orchestrator", scripts_dir)
+orchestrator = Orchestrator.wake("Woke Notes Orchestrator", args.scripts)
+
+# FIXME: what to do instead?
+# try:
+#     while True:
+#         input()
+# except KeyboardInterrupt:
+#     pass

@@ -59,7 +59,7 @@ class NoteAPI:
                             break
                         frontmatter_lines.append(line)
 
-                    frontmatter = ''.join(frontmatter_lines)
+                    frontmatter = self.yaml.load(''.join(frontmatter_lines))
                 else:
                     raise Exception("no end to frontmatter")
 
@@ -73,7 +73,7 @@ class NoteAPI:
         if maybe_note is not None:
             frontmatter, markdown = maybe_note
             if markdown.startswith("- [x] "):
-                return self.yaml.load(frontmatter), markdown
+                return frontmatter, markdown
             else:
                 return None
         else:
@@ -191,7 +191,7 @@ class NoteAPI:
             return None
 
 
-def datetimestamped_markdown_list_line(line) -> str:
+def datetimestamped_markdown_list_line(line: str) -> str:
     return f"- \\[{ctime()}] {line}\n"
 
 

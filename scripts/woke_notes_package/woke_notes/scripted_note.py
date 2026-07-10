@@ -3,9 +3,11 @@ import os
 from time import ctime
 from typing import TypeVar
 
+from pykka import ActorRef
 from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
-from .woke_note import WokeNote
+from .woke_note import WokeNote, MqttWrapper
+from .wrappers.note_api import NoteAPI
 from .wrappers.scripting import CompiledScript
 from .wrappers.external_messages import MqttPublish
 from .wrappers.file_watcher import FolderWatcher
@@ -25,11 +27,11 @@ class ScriptedNote(WokeNote):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = ScriptedNoteScriptWrapper(self.actor_ref, self.my_note, self.topic, self.mqtt,
+        self.script_wrapper = ScriptedNoteScriptWrapper(self.actor_ref, self.my_note, self.topic, self.mqtt, self.support.vault_router,
                                                         self.script_path)
         self.script_wrapper.on_start()
 
-    def on_receive(self, message):
+    def on_receive(self, message: object):
         # super on_receive ignored intentionally, those things are managed explicitly here
 
         if (isinstance(message, FileModifiedEvent)
@@ -43,9 +45,9 @@ class ScriptedNote(WokeNote):
             self.script_wrapper.recompile_script()
         else:
             try:
-                message_type, payload = message
+                message_type, key, payload = message
                 if message_type == "TIMER":
-                    self.script_wrapper.on_timer(payload)
+                    self.script_wrapper.on_timer(key, payload)
                 else:
                     logging.warning(f"Unexpected type {message_type}:- {message}")
             except ValueError:
@@ -76,7 +78,7 @@ class ScriptedNotesOrchestrator(WokeNote):
 
         self.__update_note()
 
-    def on_receive(self, message):
+    def on_receive(self, message: object):
         if isinstance(message, FileModifiedEvent):
             if message.src_path.startswith(self.support.vault_path):
                 self.on_note_modified()
@@ -100,7 +102,7 @@ class ScriptedNotesOrchestrator(WokeNote):
                 pass  # FIXME - on_note_created event?
             elif message.src_path.startswith(self.scripts_dir):
                 script_path = message.src_path
-                note_name = os.path.splitext(os.path.split(script_path)[1])[0]
+                note_name: str = os.path.splitext(os.path.split(script_path)[1])[0]
                 if note_name in self.woke_notes:
                     logging.warning(f"Got a file created event for script {script_path} but it was already created (ignoring)")
                 else:
@@ -116,10 +118,10 @@ class ScriptedNotesOrchestrator(WokeNote):
         else:
             logging.warning(f"Unexpected message, type {type(message)}: {message}")
 
-    def on_note_modified(self):
+    def on_note_modified(self) -> None:
         pass  # does not matter to this orchestrator right now
 
-    def __update_note(self):
+    def __update_note(self) -> None:
         scripted_notes_list = "\n".join(f"    - [[{nn}]]" for nn in self.woke_notes.keys())
         self.my_note.set_file_contents(f"""- generated {ctime()}
 - scripted notes:
@@ -128,8 +130,8 @@ class ScriptedNotesOrchestrator(WokeNote):
 
 
 class ScriptedNoteScriptWrapper(CompiledScript):
-    def __init__(self, actor_ref, my_note, topic, mqtt, script_path):
-        super().__init__(actor_ref, my_note, topic, mqtt, script_path)
+    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
+        super().__init__(actor_ref, my_note, topic, mqtt, vault_router, script_path)
 
     def get_script(self) -> str:
         with open(self.script_path) as f:
