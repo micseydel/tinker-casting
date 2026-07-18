@@ -129,23 +129,7 @@ class NoteAPI:
     def get_raw_frontmatter(self) -> str | None:
         try:
             with open(self.note_path) as f:
-                try:
-                    frontmatter_start = next(f)
-                except StopIteration:
-                    return None
-
-                if frontmatter_start != "---\n":
-                    logging.warning(f"Expected frontmatter but first line was {frontmatter_start}")
-                    return None
-
-                frontmatter_lines = []
-                for line in f:
-                    if line == "---\n":
-                        # done with frontmatter, no need to read the markdown here
-                        break
-                    frontmatter_lines.append(line)
-
-            return ''.join(frontmatter_lines)
+                _raw_note_to_note(f, self.yaml)
         except FileNotFoundError:
             return None
 
@@ -198,3 +182,39 @@ def datetimestamped_markdown_list_line(line: str) -> str:
 def timestamped_markdown_list_line(line) -> str:
     # FIXME: use proper formatting
     return f"- \\[{ctime()[11:19]}] {line}\n"
+
+
+def _raw_note_to_note(raw_note_lines, yaml) -> Tuple[object, str]:
+    try:
+        maybe_frontmatter_start = next(raw_note_lines)
+    except StopIteration:
+        return None, ""
+
+    frontmatter = None
+    if maybe_frontmatter_start == "---\n":
+        frontmatter_lines = []
+        for line in raw_note_lines:
+            if line == "---\n":
+                # done with frontmatter
+                break
+            frontmatter_lines.append(line)
+
+        frontmatter = yaml.load(''.join(frontmatter_lines))
+    else:
+        raise Exception("no end to frontmatter")
+
+    markdown = ''.join(raw_note_lines)  # remaining
+    return frontmatter, markdown
+
+
+class MockedNoteAPI:
+    def __init__(self, note_name, raw_note: str) -> None:
+        self.note_name = note_name
+
+        yaml = YAML(typ='safe')
+        lines = raw_note.splitlines(keepends=True)
+        # print(lines)
+        self.note = _raw_note_to_note(iter(lines), yaml)
+
+    def get_note(self) -> object | None:
+        return self.note

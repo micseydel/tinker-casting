@@ -9,10 +9,9 @@ def on_start():
 def on_note_modified():
     note = my_note.note_if_markdown_starts_with_pressed_button()
     if note:
-        frontmatter, markdown = note
-        today = datetime.date.today().isoformat()
+        _frontmatter, markdown = note
         sleep(0.25)
-        if today not in markdown:
+        if today().isoformat() not in markdown:
             updated_markdown = markdown_list_prepender(markdown)
             reset_timer_from_note(note)
             my_note.set_markdown(updated_markdown)
@@ -24,6 +23,7 @@ def on_timer(_key, _payload):
     note = frontmatter, _markdown = my_note.get_note()
     channel = frontmatter.get("channel")
     message = frontmatter.get("message")
+    logging.info(f"Timer called, publishing to {channel}: {message}")
     publish_to_ntfy(channel, message)
     reset_timer_from_note(note)
 
@@ -37,7 +37,7 @@ def markdown_list_prepender(markdown: str) -> str:
     """
     lines = markdown.splitlines()
     lines[0] = "- [ ] Mark as done"
-    line_to_prepend = f"- [[{my_note.note_name} ({datetime.date.today().isoformat()})]]"
+    line_to_prepend = f"- [[{my_note.note_name} ({today().isoformat()})]]"
     lines.insert(1, line_to_prepend)
     lines[-1] = lines[-1] + "\n"
     return "\n".join(lines)
@@ -51,10 +51,17 @@ def reset_timer_from_note(note=None):
         note = my_note.get_note()
 
     if note is not None:
+        # print("canary", note)
         frontmatter, markdown = note
 
         next_notification = next_occurrence(frontmatter.get("ifNotDoneBy"))
-        if datetime.date.today().isoformat() in markdown:
+        captured_today = today()
+
+        today_marked_as_done = captured_today.isoformat() in markdown
+        next_notification_is_for_today = ((captured_today.year, captured_today.month, captured_today.day) ==
+                                          (next_notification.year, next_notification.month, next_notification.day))
+
+        if today_marked_as_done and next_notification_is_for_today:
             next_notification += datetime.timedelta(days=1)
 
         delay = seconds_until(next_notification)

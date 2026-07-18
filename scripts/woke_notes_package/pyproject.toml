@@ -17,6 +17,7 @@ dependencies = [
 	"ruamel.yaml==0.19.1",
 	"paho-mqtt==2.1.0",
 	"watchdog==6.0.0",
+	"requests==2.34.2",
 ]
 authors = [
   {name = "Michael Seydel", email = "contact@micseydel.me"},
@@ -25,3 +26,11 @@ description = "wake up"
 # FIXME
 #readme = "README.md"
 license = "MIT"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+

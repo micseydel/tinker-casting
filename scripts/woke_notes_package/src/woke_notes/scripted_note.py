@@ -8,7 +8,7 @@ from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .woke_note import WokeNote, MqttWrapper
 from .wrappers.note_api import NoteAPI
-from .wrappers.scripting import CompiledScript
+from .wrappers.scripting import ScriptHarness
 from .wrappers.external_messages import MqttPublish
 from .wrappers.file_watcher import FolderWatcher
 
@@ -21,14 +21,14 @@ class ScriptedNote(WokeNote):
         self.script_path: str = script_path
 
         # this is defined in on_start
-        self.script_wrapper: ScriptedNoteScriptWrapper = None
+        self.script_wrapper: ScriptedNoteHarness = None
 
     def on_start(self):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = ScriptedNoteScriptWrapper(self.actor_ref, self.my_note, self.topic, self.mqtt, self.support.vault_router,
-                                                        self.script_path)
+        self.script_wrapper = ScriptedNoteHarness(self.actor_ref, self.my_note, self.topic, self.mqtt, self.support.vault_router,
+                                                  self.script_path)
         self.script_wrapper.on_start()
 
     def on_receive(self, message: object):
@@ -129,7 +129,7 @@ class ScriptedNotesOrchestrator(WokeNote):
 """)
 
 
-class ScriptedNoteScriptWrapper(CompiledScript):
+class ScriptedNoteHarness(ScriptHarness):
     def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
         super().__init__(actor_ref, my_note, topic, mqtt, vault_router, script_path)
 

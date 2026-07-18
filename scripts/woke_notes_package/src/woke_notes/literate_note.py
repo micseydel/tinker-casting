@@ -6,7 +6,7 @@ from watchdog.events import FileModifiedEvent, FileCreatedEvent
 from .woke_note import WokeNote, MqttWrapper
 from .wrappers.note_api import NoteAPI
 from .wrappers.external_messages import MqttPublish
-from .wrappers.scripting import CompiledScript
+from .wrappers.scripting import ScriptHarness
 
 
 class LiterateNotesManager(WokeNote):
@@ -45,13 +45,13 @@ class LiterateNote(WokeNote):
 
         # these are defined in on_start
         self.script_path: str = None
-        self.script_wrapper: LiterateNoteScriptWrapper = None
+        self.script_wrapper: LiterateNoteScriptHarness = None
 
     def on_start(self):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = LiterateNoteScriptWrapper(self.actor_ref, self.my_note, self.topic, self.mqtt,
+        self.script_wrapper = LiterateNoteScriptHarness(self.actor_ref, self.my_note, self.topic, self.mqtt,
                                                         self.support.vault_router)
         self.script_wrapper.on_start()
 
@@ -83,7 +83,7 @@ class LiterateNote(WokeNote):
                 logging.warning(f"Unexpected type {type(message)} {message}")
 
 
-class LiterateNoteScriptWrapper(CompiledScript):
+class LiterateNoteScriptHarness(ScriptHarness):
     def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef):
         super().__init__(actor_ref, my_note, topic, mqtt, vault_router, f"{my_note.note_path}#Code")
 

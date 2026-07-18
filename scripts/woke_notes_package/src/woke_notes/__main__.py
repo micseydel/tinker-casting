@@ -31,8 +31,8 @@ WokeNote.start_background_actors(args.vault_path, mqtt_config)
 orchestrator = Orchestrator.wake("Woke Notes Orchestrator", args.scripts)
 
 # FIXME: what to do instead?
-# try:
-#     while True:
-#         input()
-# except KeyboardInterrupt:
-#     pass
+try:
+    while True:
+        input()
+except KeyboardInterrupt:
+    orchestrator.stop()

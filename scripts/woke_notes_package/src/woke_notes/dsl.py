@@ -11,7 +11,7 @@ from time import ctime, sleep
 
 import requests
 
-from .util import next_occurrence, seconds_until
+from .util import TimeUtil, Clock
 
 from .woke_note import MqttWrapper
 from .wrappers.note_api import datetimestamped_markdown_list_line, timestamped_markdown_list_line, NoteAPI
@@ -20,6 +20,12 @@ my_note: NoteAPI
 topic: str
 default_topic: str
 mqtt: MqttWrapper
+
+_clock = Clock()
+_timeutils = TimeUtil(_clock)
+next_occurrence = _timeutils.next_occurrence
+seconds_until = _timeutils.seconds_until
+today = _clock.today
 
 
 def set_timer(delay_seconds: float | int, payload: bytes | None = None, key: str | None = None) -> None: pass

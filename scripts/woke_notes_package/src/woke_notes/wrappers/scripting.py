@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING  # FIXME: remove
 
 from pykka import ActorRef
 
-from ..util import next_occurrence, seconds_until
+from ..util import Clock, TimeUtil
 from ..vault_router import Subscribe, Publish
 from ..woke_note import MqttWrapper
 from ..wrappers.note_api import NoteAPI, datetimestamped_markdown_list_line, timestamped_markdown_list_line
 
 
-class CompiledScript:
+class ScriptHarness:
     my_note: NoteAPI
 
     def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
@@ -23,9 +23,11 @@ class CompiledScript:
         self.script_path = script_path
         self.actor_ref = actor_ref
 
+        timeutil = TimeUtil(Clock())
+
         # keep in line with dsl.py!
         self.script_scope: dict = {
-            "TYPE_CHECKING": TYPE_CHECKING,
+            "TYPE_CHECKING": TYPE_CHECKING,  # FIXME: this should just be False, right?
 
             "logging": logging,
             "ctime": time.ctime,
@@ -46,8 +48,8 @@ class CompiledScript:
             "subscribe_internal": lambda t, s: vault_router.tell(Subscribe(t, s)),
             "publish_internal": lambda t, p: vault_router.tell(Publish(t, p)),
             "publish_to_ntfy": publish_to_ntfy,
-            "next_occurrence": next_occurrence,
-            "seconds_until": seconds_until,
+            "next_occurrence": timeutil.next_occurrence,
+            "seconds_until": timeutil.seconds_until,
 
             "my_note": my_note,
             # DSL and lifecycle tinkering - to be expanded as needed

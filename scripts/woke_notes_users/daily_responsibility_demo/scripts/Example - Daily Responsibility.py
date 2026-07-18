@@ -24,6 +24,7 @@ def on_timer(_key, _payload):
     note = frontmatter, _markdown = my_note.get_note()
     channel = frontmatter.get("channel")
     message = frontmatter.get("message")
+    logging.info(f"Timer called, publishing to {channel}: {message}")
     publish_to_ntfy(channel, message)
     reset_timer_from_note(note)
 
@@ -54,7 +55,13 @@ def reset_timer_from_note(note=None):
         frontmatter, markdown = note
 
         next_notification = next_occurrence(frontmatter.get("ifNotDoneBy"))
-        if datetime.date.today().isoformat() in markdown:
+        today = datetime.date.today()
+
+        today_marked_as_done = today.isoformat() in markdown
+        next_notification_is_for_today = ((today.year, today.month, today.day) ==
+                                          (next_notification.year, next_notification.month, next_notification.day))
+        
+        if today_marked_as_done and next_notification_is_for_today:
             next_notification += datetime.timedelta(days=1)
 
         delay = seconds_until(next_notification)
