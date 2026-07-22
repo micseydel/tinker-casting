@@ -320,10 +320,12 @@ object RecurringResponsibilityActor {
     }
 
     def notificationIdForNoteId(): String = {
-      MessageDigest.getInstance("SHA-256")
-        .digest(noteRef.noteId.id.getBytes("UTF-8"))
-        .take(7)
-        .map("%02x".format(_)).mkString
+      // FIXME: make this more robust
+      noteRef.noteId.id.filter(c => c != ')' && c != '(' && c != ' ').toLowerCase()
+//      MessageDigest.getInstance("SHA-256")
+//        .digest(noteRef.noteId.id.getBytes("UTF-8"))
+//        .take(7)
+//        .map("%02x".format(_)).mkString
     }
   }
 }

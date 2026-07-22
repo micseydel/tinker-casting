@@ -54,7 +54,11 @@ object RecurringResponsibilityManager {
 
         noteRef.setMarkdown(updatedState.map {
           case Entry(wikilink, Some(nextActionDate)) =>
-            s"[[$wikilink]] ($nextActionDate)"
+            if (nextActionDate.isBefore(context.system.clock.today())) {
+              s"[[$wikilink]] (==$nextActionDate==)"
+            } else {
+              s"[[$wikilink]] ($nextActionDate)"
+            }
           case Entry(wikilink, None) =>
             s"[[$wikilink]]"
         }.toList.mkString("- ", "\n- ", "\n"))
@@ -86,7 +90,15 @@ object RecurringResponsibilityManager {
           } else if (line.startsWith("- [[") && line.contains("]]")) {
             line.split("]] ").toList match {
               case List(wikiLinkPlusPrefixCruft, almostLocalDate) =>
-                Try(LocalDate.parse(almostLocalDate.drop(1).dropRight(1))) match {
+                // drop the parens e.g. `[[Pine litter sifting]] (2026-06-05)` -> `(2026-06-05)` -> `2026-06-05`
+                val raw = almostLocalDate.drop(1).dropRight(1)
+                // remove highlighting (which is added for past-due stuff)
+                val cleaned = if (raw.startsWith("==") && raw.endsWith("==")) {
+                  raw.drop(2).dropRight(2)
+                } else {
+                  raw
+                }
+                Try(LocalDate.parse(cleaned)) match {
                   case Failure(exception) =>
                     Left(Common.getStackTraceString(exception))
                   case Success(localDate) =>

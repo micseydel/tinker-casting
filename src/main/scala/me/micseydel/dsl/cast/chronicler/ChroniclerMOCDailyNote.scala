@@ -86,7 +86,7 @@ object ChroniclerMOCDailyNote {
                   false
                 case Success(markdown) =>
                   val hasNotesWithoutAck = markdown.contains("# Notes without acknowledgements")
-                  context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck")
+                  context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck for midnight $midnight")
                   hasNotesWithoutAck
               }
           }
