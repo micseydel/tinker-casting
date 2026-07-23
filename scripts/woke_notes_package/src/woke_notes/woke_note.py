@@ -7,7 +7,7 @@ from pykka import Actor, ActorRef
 from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .vault_router import VaultRouter
-from .wrappers.note_api import NoteAPI
+from .wrappers.note_api import NoteAPI, PrimitiveNoteAPI
 from .wrappers.external_messages import MqttPublish, MqttSubscription, MqttConfig, ExternalMessages
 from .wrappers.file_watcher import VaultWatcher, VaultNoteSubscription
 
@@ -110,7 +110,7 @@ class WokeNote(pykka.ThreadingActor):
         logging.basicConfig(level=logging.INFO,
                             format='%(asctime)s - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
-        self.my_note = NoteAPI(self.note_path)
+        self.my_note = NoteAPI(PrimitiveNoteAPI(self.note_path))
 
     def on_receive(self, message):
         # logging.debug(f"[[{self.note_name}]] Receive {message}")

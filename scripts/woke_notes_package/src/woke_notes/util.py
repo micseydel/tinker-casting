@@ -19,7 +19,6 @@ class TimeUtil:
         # if later.tzinfo is None:
         #     later = later.replace(tzinfo=timezone.utc)
         now = self.clock.now(timezone.utc)
-        print(later, now)
         return (later - now).total_seconds()
 
     # generated with claude-opus-4-6 on 2026-07-13 to avoid pytz (not rigorously tested)
