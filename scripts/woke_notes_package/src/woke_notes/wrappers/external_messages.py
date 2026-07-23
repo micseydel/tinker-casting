@@ -10,6 +10,7 @@ import pykka
 from paho.mqtt import client as paho_mqtt_client
 from paho.mqtt.client import Client
 
+from .note_api import PrimitiveNoteAPI
 from ..wrappers.note_api import NoteAPI
 
 
@@ -65,7 +66,7 @@ class ExternalMessages(pykka.ThreadingActor):
                             format='%(asctime)s - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
-        self.my_note = NoteAPI(self.note_path)
+        self.my_note = NoteAPI(PrimitiveNoteAPI(self.note_path))
 
         if self.mqtt_config is not None:
             client_num = random.randint(0, 100)

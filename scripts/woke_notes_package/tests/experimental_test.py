@@ -6,7 +6,7 @@ import time
 
 from woke_notes.util import TimeUtil
 from woke_notes.wrappers.note_api import MockedNoteAPI, datetimestamped_markdown_list_line, \
-    timestamped_markdown_list_line
+    timestamped_markdown_list_line, NoteAPI
 
 if_not_done_by = "18:16:35-07:00"
 
@@ -24,11 +24,10 @@ message: "(canary)"
 
 class MockTimer:
     def __init__(self):
-        self.perviously_set = False
+        self.perviously_set = None
 
     def set_timer(self, *args, **kwargs):
-        # FIXME *args
-        self.perviously_set = True
+        self.perviously_set = (args, kwargs)
 
 
 class MockClock:
@@ -43,14 +42,14 @@ class MockClock:
         return self._today
 
 
-def gen_script_scope(note_name, set_timer, my_note, today) -> dict:
-    now = datetime.datetime(2026, 7, 18, 17, 35)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=datetime.timezone.utc)
+class MockNtfy:
+    def __init__(self):
+        self.called = None
 
-    # noinspection PyTypeChecker
-    timeutil = TimeUtil(MockClock(now, now.date))
+    def publish_to_ntfy(self, channel, message):
+        self.called = (channel, message)
 
+def gen_script_scope(note_name, set_timer, timeutil, mock_note_primitive, today, publish_to_ntfy) -> dict:
     return {
         "TYPE_CHECKING": False,
 
@@ -58,7 +57,6 @@ def gen_script_scope(note_name, set_timer, my_note, today) -> dict:
         "ctime": time.ctime,
         "json": json,
         "sleep": lambda _: None,
-        # "requests": requests,
         "datetime": datetime,
 
         # utils
@@ -67,47 +65,233 @@ def gen_script_scope(note_name, set_timer, my_note, today) -> dict:
         # FIXME: are these used?
         "datetimestamped_markdown_list_line": datetimestamped_markdown_list_line,
         "timestamped_markdown_list_line": timestamped_markdown_list_line,
-        "publish_to_ntfy": None,  # FIXME
+        "publish_to_ntfy": publish_to_ntfy,
 
-        # FIXME: keep these, right?
         "next_occurrence": timeutil.next_occurrence,
         "seconds_until": timeutil.seconds_until,
 
         # shortcuts
         "today": today,
 
-        "my_note": my_note,
+        "my_note": NoteAPI(mock_note_primitive),
     }
 
 
-def test_EXPERIMENT():
-    note_name = "Example - Daily Responsibility"
-    script_path = os.path.join(os.path.split(__file__)[0], f"../src/woke_notes/example_scripts/{note_name}.py")
+def harness(mocked_note, today, now, timer, publish_to_ntfy):
+    # FIXME: now should match today
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=datetime.timezone.utc)
 
-    today = datetime.date(2026, 7, 17)
+    # noinspection PyTypeChecker
+    timeutil = TimeUtil(MockClock(now, now.date))
 
-    my_note = MockedNoteAPI(note_name, raw_test_note(today.isoformat()))
+    script_scope: dict = gen_script_scope(
+        mocked_note.note_name,
+        timer.set_timer,
+        timeutil,
+        mocked_note,
+        lambda: today,
+        publish_to_ntfy,
+    )
 
-    timer = MockTimer()
-    script_scope: dict = gen_script_scope(note_name, timer.set_timer, my_note, lambda: today)
+    script_path = os.path.join(os.path.split(__file__)[0],
+                               f"../src/woke_notes/example_scripts/{mocked_note.note_name}.py")
 
     with open(script_path) as f:
         script = f.read()
     compiled_script = compile(script, script_path, "exec")
     exec(compiled_script, script_scope)
 
-    ##
-
-    # FIXME: test that empty note does nothing
-
-    print("should be False:", timer.perviously_set)
     script_scope["on_start"]()
-    assert timer.perviously_set
 
-    # timer.perviously_set = False
-    #
-    # script_scope["on_note_modified"]()
-    #
-    # timer.perviously_set = False
-    #
-    # script_scope["on_timer"]()
+    return script_scope
+
+
+def test_donothing():
+    note_name = "Example - Daily Responsibility"
+    today = datetime.date(2026, 7, 17)
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+    mocked_note = MockedNoteAPI(note_name, None)
+
+    harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 17, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    assert timer.perviously_set is None
+    assert mock_ntfy.called is None
+    assert not mocked_note.file_contents_set
+
+
+def test_inert_start_with_existing_contents():
+    note_name = "Example - Daily Responsibility"
+    today = datetime.date(2026, 7, 17)
+    raw_note_contents = raw_test_note(today.isoformat())
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+    mocked_note = MockedNoteAPI(note_name, raw_note_contents)
+
+    harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 17, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    args, kwargs = timer.perviously_set
+
+    assert args == (27695, None)
+    assert kwargs == {"key": 'Example - Daily Responsibility/TIMER'}
+
+    assert mock_ntfy.called is None
+
+    assert not mocked_note.file_contents_set
+
+
+def test_WAT():
+    note_name = "Example - Daily Responsibility"
+    # yesterday = datetime.date(2026, 7, 16)
+    today = datetime.date(2026, 7, 17)
+    raw_note_contents = raw_test_note(today.isoformat()).replace("- [ ] ", "- [x] ")
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+    mocked_note = MockedNoteAPI(note_name, raw_note_contents)
+
+    harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 0, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    assert timer.perviously_set[0] == (88895, None)
+    assert timer.perviously_set[1].get("key") == 'Example - Daily Responsibility/TIMER'
+
+    assert mock_ntfy.called is None
+
+    assert not mocked_note.file_contents_set
+
+def test_inert_on_note_modified():
+    note_name = "Example - Daily Responsibility"
+    today = datetime.date(2026, 7, 17)
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+    mocked_note = MockedNoteAPI(note_name, None)
+
+    script_scope = harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 17, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    script_scope["on_note_modified"]()
+
+    assert timer.perviously_set is None
+    assert mock_ntfy.called is None
+    assert not mocked_note.file_contents_set
+
+def test_resetbutton_on_note_modified():
+    note_name = "Example - Daily Responsibility"
+    today = datetime.date(2026, 7, 17)
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+    mocked_note = MockedNoteAPI(
+        note_name,
+        raw_test_note(today.isoformat()).replace("- [ ] ", "- [x] ")
+    )
+
+    script_scope = harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 17, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    timer.previously_set = None
+    script_scope["on_note_modified"]()
+
+    args, kwargs = timer.perviously_set
+    # FIXME: this is successing only because of start()!
+    assert args == (27695, None)
+    assert kwargs == {"key": 'Example - Daily Responsibility/TIMER'}
+
+    assert mock_ntfy.called is None
+    assert mocked_note.file_contents_set == raw_test_note(today.isoformat())
+
+def test_complex_on_note_modified():
+    note_name = "Example - Daily Responsibility"
+
+    yesterday = datetime.date(2026, 7, 16)
+    today = datetime.date(2026, 7, 17)
+
+    base_raw_note = raw_test_note(yesterday.isoformat())
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+    mocked_note = MockedNoteAPI(
+        note_name,
+        base_raw_note.replace("- [ ] ", "- [x] ")
+    )
+
+    script_scope = harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 17, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    timer.previously_set = None
+    script_scope["on_note_modified"]()
+
+    args, kwargs = timer.perviously_set
+    assert args == (27695, None)
+    assert kwargs == {"key": 'Example - Daily Responsibility/TIMER'}
+
+    assert mock_ntfy.called is None
+
+    lines = base_raw_note.split("\n")
+    lines.insert(6, "- [[Example - Daily Responsibility (2026-07-17)]]")
+
+    assert mocked_note.file_contents_set == '\n'.join(lines)
+
+def test_on_timer():
+    note_name = "Example - Daily Responsibility"
+    today = datetime.date(2026, 7, 17)
+
+    timer = MockTimer()
+    mock_ntfy = MockNtfy()
+
+    yesterday = datetime.date(2026, 7, 16)
+    base_raw_note = raw_test_note(yesterday.isoformat())
+    mocked_note = MockedNoteAPI(note_name, base_raw_note)
+
+    script_scope = harness(
+        mocked_note,
+        today,
+        datetime.datetime(2026, 7, 18, 17, 35),
+        timer,
+        mock_ntfy.publish_to_ntfy,
+    )
+
+    timer.previously_set = None
+
+    script_scope["on_timer"](None, 'Example - Daily Responsibility/TIMER')
+
+    assert timer.perviously_set[0][0] == 27695
+    assert mock_ntfy.called == ("THE_CHANNEL", "(canary)")
+    assert not mocked_note.file_contents_set

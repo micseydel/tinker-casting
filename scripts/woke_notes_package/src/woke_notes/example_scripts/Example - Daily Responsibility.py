@@ -1,5 +1,5 @@
 if TYPE_CHECKING:  # IDE support
-    from dsl import *
+    from ..dsl import *
 
 
 def on_start():
@@ -51,17 +51,17 @@ def reset_timer_from_note(note=None):
         note = my_note.get_note()
 
     if note is not None:
-        # print("canary", note)
         frontmatter, markdown = note
 
         next_notification = next_occurrence(frontmatter.get("ifNotDoneBy"))
-        captured_today = today()
+        rightnows_today = today()
 
-        today_marked_as_done = captured_today.isoformat() in markdown
-        next_notification_is_for_today = ((captured_today.year, captured_today.month, captured_today.day) ==
+        today_marked_as_done = rightnows_today.isoformat() in markdown
+        next_notification_is_for_today = ((rightnows_today.year, rightnows_today.month, rightnows_today.day) ==
                                           (next_notification.year, next_notification.month, next_notification.day))
 
-        if today_marked_as_done and next_notification_is_for_today:
+        next_notification_already_done = today_marked_as_done and next_notification_is_for_today
+        if next_notification_already_done:
             next_notification += datetime.timedelta(days=1)
 
         delay = seconds_until(next_notification)

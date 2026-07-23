@@ -11,6 +11,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileSystemEvent, FileCreatedEvent, \
     DirModifiedEvent
 
+from .note_api import PrimitiveNoteAPI
 from ..wrappers.note_api import NoteAPI
 
 
@@ -36,7 +37,7 @@ class VaultWatcher(pykka.ThreadingActor):
                             format='%(asctime)s - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
-        self.my_note = NoteAPI(os.path.join(self.vault_path, "Woke Notes VaultWatcher.md"))
+        self.my_note = NoteAPI(PrimitiveNoteAPI(os.path.join(self.vault_path, "Woke Notes VaultWatcher.md")))
         self.my_note.set_file_contents(f"- started {ctime()}\n")
 
         self.handler = FolderWatcherEventHandler(self.actor_ref)
