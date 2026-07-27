@@ -17,6 +17,7 @@ from .woke_note import MqttWrapper
 from .wrappers.note_api import datetimestamped_markdown_list_line, timestamped_markdown_list_line, NoteAPI
 
 my_note: NoteAPI
+note_name: str
 topic: str
 default_topic: str
 mqtt: MqttWrapper

@@ -35,4 +35,6 @@ try:
     while True:
         input()
 except KeyboardInterrupt:
+    logging.info("KeyboardInterrupt detected, stopping...")
     orchestrator.stop()
+    logging.info("Orchestrator stopped")

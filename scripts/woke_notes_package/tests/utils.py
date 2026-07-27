@@ -61,6 +61,8 @@ def gen_script_scope(note_name, set_timer, timeutil, mock_note_primitive, today,
         "today": today,
 
         "my_note": NoteAPI(mock_note_primitive),
+
+        "on_start": lambda: None,
     }
 
 

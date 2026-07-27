@@ -13,6 +13,7 @@ class Orchestrator(WokeNote):
         super().__init__(note_name, *args, **kwargs)
 
         self.scripts_dir = scripts_dir
+        self.started = []
 
     def on_start(self):
         logging.basicConfig(level=logging.INFO,
@@ -24,7 +25,7 @@ class Orchestrator(WokeNote):
         LiterateNotesManager_note_name = "LiterateNotesManager"
 
         if self.scripts_dir is not None:
-            ScriptedNotesOrchestrator.wake(ScriptedNotesOrchestrator_note_name, scripts_dir=self.scripts_dir)
+            self.started.append(ScriptedNotesOrchestrator.wake(ScriptedNotesOrchestrator_note_name, scripts_dir=self.scripts_dir))
 
         experimental_literature_note_path = os.path.join(self.support.vault_path, f"{LiterateNotesManager_note_name}.md")
         deploy_experimental_literate_notes = os.path.isfile(experimental_literature_note_path)
@@ -38,10 +39,13 @@ class Orchestrator(WokeNote):
 """)
 
         if deploy_experimental_literate_notes:
-            LiterateNotesManager.wake(LiterateNotesManager_note_name)
+            self.started.append(LiterateNotesManager.wake(LiterateNotesManager_note_name))
 
     def on_note_modified(self):
         pass  # ignore
 
     def on_stop(self):
-        pass
+        total = len(self.started)
+        for i, started in enumerate(self.started, 1):
+            logging.info(f"Stopping {started} ({total - i} remaining)")
+            started.stop()

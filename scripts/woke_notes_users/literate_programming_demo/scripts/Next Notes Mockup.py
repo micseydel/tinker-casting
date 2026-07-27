@@ -15,7 +15,7 @@ default_interval_days: 7
 """)
 
 def on_note_modified():
-    # logging.info("on_note_modified")
+    logging.info("on_note_modified")
     note = my_note.note_if_markdown_starts_with_pressed_button()
     if note:
         frontmatter, markdown = note

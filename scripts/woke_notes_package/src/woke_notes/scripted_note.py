@@ -128,6 +128,13 @@ class ScriptedNotesOrchestrator(WokeNote):
 {scripted_notes_list}
 """)
 
+    def on_stop(self):
+        self.scripts_watcher.stop()
+        logging.info(f"Stopped scripts watcher, stopping {len(self.woke_notes)} notes...")
+        for actor in self.woke_notes.values():
+            actor.stop()
+        logging.info("Successfully stopped!")
+
 
 class ScriptedNoteHarness(ScriptHarness):
     def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
