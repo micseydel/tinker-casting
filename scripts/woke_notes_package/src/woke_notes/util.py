@@ -8,7 +8,7 @@ class Clock:
         return datetime.now(tz)
 
     def today(self) -> date:
-        return datetime.today()
+        return date.today()
 
 
 class TimeUtil:

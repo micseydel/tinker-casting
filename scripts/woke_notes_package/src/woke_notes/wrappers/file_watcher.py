@@ -34,7 +34,7 @@ class VaultWatcher(pykka.ThreadingActor):
 
     def on_start(self):
         logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(message)s',
+                            format='[%(asctime)s %(pathname)s:%(lineno)s] - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
         self.my_note = NoteAPI(PrimitiveNoteAPI(os.path.join(self.vault_path, "Woke Notes VaultWatcher.md")))
@@ -55,7 +55,7 @@ class VaultWatcher(pykka.ThreadingActor):
                 logging.warning(f"overwriting [[{note_name}]] subscriber {existing_subscriber} with {msg.subscriber}")
                 self.my_note.append(f"- \\[{ctime()}] overwriting [[{note_name}]] subscriber {existing_subscriber} with {msg.subscriber}\n")
             else:
-                logging.info(f"Setting [[{note_name}]] file watcher to {msg.subscriber}")
+                logging.debug(f"Setting [[{note_name}]] file watcher to {msg.subscriber}")
                 self.my_note.append(f"- \\[{ctime()}] Setting [[{note_name}]] subscriber to {msg.subscriber}\n")
 
             self.subscribers[msg.note_name.lower()] = msg.subscriber
@@ -65,9 +65,10 @@ class VaultWatcher(pykka.ThreadingActor):
             if ext.lower() == ".md":
                 subscriber = self.subscribers.get(maybe_note_name.lower())
                 if subscriber is not None:
+                    logging.info(f"forwarding message to [[{maybe_note_name}]]")
                     subscriber.tell(msg)
                 else:
-                    logging.debug(f"No subscriber for {maybe_note_name}")
+                    logging.debug(f"No subscriber for {maybe_note_name} (lowered, in: ({self.subscribers})")
             else:
                 logging.debug(f"expected .md but got: {msg.src_path}")
         elif isinstance(msg, FileSystemEvent):
@@ -76,10 +77,11 @@ class VaultWatcher(pykka.ThreadingActor):
             logging.warning(f"Unexpected message type {type(msg)}, expected VaultNoteSubscription or FileModifiedEvent (with support for more FileSystemEvents coming later) ;; {msg}")
 
     def on_stop(self):
+        logging.info("Stopping file watcher...")
         if self.observer:
             self.observer.stop()
-            self.observer.join(timeout=2.0)
-        logging.info("File watcher stopped.")
+            self.observer.join()
+        logging.info("File watcher stopped :)")
 
 
 class FolderWatcher(pykka.ThreadingActor):
@@ -97,7 +99,7 @@ class FolderWatcher(pykka.ThreadingActor):
 
     def on_start(self):
         logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(message)s',
+                            format='[%(asctime)s %(pathname)s:%(lineno)s] - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
         self.handler = FolderWatcherEventHandler(self.actor_ref)
@@ -123,10 +125,11 @@ class FolderWatcher(pykka.ThreadingActor):
             logging.warning(f"Unexpected message type {type(msg)}, expected FileModifiedEvent")
 
     def on_stop(self):
+        logging.info("Stopping file watcher...")
         if self.observer:
             self.observer.stop()
-            self.observer.join(timeout=2.0)
-        logging.info("File watcher stopped.")
+            self.observer.join()
+        logging.info("File watcher stopped :)")
 
 
 # just bridges watchdog to the actor

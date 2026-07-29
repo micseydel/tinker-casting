@@ -1,21 +1,32 @@
+from datetime import timedelta
+
 if TYPE_CHECKING:  # IDE support
     from ..dsl import *
 
+DEFAULT_INTERVAL_DAYS = 7
+
+
 def on_start():
-    logging.info(f"Started... note exists? {my_note.already_exists()} (overwriting either way - {my_note.note_api.note_path})")
-    my_note.set_file_contents("""---
-default_interval_days: 7
+    if my_note.already_exists():
+        return
+
+    today_today = today()
+    my_note.set_file_contents(f"""---
+default_interval_days: {DEFAULT_INTERVAL_DAYS}
 ---
-- [ ] Create next: [[Next Notes Mockup (2026-07-19)]]
+- [ ] Create next: [[{my_note.note_name} ({today_today.isoformat()})]]
 
 ## History
- 
-- [[Next Notes Mockup (2026-07-12)]]
-- [[Next Notes Mockup (2026-07-05)]]
+
+- [[{my_note.note_name} ({(today_today + timedelta(days=-DEFAULT_INTERVAL_DAYS)).isoformat()})]]
+- [[{my_note.note_name} ({(today_today + timedelta(days=-DEFAULT_INTERVAL_DAYS*2)).isoformat()})]]
+- (anything from the line above downward is basically ignored)
+- (once you create one real link, e.g. with the button, you can delete these extra lines with no problem)
 """)
 
+
 def on_note_modified():
-    # logging.info("on_note_modified")
+    logging.info("[Next-Notes Moc.py:on_note_modified] CANARY")
     note = my_note.note_if_markdown_starts_with_pressed_button()
     if note:
         frontmatter, markdown = note
@@ -29,14 +40,10 @@ def on_note_modified():
         # e.g. "- [x] Create next: [[Next Notes Mockup (2026-07-19)]]".
         next_target = _wikilink_target(button)
 
-        # Create the next note. Per the recorded decision this uses open()
-        # rather than my_note, which only ever binds to the current note.
-        _create_next_note(next_target)
-
-        # A real deployment would also drop a calendar event; the mockup can't.
         logging.warning(
-            f"A calendar event should have been created for [[{next_target}]] but wasn't"
+            f"The user needs to manually create: a calendar event(?) and [[{next_target}]]. Any Next* aliasing has also been left untouched."
         )
+        # FIXME: here I can wake() the next target, if only to move the alias along... how to model that?
 
         # Advance the button to the note after this one, keeping the label text.
         interval_days = frontmatter.get("default_interval_days", 7)
@@ -47,6 +54,7 @@ def on_note_modified():
         # Record the just-created note at the top of History, if not already there.
         history_line = f"- [[{next_target}]]"
         if history_line not in lines:
+            sleep(0.25)
             _prepend_to_history(lines, history_line)
 
         my_note.set_markdown("\n".join(lines))
@@ -70,19 +78,6 @@ def _bump_target(target: str, interval_days: int) -> str:
     date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
     following = date + datetime.timedelta(days=interval_days)
     return f"{base} ({following.isoformat()})"
-
-
-def _create_next_note(target: str) -> None:
-    logging.warning(f"target {target} must be created manually")
-    # with open(f"{target}.md", "w") as f:
-    #     f.write(
-    #         f"---\n"
-    #         f"created: {today().isoformat()}\n"
-    #         f"---\n"
-    #         f"# {target}\n"
-    #         f"\n"
-    #         f"(created by [[{note_name}]])\n"
-    #     )
 
 
 def _prepend_to_history(lines: list, history_line: str) -> None:

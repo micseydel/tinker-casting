@@ -74,7 +74,7 @@ class WokeNote(pykka.ThreadingActor):
             *args: Any,
             **kwargs: Any,
     ) -> ActorRef[Actor]:
-        assert cls.support is not None, "Did you run WokeNote.configure(vault_path, mqtt_config)?"
+        assert cls.support is not None, "Did you run WokeNote.start_background_actors(vault_path, mqtt_config)?"
 
         # .start() comes from pykka.ThreadingActor
         actor_ref = cls.start(note_name,
@@ -108,7 +108,7 @@ class WokeNote(pykka.ThreadingActor):
     def on_start(self):
         """Initializes logging for the thread and creates my_note"""
         logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(message)s',
+                            format='[%(asctime)s %(pathname)s:%(lineno)s] - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
         self.my_note = NoteAPI(PrimitiveNoteAPI(self.note_path))
 

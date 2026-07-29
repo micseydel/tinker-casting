@@ -8,17 +8,18 @@ from watchdog.events import FileModifiedEvent, FileCreatedEvent
 
 from .woke_note import WokeNote, MqttWrapper
 from .wrappers.note_api import NoteAPI
-from .wrappers.scripting import ScriptHarness
+from .wrappers.scripting import ScriptHarness, ScriptPath
 from .wrappers.external_messages import MqttPublish
 from .wrappers.file_watcher import FolderWatcher
 
-SN = TypeVar("SN", bound="ScriptedNote")
+NCS = TypeVar("NCS", bound="NoteCompanionScript")
 
 
-class ScriptedNote(WokeNote):
-    def __init__(self, note_name, script_path):
+class NoteCompanionScript(WokeNote):
+    def __init__(self, note_name, script_path: ScriptPath):
         super().__init__(note_name)
-        self.script_path: str = script_path
+
+        self.script_path = script_path
 
         # this is defined in on_start
         self.script_wrapper: ScriptedNoteHarness = None
@@ -27,22 +28,28 @@ class ScriptedNote(WokeNote):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = ScriptedNoteHarness(self.actor_ref, self.my_note, self.topic, self.mqtt, self.support.vault_router,
-                                                  self.script_path)
+        self.script_wrapper = ScriptedNoteHarness(
+            self.actor_ref, self.my_note,
+            self.topic, self.mqtt,
+            self.support.vault_router,
+            self.script_path,
+        )
         self.script_wrapper.on_start()
 
     def on_receive(self, message: object):
+        logging.info(f"CANARY [[{self.note_name}]]")
         # super on_receive ignored intentionally, those things are managed explicitly here
 
         if (isinstance(message, FileModifiedEvent)
                 # FIXME: on_note_created ?
                 or isinstance(message, FileCreatedEvent)):
+            logging.info(f"CANARY [[{self.note_name}]] calling on_note_modified()")
             self.script_wrapper.on_note_modified()
         elif isinstance(message, MqttPublish):
             self.script_wrapper.on_mqtt_message(message.topic, message.payload)
         elif message == "SCRIPT_MODIFIED":
             logging.info(f"Hot reloading [[{self.note_name}]]")
-            self.script_wrapper.recompile_script()
+            self.script_wrapper.compile_script(this_is_a_recompile=True)
         else:
             try:
                 message_type, key, payload = message
@@ -53,8 +60,17 @@ class ScriptedNote(WokeNote):
             except ValueError:
                 logging.warning(f"Unexpected type {type(message)} {message}")
 
+    def on_stop(self):
+        self.script_wrapper.on_stop()
 
-class ScriptedNotesOrchestrator(WokeNote):
+
+class TemplateScript:
+    def __init__(self, script_name: str) -> None:
+        """script name is WITHOUT extension (since they're all py right now anyway), located in SCRIPTS/templates"""
+        self.script_name = script_name
+
+
+class NoteCompanionScriptsManager(WokeNote):
     def __init__(self, note_name: str, scripts_dir: str, *args, **kwargs):
         super().__init__(note_name, *args, **kwargs)
         self.scripts_dir = scripts_dir
@@ -73,7 +89,7 @@ class ScriptedNotesOrchestrator(WokeNote):
         logging.info(f"Starting with scripts {python_scripts}; spawning WokeNotes now")
 
         for note_name in note_names_for_scripts:
-            actor_ref = ScriptedNote.wake(note_name, os.path.join(self.scripts_dir, f"{note_name}.py"))
+            actor_ref = NoteCompanionScript.wake(note_name, ScriptPath(self.scripts_dir, note_name))
             self.woke_notes[note_name] = actor_ref
 
         self.__update_note()
@@ -101,13 +117,13 @@ class ScriptedNotesOrchestrator(WokeNote):
             if message.src_path.startswith(self.support.vault_path):
                 pass  # FIXME - on_note_created event?
             elif message.src_path.startswith(self.scripts_dir):
-                script_path = message.src_path
-                note_name: str = os.path.splitext(os.path.split(script_path)[1])[0]
+                script_path_to_wake = message.src_path
+                note_name: str = os.path.splitext(os.path.split(script_path_to_wake)[1])[0]
                 if note_name in self.woke_notes:
-                    logging.warning(f"Got a file created event for script {script_path} but it was already created (ignoring)")
+                    logging.warning(f"Got a file created event for script {script_path_to_wake} but it was already created (ignoring)")
                 else:
-                    logging.info(f"Detected new script {script_path}, loading it and adding it for hotreloading...")
-                    actor_ref = ScriptedNote.wake(note_name, script_path)
+                    logging.info(f"Detected new script {script_path_to_wake}, loading it and adding it for hotreloading...")
+                    actor_ref = NoteCompanionScript.wake(note_name, script_path_to_wake)
                     self.woke_notes[note_name] = actor_ref
                     self.__update_note()
             else:
@@ -137,11 +153,34 @@ class ScriptedNotesOrchestrator(WokeNote):
 
 
 class ScriptedNoteHarness(ScriptHarness):
-    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
+    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: ScriptPath):
         super().__init__(actor_ref, my_note, topic, mqtt, vault_router, script_path)
+        self._scripts = []
+        self.script_scope["wake"] = self.__wake_subordinate
+        self.script_scope["TemplateScript"] = TemplateScript
+
+    def __wake_subordinate(self, filename: str, template_script: TemplateScript) -> ActorRef:
+        if isinstance(template_script, TemplateScript):
+            script = NoteCompanionScript.wake(  # FIXME: fk wake->start if possible!
+                filename,
+                ScriptPath(os.path.join(self.script_path.scripts_dir, "templates"), template_script.script_name)
+            )
+            self._scripts.append(script)
+            return script
+        else:
+            raise NotImplementedError
 
     def get_script(self) -> str:
-        with open(self.script_path) as f:
+        with open(self.script_path.script_path) as f:
             script = f.read()
 
         return script
+
+    def on_stop(self) -> None:
+        logging.info(f"stopping ScriptedNoteHarness")
+        try:
+            for subordinate in self._scripts:
+                subordinate.stop()
+            self.script_scope["on_stop"]()
+        except Exception as e:
+            logging.exception(f"on_stop call failed {e}")

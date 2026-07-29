@@ -63,7 +63,7 @@ class ExternalMessages(pykka.ThreadingActor):
 
     def on_start(self):
         logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(message)s',
+                            format='[%(asctime)s %(pathname)s:%(lineno)s] - %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
 
         self.my_note = NoteAPI(PrimitiveNoteAPI(self.note_path))
@@ -101,10 +101,11 @@ class ExternalMessages(pykka.ThreadingActor):
             logging.warning(f"Unknown message type: {type(msg)}")
 
     def on_stop(self):
-        logging.info(f"[ExternalMessages.on_stop] calling loop_stop()")
+        logging.info(f"[on_stop] calling loop_stop()")
         if self.mqtt_client is not None:
             self.mqtt_client.loop_stop()
         self.my_note.set_file_contents(f"- done {ctime()}\n")
+        logging.info(f"[on_stop] stopped mqtt_client")
 
     # mqtt stuff
 

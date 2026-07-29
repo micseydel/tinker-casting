@@ -1,0 +1,2 @@
+-e /Users/micseydel/coding/tinker-casting/scripts/woke_notes_package
+

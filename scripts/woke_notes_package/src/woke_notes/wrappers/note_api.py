@@ -7,6 +7,9 @@ from ruamel.yaml import YAML
 
 
 class PrimitiveNoteAPI:
+    note_path: str
+    note_name: str
+
     def __init__(self, note_path: str) -> None:
         self.note_path = note_path
         self.note_name = os.path.splitext(os.path.split(note_path)[1])[0]
@@ -38,9 +41,10 @@ def string_to_genlines(string):
 
 
 class NoteAPI:
-    def __init__(self, note_api) -> None:
+    def __init__(self, note_api: PrimitiveNoteAPI) -> None:
         self.note_api = note_api
         self.note_name = note_api.note_name
+        self.note_path = note_api.note_path
 
         # FIXME - round trip is probably preferable; also, is this thread safe?
         self.yaml = YAML(typ='safe')
@@ -264,6 +268,7 @@ def _raw_note_to_frontmatter_and_markdown(raw_note_lines) -> Tuple[str | None, s
 class MockedNoteAPI:
     def __init__(self, note_name, raw_note: str | None) -> None:
         self.note_name = note_name
+        self.note_path = f"MOCKED/{note_name}"
 
         # yaml = YAML(typ='safe')
         self.raw_note = raw_note
@@ -280,4 +285,4 @@ class MockedNoteAPI:
         raise NotImplementedError("append")
 
     def already_exists(self) -> bool:
-        raise NotImplementedError("already_exists")
+        return self.raw_note is not None

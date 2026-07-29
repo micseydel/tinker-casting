@@ -7,7 +7,7 @@ from .wrappers.external_messages import get_config_from_env
 
 
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(message)s',
+                    format='[%(asctime)s %(pathname)s:%(lineno)s] - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S')
 
 parser = argparse.ArgumentParser()
@@ -30,7 +30,6 @@ WokeNote.start_background_actors(args.vault_path, mqtt_config)
 # pykka.DeadLetterRouter.default_router().start() #?
 orchestrator = Orchestrator.wake("Woke Notes Orchestrator", args.scripts)
 
-# FIXME: what to do instead?
 try:
     while True:
         input()
@@ -38,3 +37,7 @@ except KeyboardInterrupt:
     logging.info("KeyboardInterrupt detected, stopping...")
     orchestrator.stop()
     logging.info("Orchestrator stopped")
+    WokeNote.stop_background_actors()
+
+    # FIXME: what more is needed for a proper, clean shutdown?
+    # exit(0)

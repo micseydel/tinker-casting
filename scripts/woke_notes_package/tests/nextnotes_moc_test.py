@@ -3,7 +3,7 @@ import datetime
 from utils import MockTimer, MockNtfy, harness
 from woke_notes.wrappers.note_api import MockedNoteAPI
 
-NOTE_NAME = "Next Notes Mockup"
+NOTE_NAME = "Next-Notes MOC"  # FIXME: make this match the example script and have the harness infer from scriptname?
 TODAY = datetime.date(2026, 7, 17)
 NOW = datetime.datetime(2026, 7, 18, 17, 35)
 
@@ -37,23 +37,24 @@ def build_harness(mocked_note, timer, mock_ntfy):
     )
 
 
-def test_inert_on_note_modified():
-    # No file at all -> button is not "pressed" -> nothing happens.
+def test_no_note_creates_template():
     timer = MockTimer()
     mock_ntfy = MockNtfy()
     mocked_note = MockedNoteAPI(NOTE_NAME, None)
 
-    script_scope = build_harness(mocked_note, timer, mock_ntfy)
-    script_scope["on_note_modified"]()
+    build_harness(mocked_note, timer, mock_ntfy)
 
     assert timer.perviously_set is None
     assert mock_ntfy.called is None
-    assert not mocked_note.file_contents_set
+    assert mocked_note.file_contents_set == (
+                   raw_test_note(
+                       "2026-07-17",
+                       history=("2026-07-10", "2026-07-03"),
+                   ) + """- (anything from the line above downward is basically ignored)\n- (once you create one real link, e.g. with the button, you can delete these extra lines with no problem)\n"""
+           )
 
 
 def test_pressed_creates_advances_and_records():
-    # monkeypatch.chdir(tmp_path)
-
     timer = MockTimer()
     mock_ntfy = MockNtfy()
     mocked_note = MockedNoteAPI(NOTE_NAME, pressed(raw_test_note("2026-07-19")))
@@ -70,17 +71,6 @@ def test_pressed_creates_advances_and_records():
         "2026-07-26",
         history=("2026-07-19", "2026-07-12", "2026-07-05"),
     )
-
-    # The next note was created on disk (via open(), per the recorded decision).
-    # created = tmp_path / f"{NOTE_NAME} (2026-07-19).md"
-    # assert created.read_text() == (
-    #     "---\n"
-    #     "created: 2026-07-17\n"
-    #     "---\n"
-    #     f"# {NOTE_NAME} (2026-07-19)\n"
-    #     "\n"
-    #     f"(created by [[{NOTE_NAME}]])\n"
-    # )
 
 
 def test_pressed_skips_history_when_already_present():
@@ -103,7 +93,6 @@ def test_pressed_skips_history_when_already_present():
 
 
 def test_pressed_appends_to_empty_history():
-
     timer = MockTimer()
     mock_ntfy = MockNtfy()
     raw = f"""---
@@ -129,4 +118,3 @@ default_interval_days: 7
         "\n"
         f"- [[{NOTE_NAME} (2026-07-19)]]"
     )
-    # assert (tmp_path / f"{NOTE_NAME} (2026-07-19).md").exists()

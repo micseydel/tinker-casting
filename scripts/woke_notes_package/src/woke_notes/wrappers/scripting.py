@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os
 import threading
 import time
 import requests
@@ -15,10 +16,24 @@ from ..woke_note import MqttWrapper
 from ..wrappers.note_api import NoteAPI, datetimestamped_markdown_list_line, timestamped_markdown_list_line
 
 
+class ScriptPath:
+    scripts_dir: str
+    script_name: str
+    script_path:str
+
+    def __init__(self, scripts_dir: str, script_name: str) -> None:
+        self.scripts_dir = scripts_dir
+        self.script_name = script_name
+        self.script_path = os.path.join(self.scripts_dir, f"{self.script_name}.py")
+
+    def __repr__(self) -> str:
+        return f"ScriptPath({self.scripts_dir}, {self.script_name}, {self.script_path})"
+
+
 class ScriptHarness:
     my_note: NoteAPI
 
-    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: str):
+    def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef, script_path: ScriptPath):
         self.my_note = my_note
         self.script_path = script_path
         self.actor_ref = actor_ref
@@ -60,11 +75,12 @@ class ScriptHarness:
             "on_note_modified": lambda: None,
             "on_start": lambda: None,
             "on_timer": lambda key, payload: None,
+            "on_stop": lambda: None,
         }
 
         self.prior_script = None
         self.compiled_script = None
-        self.recompile_script()
+        self.compile_script(this_is_a_recompile=False)
         self.timers: Dict[str, threading.Timer] = {}
 
     def get_script(self) -> str:
@@ -84,20 +100,23 @@ class ScriptHarness:
             timer = self.timers.pop(key)
             timer.cancel()
 
-    def recompile_script(self) -> None:
+    def compile_script(self, this_is_a_recompile) -> None:
         script = self.get_script()
         if script == self.prior_script:
             logging.debug("ignoring recompilation request, script is unchanged (even though markdown was changed)")
             return
 
         try:
-            self.compiled_script = compile(script, self.script_path, "exec")
+            self.compiled_script = compile(script, self.script_path.script_path, "exec")
         except SyntaxError as e:
             logging.exception(f"Ignored {self.script_path} read {len(script)} bytes but there was a syntax error")
         except Exception as e:
             logging.exception(f"Something went wrong ({e}) with the script {self.script_path}")
         else:
-            logging.info(f"[[{self.my_note.note_name}#Code]] recompilation complete, executing to update the scope now...")
+            if this_is_a_recompile:
+                logging.info(f"{self.script_path} recompilation complete, executing to update the scope now...")
+            else:
+                logging.info(f"{self.script_path} compilation complete, executing to update the scope now...")
             # this may update the scope with potentially new on* event functions
             exec(self.compiled_script, self.script_scope)
             self.prior_script = script
@@ -109,6 +128,7 @@ class ScriptHarness:
             logging.exception(f"on_start call failed {e}")
 
     def on_note_modified(self) -> None:
+        logging.info(f"[on_note_modified] [[{self.my_note.note_name}]] calling self.script_scope[\"on_note_modified\"]()")
         try:
             self.script_scope["on_note_modified"]()
         except Exception as e:
@@ -125,6 +145,9 @@ class ScriptHarness:
             self.script_scope["on_timer"](key, payload)
         except Exception as e:
             logging.exception(f"on_timer call failed {e}")
+
+    def on_stop(self) -> None:
+        logging.info(f"stopping ScriptHarness")
 
 
 # FIXME: move to "services" or something, with weather, PurpleAir, etc

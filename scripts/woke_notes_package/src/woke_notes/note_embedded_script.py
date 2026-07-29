@@ -9,7 +9,7 @@ from .wrappers.external_messages import MqttPublish
 from .wrappers.scripting import ScriptHarness
 
 
-class LiterateNotesManager(WokeNote):
+class NoteEmbeddedScriptsManager(WokeNote):
     def __init__(self, note_name, *args, **kwargs):
         super().__init__(note_name, *args, **kwargs)
         self.note_names = []
@@ -19,14 +19,14 @@ class LiterateNotesManager(WokeNote):
 
         self.note_names = list(self.__get_note_names_from_note())
         for note_name in self.note_names:
-            LiterateNote.wake(note_name)
+            NoteEmbeddedScript.wake(note_name)
 
     def on_note_modified(self):
         latest_note_names = list(self.__get_note_names_from_note())
         # FIXME do something interesting with removed ones?
         new_note_names = set(latest_note_names) - set(self.note_names)
         for note_name in new_note_names:
-            LiterateNote.wake(note_name)
+            NoteEmbeddedScript.wake(note_name)
 
         self.note_names.extend(new_note_names)
 
@@ -39,19 +39,20 @@ class LiterateNotesManager(WokeNote):
                 yield line[4:-3]
 
 
-class LiterateNote(WokeNote):
+class NoteEmbeddedScript(WokeNote):
     def __init__(self, note_name):
         super().__init__(note_name)
 
         # these are defined in on_start
         self.script_path: str = None
-        self.script_wrapper: LiterateNoteScriptHarness = None
+        self.script_wrapper: NoteEmbeddedScriptHarness = None
 
     def on_start(self):
         # defines note_api
         super().on_start()
 
-        self.script_wrapper = LiterateNoteScriptHarness(self.actor_ref, self.my_note, self.topic, self.mqtt,
+        self.script_wrapper = NoteEmbeddedScriptHarness(self.actor_ref, self.my_note,
+                                                        self.topic, self.mqtt,
                                                         self.support.vault_router)
         self.script_wrapper.on_start()
 
@@ -62,20 +63,20 @@ class LiterateNote(WokeNote):
                 # FIXME hacky
                 or isinstance(message, FileCreatedEvent)) \
                 :
-            logging.debug(f"[LiterateNote.on_receive] calling on_note_modified")
+            logging.debug(f"[on_receive] calling on_note_modified")
             try:
                 self.script_wrapper.on_note_modified()
-                self.script_wrapper.recompile_script()  # FIXME hacky
+                self.script_wrapper.compile_script(this_is_a_recompile=True)  # FIXME hacky
             except Exception as e:
                 logging.exception(f"Something unexpected happened when trying to hot reload {e}")
         elif isinstance(message, MqttPublish):
-            logging.debug(f"[LiterateNote.on_receive] calling on_mqtt_message")
+            logging.debug(f"[on_receive] calling on_mqtt_message")
             self.script_wrapper.on_mqtt_message(message.topic, message.payload)
         else:
             try:
                 message_type, key, payload = message
                 if message_type == "TIMER":
-                    logging.debug(f"[LiterateNote.on_receive] calling on_timer")
+                    logging.debug(f"[on_receive] calling on_timer")
                     self.script_wrapper.on_timer(key, payload)
                 else:
                     logging.warning(f"Unexpected type {message_type}:- {message}")
@@ -83,7 +84,7 @@ class LiterateNote(WokeNote):
                 logging.warning(f"Unexpected type {type(message)} {message}")
 
 
-class LiterateNoteScriptHarness(ScriptHarness):
+class NoteEmbeddedScriptHarness(ScriptHarness):
     def __init__(self, actor_ref: ActorRef, my_note: NoteAPI, topic: str, mqtt: MqttWrapper, vault_router: ActorRef):
         super().__init__(actor_ref, my_note, topic, mqtt, vault_router, f"{my_note.note_path}#Code")
 

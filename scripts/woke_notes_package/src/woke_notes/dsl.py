@@ -10,11 +10,14 @@ import datetime
 from time import ctime, sleep
 
 import requests
+from pykka import ActorRef
 
+from .note_companion_script import TemplateScript
 from .util import TimeUtil, Clock
 
 from .woke_note import MqttWrapper
 from .wrappers.note_api import datetimestamped_markdown_list_line, timestamped_markdown_list_line, NoteAPI
+
 
 my_note: NoteAPI
 note_name: str
@@ -27,6 +30,10 @@ _timeutils = TimeUtil(_clock)
 next_occurrence = _timeutils.next_occurrence
 seconds_until = _timeutils.seconds_until
 today = _clock.today
+
+
+# may be expanded beyond template scripts
+def wake(notename: str, template_script_name: TemplateScript) -> ActorRef: pass
 
 
 def set_timer(delay_seconds: float | int, payload: bytes | None = None, key: str | None = None) -> None: pass

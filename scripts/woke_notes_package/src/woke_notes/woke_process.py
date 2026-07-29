@@ -25,7 +25,7 @@ class WokeProcess(WokeNote):
 
 def worker_proc(worker_conn: Connection, worker_factory):
     logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s - %(message)s',
+                        format='[%(asctime)s %(pathname)s:%(lineno)s] - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     # FIXME - technically logging can overlap! (use a different file)
 
