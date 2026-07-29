@@ -46,6 +46,8 @@ class Orchestrator(WokeNote):
 
     def on_stop(self):
         total = len(self.started)
+        logging.info(f"About to stop {total} woke notes")
         for i, started in enumerate(self.started, 1):
             logging.info(f"Stopping {started} ({total - i} remaining)")
             started.stop()
+        logging.info(f"Stopped {total} woke notes")

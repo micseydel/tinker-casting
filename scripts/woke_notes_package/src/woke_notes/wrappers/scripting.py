@@ -23,7 +23,8 @@ class ScriptHarness:
         self.script_path = script_path
         self.actor_ref = actor_ref
 
-        timeutil = TimeUtil(Clock())
+        clock = Clock()
+        timeutil = TimeUtil(clock)
 
         # keep in line with dsl.py!
         self.script_scope: dict = {
@@ -35,6 +36,7 @@ class ScriptHarness:
             "sleep": time.sleep,
             "requests": requests,
             "datetime": datetime,
+            "today": clock.today,
 
             # utils
             "mqtt": mqtt,
