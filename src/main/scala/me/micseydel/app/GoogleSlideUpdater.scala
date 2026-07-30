@@ -19,7 +19,8 @@ object GoogleSlideUpdater {
   final case class SaveSlideInfoToNote(presentationId: String) extends Message
 
   case class Replacement(objectId: String, newText: String, fontSize: Int, italics: Boolean)
-  final case class ReplaceText(presentationId: String, replacements: List[Replacement]) extends Message
+  case class SpeakerNote(objectId: String, newText: String)
+  final case class Update(presentationId: String, replacements: List[Replacement], speakerNotes: List[SpeakerNote]) extends Message
 
   def apply(credential: Credential)(implicit Tinker: Tinker): Ability[Message] = NoteMakingTinkerer("Slides Tinkering", TinkerColor.random(), "🛝") { (context, noteRef) =>
     implicit val tc: TinkerContext[?] = context
@@ -31,13 +32,28 @@ object GoogleSlideUpdater {
       .build
 
     Tinker.receiveMessage {
-      case ReplaceText(presentationId, replacements) =>
-        val requests = replacements.flatMap {
-          case Replacement(objectId, newText, fontSize, italics) => replacementRequests(objectId, newText, fontSize, italics)
+      case Update(presentationId, replacements, speakerNotes) =>
+        val replacementRequests: List[Request] = replacements.flatMap {
+          case Replacement(objectId, newText, fontSize, italics) => replacementRequest(objectId, newText, fontSize, italics)
+        }
+        val speakerNotesRequests = speakerNotes.flatMap {
+          case SpeakerNote(objectId, newText) =>
+            List(
+              new Request()
+                .setDeleteText(new DeleteTextRequest()
+                  .setObjectId(objectId)
+                  .setTextRange(new Range()
+                    .setType("ALL"))),
+              new Request()
+                .setInsertText(new InsertTextRequest()
+                  .setObjectId(objectId)
+                  .setText(newText)
+                  .setInsertionIndex(0)),
+            )
         }
 
         val batchUpdateRequest = new BatchUpdatePresentationRequest()
-          .setRequests(requests.asJava)
+          .setRequests((replacementRequests ++ speakerNotesRequests).asJava)
 
         // FIXME: move into a Future
         service.presentations
@@ -58,7 +74,7 @@ object GoogleSlideUpdater {
   }
 
 
-  private def replacementRequests(objectId: String, newText: String, fontSize: Int, italics: Boolean): List[Request] = {
+  private def replacementRequest(objectId: String, newText: String, fontSize: Int, italics: Boolean): List[Request] = {
     val deleteTextRequest = new Request()
       .setDeleteText(
         new DeleteTextRequest()

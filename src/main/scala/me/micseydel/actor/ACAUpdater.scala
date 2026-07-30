@@ -6,7 +6,7 @@ import me.micseydel.Common
 import me.micseydel.actor.google.GmailActor
 import me.micseydel.actor.google.GmailActor.{Email, Hyperlink}
 import me.micseydel.app.GoogleSlideUpdater
-import me.micseydel.app.GoogleSlideUpdater.Replacement
+import me.micseydel.app.GoogleSlideUpdater.{Replacement, SpeakerNote}
 import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.cast.TimeKeeper
@@ -55,7 +55,7 @@ object ACAUpdater {
           case Validated.Valid(maybeMatch) =>
             maybeMatch match {
               case Some(emailMatch: EmailMatch) =>
-                noteRef.writeMatchingEmailToDisk(emailMatch) match {
+                noteRef.writeMatchingEmailToDisk(emailMatch, chunkedForZoom(emailMatch)) match {
                   case Failure(exception) => context.actorContext.log.warn(s"Failed to write matching email to disk! ${emailMatch.title}", exception)
                   case Success(markdown) => //FIXME
                 }
@@ -98,20 +98,25 @@ object ACAUpdater {
           case Validated.Valid(maybeMatch) =>
             maybeMatch match {
               case Some(emailMatch@EmailMatch(title, brb, body, footer, _)) =>
+                val forZoom = chunkedForZoom(emailMatch)
                 context.actorContext.log.info(s"Match for $title! Updating slide...")
-                noteRef.writeMatchingEmailToDisk(emailMatch) match {
+                noteRef.writeMatchingEmailToDisk(emailMatch, forZoom) match {
                   case Failure(exception) => context.actorContext.log.warn(s"Failed to write matching email to disk! ${emailMatch.title}", exception)
                   case Success(markdown) =>
                   //FIXME
                   // - ACAMatch(threadId, title)
                   // - RequestACADetails(threadId) -> ReceiveACADetails(threadId, wikilink /*title*/, markdown /*or case class*/)
                 }
-                slidesActor !! GoogleSlideUpdater.ReplaceText(config.presentationId, List(
+
+                slidesActor !! GoogleSlideUpdater.Update(config.presentationId, List(
                   Replacement(config.replacements.title, title, fontSize = 38, italics = false),
                   Replacement(config.replacements.brb, brb, fontSize = 14, italics = true),
                   Replacement(config.replacements.body, body, fontSize = 14, italics = false),
                   Replacement(config.replacements.footer, footer, fontSize = 14, italics = true),
-                ))
+                ), List(
+                    SpeakerNote(config.replacements.speaker_notes, forZoom)
+                  )
+                )
               case None => context.actorContext.log.debug(s"No matching emails out of ${emails.size}")
             }
 
@@ -123,6 +128,13 @@ object ACAUpdater {
 
       case ReceiveSlidesActor(Some(slidesActor)) => initialized(slidesActor)
       case ReceiveSlidesActor(None)| CheckForSlidesOneMoreTime => Tinker.steadily
+    }
+  }
+
+  private def chunkedForZoom(matching: EmailMatch): String = {
+    formattedChunks(s"${matching.title}\n\n**${matching.brb}**\n\n${matching.body}\n\n*${matching.footer}*") match {
+      case Validated.Valid(formatted) => formatted
+      case Validated.Invalid(e) => s"Something went wrong chunking: $e"
     }
   }
 
@@ -168,6 +180,7 @@ object ACAUpdater {
                            brb: String,
                            body: String,
                            footer: String,
+                           speaker_notes: String,
                          )
 
   case class ACAUpdaterConfig(
@@ -181,7 +194,7 @@ object ACAUpdater {
   }
 
   private object YamlProtocol extends DefaultYamlProtocol {
-    implicit val replacementsYamlFormat: YamlFormat[Replacements] = yamlFormat4(Replacements)
+    implicit val replacementsYamlFormat: YamlFormat[Replacements] = yamlFormat5(Replacements)
     implicit val configYamlFormat: YamlFormat[ACAUpdaterConfig] = yamlFormat5(ACAUpdaterConfig)
   }
 
@@ -205,7 +218,7 @@ object ACAUpdater {
       }
     }
 
-    def writeMatchingEmailToDisk(matching: EmailMatch)(implicit context: TinkerContext[?]): Try[String] = {
+    def writeMatchingEmailToDisk(matching: EmailMatch, formattedForZoom: String)(implicit context: TinkerContext[?]): Try[String] = {
       val provenance = matching.maybeGmailHyperlink
         .map(link => s"    - (via [gmail]($link))\n")
         .getOrElse("")
@@ -220,12 +233,6 @@ object ACAUpdater {
            |
            |
            |*${matching.footer}*""".stripMargin
-
-      // FIXME: this should be written to the speaker notes too!
-      val formattedForZoom = formattedChunks(s"${matching.title}\n\n**${matching.brb}**\n\n${matching.body}\n\n*${matching.footer}*") match {
-        case Validated.Valid(formatted) => formatted
-        case Validated.Invalid(e) => s"Something went wrong chunking: $e"
-      }
 
       noteRef.setMarkdown(
         s"""- Generated: ${context.system.clock.now()}
