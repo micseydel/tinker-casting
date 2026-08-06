@@ -1,3 +1,14 @@
+Before spinning this module out into its own reop:
+- **better handling of multiple orchestrators on the same directory**
+- rename? e.g.
+  - Nervous Notes
+  - Something around "Otto" like Doc Ock?
+- add a glossary
+- 
+
+
+# Old readme
+
 Needs updates per recent refactoring and updates
 ---
 

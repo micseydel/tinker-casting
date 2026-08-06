@@ -74,7 +74,7 @@ object RemindMeListenerActor {
               context.actorContext.log.info(s"State updated! Writing to JSON and note")
               jsonRef.setState(latestState)
 
-              val blockId = captureTime.toEpochSecond.toString
+              val blockId = s"${context.system.clock.today()}-${captureTime.toEpochSecond}" // FIXME: sloppy but good for the moment
 
               val (noteIdToUse, textToUse) = if (text.wordCount > 60) {
                 val detections = segments.zipWithIndex.collect {

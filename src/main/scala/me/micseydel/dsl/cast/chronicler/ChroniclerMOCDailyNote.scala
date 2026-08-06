@@ -75,32 +75,37 @@ object ChroniclerMOCDailyNote {
           Tinker.steadily
 
         case ReceiveMidnight(midnight) =>
-          val notesWithoutAck = noteRef.readMarkdownSafer() match {
-            case NoteRef.FileDoesNotExist =>
-              context.actorContext.log.warn(s"[CANARY] No transcriptions for $forDate?")
-              false
-            case NoteRef.Contents(s) =>
-              s match {
-                case Failure(exception) =>
-                  context.actorContext.log.warn(s"[CANARY] Unexpected failure for $forDate", exception)
-                  false
-                case Success(markdown) =>
-                  val hasNotesWithoutAck = markdown.contains("# Notes without acknowledgements")
-                  context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck for midnight $midnight")
-                  hasNotesWithoutAck
-              }
+          if (midnight == forDate.plusDays(1)) {
+            val notesWithoutAck = noteRef.readMarkdownSafer() match {
+              case NoteRef.FileDoesNotExist =>
+                context.actorContext.log.warn(s"[CANARY] No transcriptions for $forDate?")
+                false
+              case NoteRef.Contents(s) =>
+                s match {
+                  case Failure(exception) =>
+                    context.actorContext.log.warn(s"[CANARY] Unexpected failure for $forDate", exception)
+                    false
+                  case Success(markdown) =>
+                    val hasNotesWithoutAck = markdown.contains("# Notes without acknowledgements")
+                    context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck for midnight $midnight")
+                    hasNotesWithoutAck
+                }
+            }
+
+            if (notesWithoutAck) {
+              val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+              val id = formatter.format(midnight)
+              val notificationId = s"withoutack-$id"
+              context.actorContext.log.info(s"[CANARY] creating notification $notificationId for midnight $midnight")
+              val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(notificationId), Nil)
+              context.system.notifier !! NotificationCenterManager.NewNotification(notification)
+            } else {
+              context.actorContext.log.info(s"[CANARY] no notes without ack, so not sending any notification")
+            }
+          } else {
+            context.actorContext.log.info(s"[CANARY] ignoring old midnight")
           }
 
-          if (notesWithoutAck) {
-            val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-            val id = formatter.format(midnight)
-            val notificationId = s"withoutack-$id"
-            context.actorContext.log.info(s"[CANARY] creating notification $notificationId for midnight $midnight")
-            val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(notificationId), Nil)
-            context.system.notifier !! NotificationCenterManager.NewNotification(notification)
-          } else {
-            context.actorContext.log.info(s"[CANARY] no notes without ack, so not sending any notification")
-          }
 
           Tinker.steadily
       }
