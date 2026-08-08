@@ -4,6 +4,8 @@ import struct
 import sys
 import os
 import random
+import logging
+from time import time, ctime
 
 from bleak import BleakClient, BleakScanner, exc
 from paho.mqtt import client as paho_client
@@ -12,33 +14,27 @@ from woke_notes import WokeNote, get_config_from_env
 
 
 HR_MEAS = "00002A37-0000-1000-8000-00805F9B34FB"
+# FIXME: battery? breathing? steps?
 
 
 class WokeLHRistener(WokeNote):
-    pass
+    def on_other_message(self, message):
+        try:
+            kind, sent_time, hr_val = message
+            if kind == "simple_heart_rate":
+                logging.info(f"{ctime(sent_time)} {hr_val}")
+            else:
+                logging.warning(f"expected kind was simple_heart_rate but got {kind}; sent_time, hr_val = {sent_time}, {hr_val}")
+        except ValueError:
+            logging.exception(f"weird message {message}")
 
 
-# def connect_mqtt(client_id, broker, port, username, password) -> paho_client:
-#     def on_connect(mqtt_client, userdata, flags, rc):
-#         if rc == 0:
-#             print("Connected to MQTT Broker!")
-#         else:
-#             print("Failed to connect, return code %d\n", rc)
-
-#     mqtt_client = paho_client.Client(client_id)
-#     mqtt_client.username_pw_set(username, password)
-#     mqtt_client.on_connect = on_connect
-#     mqtt_client.connect(broker, port)
-#     return mqtt_client
-
-
-async def run(address, mqtt_client, debug=False):
+async def run(address, actor_ref, debug=False):
     async with BleakClient(address) as bt_client:
         connected = await bt_client.is_connected()
-        print("Connected: {0}".format(connected))
+        logging.info("Connected: {0}".format(connected))
 
         def hr_val_handler(sender, data):
-            # print(f"HR Measurement raw = {sender}: {data} (types {type(sender)} and {type(data)})")
             (hr_fmt,
              snsr_detect,
              snsr_cntct_spprtd,
@@ -48,15 +44,7 @@ async def run(address, mqtt_client, debug=False):
                 hr_val, = struct.unpack_from("<H", data, 1)
             else:
                 hr_val, = struct.unpack_from("<B", data, 1)
-            print(f"HR Value: {hr_val}")
-            result = mqtt_client.publish("simple_heart_rate", str(hr_val))
-            # result: [0, 1]
-            status = result[0]
-            if status == 0:
-                # print(f"Send `{msg}` to topic `{out_topic}`")
-                pass
-            else:
-                print(f"Failed to send message to topic {out_topic}")
+            actor_ref.tell(("simple_heart_rate", time(), hr_val))
 
         await bt_client.start_notify(HR_MEAS, hr_val_handler)
 
@@ -80,45 +68,30 @@ async def print_devices(out):
 
 
 def main():
-    pass
-
-
-if __name__ == "__main__":
     try:
-        _, address = sys.argv
+        _, vault_path, address = sys.argv
     except ValueError:
         print("An address and URL are required parameters, fetching then printing the available addresses now...\n", file=sys.stderr)
         asyncio.run(print_devices(sys.stderr))
         exit(1)
 
-    # broker = os.environ.get("mqttBroker")
-    # port = int(os.environ.get("mqttBrokerPort"))
-    # username = os.environ.get("mqttUsername")
-    # password = os.environ.get("mqttPassword")
-
     mqtt_config = get_config_from_env()
-
     WokeNote.start_background_actors(vault_path, mqtt_config)
+    actor = WokeLHRistener.wake("WokeLHRistener")
 
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(run(address, actor))
+    except KeyboardInterrupt:
+        print("Exiting per Ctrl+C")
+    except exc.BleakDeviceNotFoundError:
+        print(f"Device {address} not found, scanning for any likely candidates now...", file=sys.stderr)
+        asyncio.run(print_devices(sys.stderr))
+        exit(1)
+    finally:
+        WokeNote.stop_background_actors()
+
+
+if __name__ == "__main__":
     main()
-
-    WokeNote.stop_background_actors()
-
-    # # Generate a Client ID with the subscribe prefix.
-    # client_id = f'subscribe-{random.randint(0, 100)}'
-
-    # print(f"pid {os.getpid()}")
-
-    # mqtt_client = connect_mqtt(client_id, broker, port, username, password)
-
-    # print(f"Using {address} and connecting to mqtt {broker}")
-    # loop = asyncio.get_event_loop()
-    # try:
-    #     loop.run_until_complete(run(address, mqtt_client))
-    # except KeyboardInterrupt:
-    #     print("Exiting per Ctrl+C")
-    # except exc.BleakDeviceNotFoundError:
-    #     print(f"Device {address} not found, scanning for any likely candidates now...", file=sys.stderr)
-    #     asyncio.run(print_devices(sys.stderr))
-    #     exit(1)
 
