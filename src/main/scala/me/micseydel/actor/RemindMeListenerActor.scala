@@ -171,7 +171,9 @@ object RemindMeListenerActor {
 
   private def isAMatch(text: String): Boolean = {
     val lowercase = text.toLowerCase
-    lowercase.contains("remind me") || lowercase.contains("set a reminder") ||
+    lowercase.contains("remind me") ||
+      // rare case but added because it's a weird way to start otherwise
+      lowercase.contains("mind me") ||
       // sometimes "remind me" transcribes as "reminding" but not often enough to go beyond the start (for now anyway)
       lowercase.startsWith("reminding") ||
       // may be a little overzealous but that's ok
