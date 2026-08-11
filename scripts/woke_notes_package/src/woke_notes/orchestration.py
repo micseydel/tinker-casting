@@ -16,12 +16,13 @@ class Orchestrator(WokeNote):
     This is the top level orchestrator - it starts (and links to) FIXME
     """
 
-    def __init__(self, note_name, scripts_dir, *args, **kwargs):
+    def __init__(self, note_name: str, scripts_dir: str, deploy_debug_notes: bool, *args, **kwargs):
         # this runs in the spawner's context, whereas on_start runs in the actor thread
         super().__init__(note_name, *args, **kwargs)
 
         self.scripts_dir = scripts_dir
         self.started = []
+        self.deploy_debug_notes = deploy_debug_notes
 
     def on_start(self):
         logging.basicConfig(level=logging.INFO,
@@ -30,10 +31,11 @@ class Orchestrator(WokeNote):
         super().on_start()
 
         if self.scripts_dir is not None:
-            self.started.append(NoteCompanionScriptsManager.wake(NoteCompanionScriptsManager_NOTE_NAME, scripts_dir=self.scripts_dir))
+            self.started.append(NoteCompanionScriptsManager.wake(NoteCompanionScriptsManager_NOTE_NAME, self.scripts_dir, self.deploy_debug_notes))
 
-        experimental_embedded_scripts_note_path = os.path.join(self.support.vault_path, f"{NoteEmbeddedScriptsManager_NOTE_NAME}.md")
-        deploy_experimental_embedded_script_notes = os.path.isfile(experimental_embedded_scripts_note_path)
+        logging.warning(f"[[{NoteEmbeddedScriptsManager_NOTE_NAME}]] is not being used")
+        # experimental_embedded_scripts_note_path = os.path.join(self.support.vault_path, f"{NoteEmbeddedScriptsManager_NOTE_NAME}.md")
+        deploy_experimental_embedded_script_notes = False # os.path.isfile(experimental_embedded_scripts_note_path)
 
         # FIXME: update for no scripts dir
         self.my_note.set_file_contents(f"""- generated {ctime()}
@@ -43,8 +45,8 @@ class Orchestrator(WokeNote):
 - [[{NoteCompanionScriptsManager_NOTE_NAME}]]
 """)
 
-        if deploy_experimental_embedded_script_notes:
-            self.started.append(NoteEmbeddedScriptsManager.wake(NoteEmbeddedScriptsManager_NOTE_NAME))
+        # if deploy_experimental_embedded_script_notes:
+        #     self.started.append(NoteEmbeddedScriptsManager.wake(NoteEmbeddedScriptsManager_NOTE_NAME))
 
     def on_note_modified(self):
         pass  # ignore

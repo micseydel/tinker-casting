@@ -27,8 +27,9 @@ else:
 WokeNote.start_background_actors(args.vault_path, mqtt_config)
 # FIXME: can I delete the password to let it get garbage collected?
 
+deploy_debug_notes = False
 # pykka.DeadLetterRouter.default_router().start() #?
-orchestrator = Orchestrator.wake("Woke Notes Orchestrator", args.scripts)
+orchestrator = Orchestrator.wake("Woke Notes Orchestrator", args.scripts, deploy_debug_notes)
 
 try:
     while True:

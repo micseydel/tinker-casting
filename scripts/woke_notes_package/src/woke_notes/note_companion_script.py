@@ -71,11 +71,12 @@ class TemplateScript:
 
 
 class NoteCompanionScriptsManager(WokeNote):
-    def __init__(self, note_name: str, scripts_dir: str, *args, **kwargs):
+    def __init__(self, note_name: str, scripts_dir: str, deploy_debug_notes: bool, *args, **kwargs):
         super().__init__(note_name, *args, **kwargs)
         self.scripts_dir = scripts_dir
         self.scripts_watcher = None
         self.woke_notes = {}  # from note name to ActorRef
+        self.deploy_debug_notes = deploy_debug_notes
 
     def on_start(self):
         super().on_start()
@@ -138,6 +139,9 @@ class NoteCompanionScriptsManager(WokeNote):
         pass  # does not matter to this orchestrator right now
 
     def __update_note(self) -> None:
+        if not self.deploy_debug_notes:
+            return
+
         scripted_notes_list = "\n".join(f"    - [[{nn}]]" for nn in self.woke_notes.keys())
         self.my_note.set_file_contents(f"""- generated {ctime()}
 - scripted notes:
