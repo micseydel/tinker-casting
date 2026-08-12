@@ -1,0 +1,4 @@
+-e /home/micseydel/coding/tinker-casting/scripts/woke_notes_package
+claude-agent-sdk
+pykka
+
