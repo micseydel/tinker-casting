@@ -1,24 +1,22 @@
 package me.micseydel.actor.kitties
 
 import akka.actor.ActorPath
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
-import cats.implicits.catsSyntaxValidatedId
+import cats.data.Validated
 import me.micseydel.NoOp
 import me.micseydel.actor.MonthlyNotesRouter
 import me.micseydel.actor.MonthlyNotesRouter.Month
 import me.micseydel.actor.kitties.LitterCharts.{AuditCompleted, LitterReportForDay, LitterSummaryForDay}
 import me.micseydel.actor.kitties.MarkdownDailyLitterSummaryReportDocumentParser.{DataPoint, LitterReport}
+import me.micseydel.dsl.*
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
-import me.micseydel.dsl.*
 import me.micseydel.model.LitterSiftedEventJsonProtocol.SiftedContentsFormat
 import me.micseydel.prototyping.ObsidianCharts
 import me.micseydel.prototyping.ObsidianCharts.{DoubleSeries, IntSeries, Series, averageOfLastN}
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
-import net.jcazevedo.moultingyaml.{DefaultYamlProtocol, YamlFormat}
+import net.jcazevedo.moultingyaml.{PimpedString, *}
 import org.slf4j.Logger
-import net.jcazevedo.moultingyaml.*
 import spray.json.*
 
 import java.io.FileNotFoundException
