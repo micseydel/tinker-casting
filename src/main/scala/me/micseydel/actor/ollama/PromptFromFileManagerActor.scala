@@ -1,12 +1,17 @@
 package me.micseydel.actor.ollama
 
+import me.micseydel.actor.notifications.NotificationCenterManager
+import me.micseydel.actor.notifications.NotificationCenterManager.{Notification, NotificationId}
 import me.micseydel.actor.ollama.OllamaModel.{ChatResponse, ChatResponseFailure, ChatResponseResult}
-import me.micseydel.dsl.{Tinker, TinkerColor}
+import me.micseydel.dsl.{Tinker, TinkerColor, TinkerContext}
 import me.micseydel.dsl.Tinker.Ability
 import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
+import me.micseydel.util.TimeUtil
 import me.micseydel.vault.Note
 import me.micseydel.vault.persistence.NoteRef
 
+import java.security.MessageDigest
+import java.time.ZonedDateTime
 import scala.concurrent.ExecutionContextExecutor
 import scala.util.{Failure, Success}
 
@@ -53,9 +58,10 @@ object PromptFromFileManagerActor {
             |""".stripMargin)
 
         context.actorContext.log.info("Spawning an anonymous FetchChatResponse actor")
+        val startTime = context.system.clock.now()
         context.castAnonymous(FetchChatResponseActor(hostAndPort, note.markdown, model, context.messageAdapter(ReceivePromptResponse)))
 
-        initialized(noteRef, model)
+        initialized(noteRef, model, startTime)
 
       case ReceiveException(exception) =>
         context.actorContext.log.error("Failed to access disk", exception)
@@ -67,7 +73,9 @@ object PromptFromFileManagerActor {
     }
   }
 
-  private def initialized(noteRef: NoteRef, model: String)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+  private def initialized(noteRef: NoteRef, model: String, startedTime: ZonedDateTime)(implicit Tinker: Tinker): Ability[Message] = Tinker.receive { (context, message) =>
+    implicit val tc: TinkerContext[?] = context
+
     message match {
       case ReceiveNoteContents(_) =>
         context.actorContext.log.warn(s"Ignoring note, already initialized with model $model")
@@ -78,7 +86,10 @@ object PromptFromFileManagerActor {
         Tinker.steadily
 
       case ReceivePromptResponse(ChatResponseResult(text, model, created_at, total_duration, load_duration, prompt_eval_count, prompt_eval_duration, eval_count, eval_duration)) =>
-        context.actorContext.log.info(s"Received prompt reply!")
+        val receivedTime = context.system.clock.now()
+        val timeTook = TimeUtil.between(startedTime, receivedTime).toSeconds
+
+        context.actorContext.log.info(s"Received prompt reply! Started $startedTime and took $timeTook")
         noteRef.append(
           s"""## Response
              |
@@ -89,9 +100,25 @@ object PromptFromFileManagerActor {
              |> - prompt_eval_duration: $prompt_eval_duration
              |> - eval_count: $eval_count
              |> - eval_duration: $eval_duration
+             |> - *calculated* duration: ${timeTook}s
              |
              |$text
              |""".stripMargin)
+
+
+        if (timeTook > 120) {
+          val noteId = noteRef.noteId.id
+          // SHA-1 because shorter hashes are easier to deal with and collisions are sufficiently unlikely
+          // FIXME: might be worth allowing the hashing function and take() value to be configurable
+          val hashedNoteId = MessageDigest.getInstance("SHA-1")
+            .digest(noteId.getBytes("UTF-8"))
+            .map("%02x".format(_)).mkString.take(12)
+          val notificationId = s"ollama-$hashedNoteId" // FIXME is there a more semantic alternative than hashing?
+          context.system.notifier !! NotificationCenterManager.NewNotification(
+            Notification(receivedTime, s"- [[${noteId}#Response]]", None, NotificationId(notificationId), Nil)
+          )
+        }
+
         Tinker.steadily
 
       case ReceivePromptResponse(ChatResponseFailure(msg, maybeException)) =>
