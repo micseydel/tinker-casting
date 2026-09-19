@@ -137,12 +137,13 @@ private object EXPERIMENTHttpFetchAndUnmarshall {
     implicit val s: ActorSystem[_] = context.system.actorSystem
 
     // this is essential for 70b models on interesting prompts, but may be a poor default
+    // FIXME: consider making it configurable via frontmatter or longer for "thinking" because qwen timed out 2x on the 10-minute timeout
     val connectionSettings = ClientConnectionSettings(context.system.actorSystem)
-      .withIdleTimeout(10.minutes)
+      .withIdleTimeout(20.minutes)
 
     val poolSettings = ConnectionPoolSettings(context.system.actorSystem)
       .withConnectionSettings(connectionSettings)
-      .withResponseEntitySubscriptionTimeout(10.minutes)
+      .withResponseEntitySubscriptionTimeout(20.minutes)
 
     context.pipeToSelf(Http().singleRequest(HttpRequest(
       method = HttpMethods.POST,

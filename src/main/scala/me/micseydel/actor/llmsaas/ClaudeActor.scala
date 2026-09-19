@@ -7,6 +7,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
 import akka.http.scaladsl.model.headers.*
+import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSettings}
 import akka.stream.Materializer
 import spray.json.*
 
@@ -92,8 +93,16 @@ object ClaudeActor {
         RawHeader("anthropic-version", "2023-06-01")
       )
 
+      // from FetchChatResponseActor, adding because Claude timed out after 1 minute for a text prompt
+      val connectionSettings = ClientConnectionSettings(context.system)
+        .withIdleTimeout(10.minutes)
+
+      val poolSettings = ConnectionPoolSettings(context.system)
+        .withConnectionSettings(connectionSettings)
+        .withResponseEntitySubscriptionTimeout(10.minutes)
+
       def get(uri: String): Future[HttpResponse] =
-        http.singleRequest(HttpRequest(uri = uri, headers = baseHeaders))
+        http.singleRequest(HttpRequest(uri = uri, headers = baseHeaders), settings = poolSettings)
 
       def post(uri: String, body: String): Future[HttpResponse] =
         http.singleRequest(HttpRequest(
@@ -101,7 +110,7 @@ object ClaudeActor {
           uri     = uri,
           headers = baseHeaders,
           entity  = HttpEntity(ContentTypes.`application/json`, body)
-        ))
+        ), settings = poolSettings)
 
       def strict(f: Future[HttpResponse]): Future[HttpEntity.Strict] =
         f.flatMap(_.entity.toStrict(10.seconds))

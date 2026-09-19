@@ -5,6 +5,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse}
 import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.settings.{ClientConnectionSettings, ConnectionPoolSettings}
 import akka.stream.Materializer
 import spray.json.*
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
@@ -90,8 +91,16 @@ object OpenAIActor {
 
       val authHeader = RawHeader("Authorization", s"Bearer $apiKey")
 
+      // from FetchChatResponseActor, adding because Claude timed out after 1 minute for a text prompt
+      val connectionSettings = ClientConnectionSettings(context.system)
+        .withIdleTimeout(10.minutes)
+
+      val poolSettings = ConnectionPoolSettings(context.system)
+        .withConnectionSettings(connectionSettings)
+        .withResponseEntitySubscriptionTimeout(10.minutes)
+
       def get(uri: String): Future[HttpResponse] =
-        http.singleRequest(HttpRequest(uri = uri, headers = List(authHeader)))
+        http.singleRequest(HttpRequest(uri = uri, headers = List(authHeader)), settings = poolSettings)
 
       def post(uri: String, body: String): Future[HttpResponse] =
         http.singleRequest(HttpRequest(
@@ -99,7 +108,7 @@ object OpenAIActor {
           uri     = uri,
           headers = List(authHeader),
           entity  = HttpEntity(ContentTypes.`application/json`, body)
-        ))
+        ), settings = poolSettings)
 
       //      def strict(f: Future[HttpResponse]): Future[HttpEntity.Strict] =
       //        f.flatMap(_.entity.toStrict(10.seconds))
