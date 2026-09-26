@@ -173,6 +173,10 @@ nlu:
       - I just sifted [two beef lumps](urine:two) from [the bath litter box](litterbox:back).
       - I just lifted [a pee pump](urine:one) from [the back litter box](litterbox:back).
       - I just sifted [a little bit of poop](poop:one) from [the front litter box](litterbox:front).
+      - I just sifted [a sticky pea clump](urine:one) from [the back litter box](litterbox:back).
+      - I just sifted [a sticky pee clump](urine:one) from [the front litter box](litterbox:front).
+      - I just sifted [a sticky peak lump](urine:one) from [the back litter box](litterbox:back).
+      - I just lifted [a key clump](urine:one) from [the front letterbox](litterbox:front).
 
   - lookup: color
     examples: |
@@ -245,3 +249,6 @@ nlu:
       - Peanut is sleeping near me on the heating pad, although it is not currently turned on.
       - Remind me to get two more cartons of chocolate milk from Trader Joe's.
       - Remind me to get cat food from the storage unit.
+      - I just discarded 87 grams of dry food kibble.
+      - I just measured 139 grams of carryover dry food kibble.
+      - Butter just had a couple of sneezes and I am also feeling a little sneezy and sniffly.

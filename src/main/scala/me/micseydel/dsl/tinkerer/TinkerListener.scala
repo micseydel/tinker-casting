@@ -15,8 +15,8 @@ import me.micseydel.util.StringImplicits.RichString
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import scala.concurrent.{Await, Future}
-import scala.util.{Failure, Success}
+import scala.concurrent.{Await, Future, TimeoutException}
+import scala.util.{Failure, Success, Try}
 
 object TinkerListener {
   sealed trait Message
@@ -57,7 +57,7 @@ object RasaAnnotatingListener {
     Tinker.userExtension.gossiper !! subscription(context.messageAdapter(TranscriptionEvent))
 
     implicit val scheduler: Scheduler = context.system.actorSystem.scheduler
-    implicit val duration: FiniteDuration = 30.seconds // FIXME: hopefully can be faster, or more likely, replaced
+    implicit val duration: FiniteDuration = 60.seconds // FIXME: hopefully can be faster, or more likely, replaced
     implicit val timeout: Timeout = Timeout(duration)
 
 //    val maybeExperiment = replacementCandidate.map { replacement =>
@@ -75,7 +75,7 @@ object RasaAnnotatingListener {
 //        val maybeComparisonFut: Option[Future[RasaResult]] = replacementCandidate.map(getRasaResultFut(rawText, _))
 
         val maybeRasaResult: Option[RasaResult] = if (rawText.wordCount < 30) {
-          getRasaResultFut(rawText, model).value match {
+          Try(getRasaResultFut(rawText, model).value match {
             case None =>
               context.actorContext.log.warn(s"It looks like the future for ${notedTranscription.noteId} was empty")
               None
@@ -85,22 +85,29 @@ object RasaAnnotatingListener {
                   context.actorContext.log.warn(s"Fetching Rasa result for ${notedTranscription.noteId} failed", exception)
                   None
                 case Success(rasaResult) =>
-//                  for {
-//                    experiment <- maybeExperiment
-//                    comparisonFut <- maybeComparisonFut
-//                  } {
-//                    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
-//                    context.actorContext.log.debug(s"Setting onComplete for ${notedTranscription.noteId}")
-//                    // FIXME: lazy
-//                    comparisonFut.onComplete {
-//                      case Failure(exception) =>
-//                        exception.printStackTrace()
-//                      case Success(toCompare) =>
-//                        experiment !! RasaExperiment.Receive(notedTranscription, rasaResult, toCompare)
-//                    }
-//                  }
+                  //                  for {
+                  //                    experiment <- maybeExperiment
+                  //                    comparisonFut <- maybeComparisonFut
+                  //                  } {
+                  //                    implicit val ec: ExecutionContextExecutor = context.system.actorSystem.executionContext
+                  //                    context.actorContext.log.debug(s"Setting onComplete for ${notedTranscription.noteId}")
+                  //                    // FIXME: lazy
+                  //                    comparisonFut.onComplete {
+                  //                      case Failure(exception) =>
+                  //                        exception.printStackTrace()
+                  //                      case Success(toCompare) =>
+                  //                        experiment !! RasaExperiment.Receive(notedTranscription, rasaResult, toCompare)
+                  //                    }
+                  //                  }
                   Some(rasaResult)
               }
+          }) match {
+            case Failure(exception: TimeoutException) =>
+              context.actorContext.log.warn("Rasa call timed out", exception)
+              None
+            case Success(value) =>
+              value
+            case Failure(exception) => throw exception
           }
         } else {
           None
