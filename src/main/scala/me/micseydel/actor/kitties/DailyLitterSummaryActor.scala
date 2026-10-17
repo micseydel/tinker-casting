@@ -28,13 +28,14 @@ import scala.util.{Failure, Success}
 private[kitties] object DailyLitterSummaryActor {
   private val EmptyDocument = DailyLitterDocument(LitterReport.fresh(), Nil)
 
-  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterReportForDay])(implicit Tinker: EnhancedTinker[MyCentralCast]): (String, Ability[Message]) = {
+  def apply(forDay: LocalDate, color: TinkerColor, emoji: String, monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterReportForDay], litterMatchCorrectionTracker: SpiritRef[LitterMatchCorrectionActor.Message])(implicit Tinker: EnhancedTinker[MyCentralCast]): (String, Ability[Message]) = {
     val isoDate = TimeUtil.localDateTimeToISO8601Date(forDay)
     val noteName = s"Litter boxes sifting ($isoDate)"
 
     implicit val monthly: SpiritRef[LitterSummaryForDay] = monthlyLitterGraphActor
     implicit val recent: SpiritRef[LitterReportForDay] = last30DaysLitterGraphActor
     implicit val parser: MarkdownDailyLitterSummaryReportDocumentParser = new MarkdownDailyLitterSummaryReportDocumentParser(forDay)
+    implicit val litterMatchCorrectionActor: SpiritRef[LitterMatchCorrectionActor.Message] = litterMatchCorrectionTracker
 
     noteName -> AttentiveNoteMakingTinkerer[Message, ReceiveNotePing](noteName, color, emoji, ReceiveNotePing) { (context, noteRef) =>
       implicit val tc: TinkerContext[?] = context
@@ -60,7 +61,7 @@ private[kitties] object DailyLitterSummaryActor {
     }
   }
 
-  def behavior(cachedAuditStatus: Boolean)(implicit Tinker: EnhancedTinker[MyCentralCast], monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterReportForDay], noteRef: NoteRef, parser: MarkdownDailyLitterSummaryReportDocumentParser): Ability[Message] = Tinker.setup { context =>
+  def behavior(cachedAuditStatus: Boolean)(implicit Tinker: EnhancedTinker[MyCentralCast], monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay], last30DaysLitterGraphActor: SpiritRef[LitterReportForDay], litterMatchCorrectionTracker: SpiritRef[LitterMatchCorrectionActor.Message], noteRef: NoteRef, parser: MarkdownDailyLitterSummaryReportDocumentParser): Ability[Message] = Tinker.setup { context =>
     implicit val tc: TinkerContext[?] = context
     implicit val log: Logger = context.actorContext.log
 
@@ -78,7 +79,7 @@ private[kitties] object DailyLitterSummaryActor {
               val latestDocIsAudited = document.report.auditStatus == AuditCompleted
               if (latestDocIsAudited && cachedAuditStatus != latestDocIsAudited) {
                 // (if this is newly audited, normalize the inbox)
-                Some(document.normalizeInbox(parser.day))
+                Some(document.normalizeInbox(parser.day, litterMatchCorrectionTracker))
               } else {
                 None
               }
@@ -242,22 +243,25 @@ case class DailyLitterDocument(report: LitterReport, inbox: List[String]) {
     }
   }
 
-  def normalizeInbox(forDay: LocalDate)(implicit log: Logger): DailyLitterDocument = {
+  def normalizeInbox(forDay: LocalDate, litterMatchCorrectionTracker: SpiritRef[LitterMatchCorrectionActor.Message])(implicit tc: TinkerContext[?]): DailyLitterDocument = {
     val (leftoverInbox, inboxCorrections) = inbox.map(LineParser.apply(_, forDay)).partitionMap {
       case MarkdownDailyLitterSummaryReportDocumentParser.ParseSuccessDatapoint(datapoint) =>
         Right(datapoint)
 
       case MarkdownDailyLitterSummaryReportDocumentParser.ParseFailure(rawLine, reason, comments) =>
-        log.warn(s"!! parse failure: $reason ($comments)")
+        tc.actorContext.log.warn(s"!! parse failure: $reason ($comments)")
         Left(rawLine)
     }
 
     if (inboxCorrections.nonEmpty) {
+      // FIXME: save these - emit to mqtt?
       val partlyCorrected = inboxCorrections.foldRight(this) { (correction, documentSoFar) =>
+        litterMatchCorrectionTracker !! LitterMatchCorrectionActor.Correction(correction)
         documentSoFar.append(correction)
       }
       partlyCorrected
         .modify(_.inbox).setTo(leftoverInbox)
+        // FIXME: only complete if there are no more inbox items
         .modify(_.report.auditStatus).setTo(AuditCompleted)
     } else {
       this

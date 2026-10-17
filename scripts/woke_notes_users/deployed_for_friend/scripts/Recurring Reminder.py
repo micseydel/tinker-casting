@@ -24,8 +24,12 @@ def on_timer(_key, _payload):
     channel = frontmatter.get("channel")
     message = frontmatter.get("message")
     logging.info(f"Timer called, publishing to {channel}: {message}")
-    publish_to_ntfy(channel, message)
-    reset_timer_from_note(note)
+    try:
+        publish_to_ntfy(channel, message)
+    except:
+        raise  # FIXME: should ideally send the failure to the notification center? maybe reschedule for once in a few minutes?
+    finally:
+        reset_timer_from_note(note)
 
 
 # utils

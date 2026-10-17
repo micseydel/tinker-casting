@@ -31,7 +31,7 @@ object KibbleManagerListenerActor {
             if (mentionsKibble || mentionsDryFood) {
               val acknowledgement = getGrams(text) match {
                 case None =>
-                  context.actorContext.log.warn(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
+                  context.actorContext.log.debug(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
                   manager !! KibbleManagerActor.MaybeHeardKibbleMention(nt)
                   Ignored
                 case Some(mass) =>
@@ -129,7 +129,7 @@ object KibbleManagerListenerActor {
           if (mentionsKibble || mentionsDryFood) {
             val event: KibbleManagerActor.Message = getGrams(text) match {
               case None =>
-                log.warn(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
+                log.debug(s"Kibble/dry food mentioned but could not identify mass (in grams): $text")
                 KibbleManagerActor.MaybeHeardKibbleMention(nt)
               case Some(mass) =>
                 if (lowerText.contains("discard")) {

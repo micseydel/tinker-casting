@@ -39,8 +39,12 @@ object LitterBoxReportsActor {
     val monthlyLitterGraphActor: SpiritRef[LitterSummaryForDay] = context.cast(MonthlyLitterGraphActor(), "MonthlyLitterGraphActor")
     val last30DaysLitterGraphActor: SpiritRef[LitterReportForDay] = context.cast(Last30DaysLitterGraphActor(), "Last30DaysLitterGraphActor")
 
+    val litterMatchCorrectionTracker: SpiritRef[LitterMatchCorrectionActor.Message] = context.cast(LitterMatchCorrectionActor(), "LitterMatchCorrectionActor")
+
     val dailyNotesAssistant: SpiritRef[DailyNotesRouter.Envelope[Message]] =
-      context.cast(DailyNotesRouter(DailyLitterSummaryActor(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor), DaysToActivateBack), "DailyNotesRouter")
+      context.cast(
+        DailyNotesRouter(DailyLitterSummaryActor(_, _, _, monthlyLitterGraphActor, last30DaysLitterGraphActor, litterMatchCorrectionTracker), DaysToActivateBack),
+        "DailyNotesRouter")
 
     Tinker.receiveMessage {
       case ec@LitterSiftedObservation(_) =>
