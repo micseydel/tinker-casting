@@ -98,7 +98,7 @@ private[kitties] object DailyLitterSummaryActor {
 
       maybeUpdatedDocument match {
         case None =>
-          context.actorContext.log.info(s"[CANARY] no need to update ${noteRef.noteId}")
+          context.actorContext.log.info(s"no need to update ${noteRef.noteId}")
           Tinker.steadily
         case Some(document) =>
           noteRef.setMarkdown(document.toMarkdown) match {

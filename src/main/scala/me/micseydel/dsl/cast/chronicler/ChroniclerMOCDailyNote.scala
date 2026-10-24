@@ -8,9 +8,11 @@ import me.micseydel.dsl.tinkerer.NoteMakingTinkerer
 import me.micseydel.dsl.{Operator, Tinker, TinkerColor, TinkerContext}
 import me.micseydel.vault.NoteId
 import me.micseydel.vault.persistence.NoteRef
+import org.joda.time.Days
 import org.slf4j.Logger
 
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.time.{LocalDate, ZonedDateTime}
 import scala.util.{Failure, Success}
 
@@ -56,82 +58,54 @@ object ChroniclerMOCDailyNote {
           (noteRef.readMarkdownSafer() match {
             case NoteRef.Contents(Success(markdown)) =>
               val latestMarkdown = ChroniclerMOCDailyMarkdown.updatedMarkdown(markdown, message)
-//              if (latestMarkdown != markdown) {
-//                noteRef.setMarkdown(latestMarkdown)
-//              } else {
-//                Success(NoOp)
-//              }
               Success(latestMarkdown)
             case NoteRef.Contents(f@Failure(exception)) => f
             case NoteRef.FileDoesNotExist =>
               Success(ChroniclerMOCDailyMarkdown.updatedMarkdown("", message))
           }).flatMap(noteRef.setMarkdown)
 
-//          noteRef.updateWith(message) match {
-//            case Failure(exception) => context.actorContext.log.warn("Failed to set markdown", exception)
-//            case Success(NoOp) =>
-//          }
-
           Tinker.steadily
 
         case ReceiveMidnight(midnight) =>
-          if (midnight == forDate.plusDays(1)) {
-            val notesWithoutAck = noteRef.readMarkdownSafer() match {
-              case NoteRef.FileDoesNotExist =>
-                context.actorContext.log.warn(s"[CANARY] No transcriptions for $forDate?")
-                false
-              case NoteRef.Contents(s) =>
-                s match {
-                  case Failure(exception) =>
-                    context.actorContext.log.warn(s"[CANARY] Unexpected failure for $forDate", exception)
-                    false
-                  case Success(markdown) =>
-                    val hasNotesWithoutAck = markdown.contains("# Notes without acknowledgements")
-                    context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck for midnight $midnight")
-                    hasNotesWithoutAck
-                }
-            }
+          val daysBetween = ChronoUnit.DAYS.between(forDate, midnight.toLocalDate)
 
-            if (notesWithoutAck) {
-              val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-              val id = formatter.format(midnight)
-              val notificationId = s"withoutack-$id"
-              context.actorContext.log.info(s"[CANARY] creating notification $notificationId for midnight $midnight")
-              val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(notificationId), Nil)
-              context.system.notifier !! NotificationCenterManager.NewNotification(notification)
-            } else {
-              context.actorContext.log.info(s"[CANARY] no notes without ack, so not sending any notification")
-            }
-          } else {
-            context.actorContext.log.info(s"[CANARY] ignoring old midnight")
+          daysBetween match {
+            case 0 =>
+              context.actorContext.log.info(s"[CANARY]  ignoring same-day midnight $midnight for $forDate")
+            case 1 =>
+              val notesWithoutAck = noteRef.readMarkdownSafer() match {
+                case NoteRef.FileDoesNotExist =>
+                  context.actorContext.log.warn(s"[CANARY] No transcriptions for $forDate?")
+                  false
+                case NoteRef.Contents(s) =>
+                  s match {
+                    case Failure(exception) =>
+                      context.actorContext.log.warn(s"[CANARY] Unexpected failure for $forDate", exception)
+                      false
+                    case Success(markdown) =>
+                      val hasNotesWithoutAck = markdown.contains("# Notes without acknowledgements")
+                      context.actorContext.log.info(s"[CANARY] markdown of length ${markdown.length} hasNotesWithoutAck=$hasNotesWithoutAck for midnight $midnight")
+                      hasNotesWithoutAck
+                  }
+              }
+
+              if (notesWithoutAck) {
+                val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+                val id = formatter.format(midnight)
+                val notificationId = s"withoutack-$id"
+                context.actorContext.log.info(s"[CANARY] creating notification $notificationId for midnight $midnight")
+                val notification = Notification(midnight, s"- [[Transcribed mobile notes (${midnight.minusDays(1).toLocalDate})#Notes without acknowledgements]]", None, NotificationId(notificationId), Nil)
+                context.system.notifier !! NotificationCenterManager.NewNotification(notification)
+              } else {
+                context.actorContext.log.info(s"[CANARY] no notes without ack, so not sending any notification")
+              }
+            case other =>
+              context.actorContext.log.info(s"[CANARY] ignoring midnight $midnight for day $forDate ($other)")
           }
-
 
           Tinker.steadily
       }
     }
-
-//  private implicit class RichNoteRef(val noteRef: NoteRef) extends AnyVal {
-//    def updateWith(message: PostInitMessage)(implicit log: Logger): Try[NoOp.type] = {
-//      noteRef.readMarkdown().map(ChroniclerMOCDailyMarkdown.parse(_, message.time.toLocalDate)) match {
-//        case f@Failure(exception) =>
-////          log.warn("Failed to read/parse document", exception)
-//          f.map(_ => NoOp)
-//        case Success(document) =>
-//          val latest = message match {
-//            case AddNote(noteEntry) =>
-//              document.addEntry(noteEntry)
-//            case ack@ListenerAcknowledgement(_, _, _, _) =>
-//              document.addAcknowledgement(ack)
-//          }
-//          if (document != latest) {
-//            noteRef.setMarkdown(latest.toMarkdown)
-//          } else {
-//            Success(NoOp)
-//          }
-//      }
-//    }
-//  }
 
   // model
 
