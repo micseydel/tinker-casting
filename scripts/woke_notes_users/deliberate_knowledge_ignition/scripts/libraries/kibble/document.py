@@ -218,6 +218,7 @@ class KibbleDocument:
         self.inbox.sort(key=lambda e: e.time)
 
     def integrate_transcription(self, capture_datetime: datetime.datetime, lowered_text: str, note_id: str):
+        # FIXME: return ack detail stuff
         block_id_int = str(int(capture_datetime.timestamp()))
         block_id = f"extracted-{block_id_int}"
         ref = f"#^{block_id_int}"
@@ -237,12 +238,15 @@ class KibbleDocument:
             logging.info(f"failed to extract from {lowered_text}")
             event = TimestampedMarkdownBulletWithoutBlockId(capture_datetime, str(raw_extraction), ref)
             self.inbox.append(event)
+            # FIXME: push to notification center
         elif extraction[1] is None:
             event = TimestampedMarkdownBulletWithoutBlockId(capture_datetime, str(extraction), ref)
             self.inbox.append(event)
+            # FIXME: push to notification center
         else:
             event = EventLine(capture_datetime, extraction, ref, block_id)
             self.extracted_events.append(event)
+            # FIXME: return ack details
 
         assert len(self.extracted_events) == len(set(self.extracted_events))
         assert len(self.inbox) == len(set(self.inbox))

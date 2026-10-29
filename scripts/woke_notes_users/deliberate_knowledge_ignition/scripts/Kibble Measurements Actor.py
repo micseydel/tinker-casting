@@ -60,8 +60,22 @@ def on_mqtt_message(topic_for_message: str, message):
                 return
 
             document: KibbleDocument = KibbleDocument(note)
+            # FIXME: should return ack details
             document.integrate_transcription(capture_datetime, lowered_text, note_id)
             my_note.set_markdown(document.to_markdown())
+
+            # FIXME: discards should schedule a ntfy
+
+            # FIXME: retire the Scala KibbleManagerActor, more specific "details" based on event type
+            #   should NOT auto-integrate when it was just the inbox - and inbox integrations should get ack'd
+            #   inbox entries should also result in a [[Notification Center]] ping
+            # mqtt.publish("[[Chronicler]]", json.dumps({
+            #     "noteId": note_id,
+            #     "noteCreationDate": capture_datetime.date().isoformat(),
+            #     "timeOfAck": datetime.datetime.now().astimezone().isoformat(),
+            #     "details": f"Kibble integrated ([[{note_id}|ref]])",
+            #     "setNoteState": "AutomaticallyIntegrated",
+            # }))
         except Exception as e:
             logging.exception(f"something unexpected ({e}) went wrong after successfully extracting from mqtt JSON: {note_id, lowered_text, capture_datetime}")
     else:
@@ -73,7 +87,7 @@ def on_mqtt_message(topic_for_message: str, message):
 def parse_message(message) -> tuple[str, str, datetime.datetime]:
     incoming_data = json.loads(message.decode())
 
-    note_id = incoming_data["noteId"]
+    note_id = incoming_data["noteId"]["id"]
     lowered_text = incoming_data["capture"]["whisperResult"]["whisperResultContent"]["text"].lower().strip()  # FIXME
     capture_datetime = datetime.datetime.strptime(incoming_data["capture"]["captureTime"][:19], DATE_TIME_FORMAT)
 

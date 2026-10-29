@@ -1,5 +1,5 @@
 if TYPE_CHECKING:  # IDE support
-    from woke_notes.dsl import *
+    from nervous_notes.dsl import *
 
 
 def on_start():

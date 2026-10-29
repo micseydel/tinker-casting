@@ -11,14 +11,28 @@ vault_json = "/Users/micseydel/obsidian_vaults/deliberate_knowledge_accretion/js
 
 
 def on_start():
-    # note = my_note.get_note()
-    # if note is None:
-    #     my_note.set_markdown("- [ ] publish all")
+    note = my_note.get_note()
+    if note is None:
+        my_note.set_file_contents("""\
+---
+start: 2026-10-24
+stop: 2026-10-29
+publish_to_note_id: note_id_without_brackets
+publish_to_mqtt_topic:
+---
+- [ ] publish all
+
+> [!info] Frontmatter
+> - start and stop are required dates
+> - publish_to_note_id and publish_to_mqtt_topic are both optional but nothing happens without one
+> - must_contain_one_of is an optional list of words
+
+""")
     logging.warning("note was empty")
 
 
 def on_note_modified():
-    logging.info("Note modified...")
+    # logging.info("Note modified...")
     if (note := my_note.note_if_markdown_starts_with_pressed_button()):
         frontmatter, markdown = note
 
@@ -26,6 +40,13 @@ def on_note_modified():
 
         start: datetime.date = frontmatter["start"]
         stop: datetime.date = frontmatter["stop"]
+        publish_to_note_id = frontmatter.get("publish_to_note_id")
+        publish_to_mqtt_topic = frontmatter.get("publish_to_mqtt_topic")
+        must_contain_one_of = frontmatter.get("must_contain_one_of")
+
+        if not publish_to_note_id and not publish_to_mqtt_topic:
+            logging.warning(f"needed at least one of publish_to_note_id or publish_to_mqtt_topic")
+            return
 
         candidates = []
 
@@ -46,13 +67,16 @@ def on_note_modified():
 
         sleep(1)  # wait a bit for startup
 
-        published = 0
+        published_to_mqtt = 0
+        batch_to_publish = []
         candidates.sort()
         for candidate in candidates:
             with open(candidate) as f:
                 for line in f:
-                    # logging.info("!!! found a line!")
-                    if "LargeModel" in line and ("dry food" in line.lower() or "kibble" in line.lower()):
+                    must_contain_one_of_gate = True
+                    if must_contain_one_of:
+                        must_contain_one_of_gate = any(word in line.lower() for word in must_contain_one_of)
+                    if "LargeModel" in line and must_contain_one_of_gate:
                         event = json.loads(line)
                         before, capture_daytime = candidate.split('-')
                         capture_time = capture_daytime.split('.')[0]
@@ -70,10 +94,21 @@ def on_note_modified():
                                 "whisperResult": event["event"],
                                 "captureTime": captureDateTime,
                             },
-                            "noteId": note_id,
+                            "noteId": {"id": note_id},
                         }
-                        mqtt.publish("[[Kibble Measurements Actor]]", json.dumps(data))
-                        published += 1
-        logging.info(f"!!! published {published} events !!!")
+                        if publish_to_mqtt_topic:
+                            mqtt.publish(publish_to_mqtt_topic, json.dumps(data))
+                            published_to_mqtt += 1
+                        if publish_to_note_id:
+                            batch_to_publish.append((data))
+
+        # FIXME any benefit to publishing length-1 as a non-batch?
+        if batch_to_publish:
+            batch_publish_to_nervous_note(publish_to_note_id, batch_to_publish)
+
+        logging.info(f"!!! published {published_to_mqtt} events to {publish_to_mqtt_topic or '(no given mqtt topic)'} mqtt topic, "
+                     f"{len(batch_to_publish)} to "
+                     + (f"[[{publish_to_note_id}]]" if publish_to_note_id else "(no given note id)") +
+                     f" !!!")
 
         my_note.reset_button_at_start_of_markdown()

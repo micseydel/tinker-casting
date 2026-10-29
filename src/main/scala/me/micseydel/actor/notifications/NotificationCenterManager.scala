@@ -31,6 +31,7 @@ object NotificationCenterManager {
 //  private
   case class ExpireCooldown(key: String) extends Message
 
+  // FIXME: mqtt support
   sealed trait NotificationMessage extends Message
 
   case class NewNotification(notification: Notification) extends NotificationMessage
