@@ -4,51 +4,14 @@ import logging
 from ast import literal_eval
 from collections import defaultdict
 
+from nervous_notes.obsidian.charts import simple_chart
+
 from libraries.kibble.kibble import extract, process_events, EventLine
 from libraries.kibble.model import Event
 from libraries.markdown import TimestampedMarkdownBullet, TimestampedMarkdownBulletWithoutBlockId, \
     lines_by_toplevel_sections
 
 NEWLINE = "\n"
-
-
-# https://charts.phib.ro/Meta/Charts/Basics
-# FIXME: chart object with to_code_block? then I could stack them more easily...
-def simple_chart(labels: list[str], title: str, data: list[int],
-                 include_seven_day_average=False, include_average=False, include_zero=False):
-    series = [{"title": title, "data": data}]
-    chart = {
-        "type": "line",
-        "labels": labels,
-        "series": series,
-    }
-
-    if include_average:
-        average = sum(data) / len(data)
-        series.append({
-            "title": "average",
-            "data": [average] * len(data)
-        })
-
-    if include_seven_day_average:
-        running = []
-        running_average = []
-        series.append({
-            "title": "7-day running average",
-            "data": running_average
-        })
-        for item in data:
-            running.append(item)
-            running = running[-7:]
-            running_average.append(sum(running) / len(running))
-
-    if include_zero:
-        series.append({
-            "title": "zero",
-            "data": [0] * len(data)
-        })
-
-    return f"```chart\n{json.dumps(chart)}\n```\n"
 
 
 def discarded_chart(discarded_by_day: dict[datetime.date, int]) -> str:
@@ -96,6 +59,8 @@ def consumed_high_level_chart(dispensed_by_day: dict[datetime.date, int], discar
     average_last_21_days = sum(last_21_days) / len(last_21_days)
     last_7_days = data[-7:]
     average_last_7_days = sum(last_7_days) / len(last_7_days)
+
+    # FIXME include a last 30 days chart
 
     return (f"- From [[#Stock and raw bowl events]] dispensed events and [[#Extracted Events]] discards\n"
             f"- average={average:.1f}\n"
