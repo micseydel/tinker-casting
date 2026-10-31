@@ -290,7 +290,7 @@ class StockManager:
         if last_container_measurement is None or (last_container_measurement.container == container):
             # simple case for when we don't have to make an inferred measurement across containers
 
-            assert measurement > self.empties[container], f"[{event.date()}] something went wrong - measured container {container} at {measurement}, but empty value is {self.empties[container]}"
+            assert measurement >= self.empties[container], f"[{event.date()}] something went wrong - measured container {container} at {measurement}, but empty value is {self.empties[container]}"
             updated_remaining = measurement - self.empties[container]
             assert updated_remaining >= 0
 
