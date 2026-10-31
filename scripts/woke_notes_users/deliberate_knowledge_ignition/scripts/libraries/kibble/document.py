@@ -4,7 +4,7 @@ import logging
 from ast import literal_eval
 from collections import defaultdict
 
-from nervous_notes.obsidian.charts import simple_chart
+from nervous_notes.obsidian.charts import simple_chart, SeriesElement, LineChart
 
 from libraries.kibble.kibble import extract, process_events, EventLine
 from libraries.kibble.model import Event
@@ -55,20 +55,38 @@ def consumed_high_level_chart(dispensed_by_day: dict[datetime.date, int], discar
 
     average = sum(data) / len(data)
 
+    last_30_days = data[-30:]
+    average_last_30_days = sum(last_30_days) / len(last_30_days)
     last_21_days = data[-21:]
     average_last_21_days = sum(last_21_days) / len(last_21_days)
     last_7_days = data[-7:]
     average_last_7_days = sum(last_7_days) / len(last_7_days)
 
-    # FIXME include a last 30 days chart
-
-    return (f"- From [[#Stock and raw bowl events]] dispensed events and [[#Extracted Events]] discards\n"
-            f"- average={average:.1f}\n"
-            f"- average_last_21_days={average_last_21_days:.1f}\n"
-            f"- average_last_7_days={average_last_7_days:.1f}\n\n") + simple_chart(
+    chart_for_all_time = simple_chart(
         labels, "Consumed (dispensed-discarded)", data,
         include_seven_day_average=True, include_average=True, include_zero=True
     )
+
+    average_data = SeriesElement("", data).running_average(7).data[-30:]
+    last30days_series_element = SeriesElement("7-day running average", average_data)
+    last30days_series = [last30days_series_element, last30days_series_element.average()]
+    last30days_chart = LineChart(labels[-30:], last30days_series).to_markdown()
+
+    return f"""\
+- From [[#Stock and raw bowl events]] dispensed events and [[#Extracted Events]] discards
+- average={average:.1f}
+- average_last_30_days={average_last_30_days:.1f}
+- average_last_21_days={average_last_21_days:.1f}
+- average_last_7_days={average_last_7_days:.1f}
+
+### Last 30 Days Consumed
+
+{last30days_chart}
+
+### All-time Consumed
+
+{chart_for_all_time}
+"""
 
 
 def consumed_via_bowl_events_chart(events: list[tuple[Event, int]]) -> str:
